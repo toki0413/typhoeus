@@ -10,6 +10,16 @@ data/seed/_selftest/
 data/seed/imerg/*.HDF5
 data/seed/imerg/*.nc
 
+# SAR 原始影像（每景 500-660 MB，AWS 公开桶可匿名重下）
+# 重下方法见 data/seed/sentinel1_dry/README.md
+data/seed/sentinel1/*.tiff
+data/seed/sentinel1/*.xml
+data/seed/sentinel1_dry/*.tiff
+data/seed/sentinel1_dry/*.xml
+
+# 例外：JRC 深度-损失曲线只有 4.8 KB，且是 p55 外部对标的输入
+!data/seed/jrc_depth_damage.csv
+
 # 产物可复算生成，但保留在库中便于评审直接查看
 # out/ 不忽略
 
