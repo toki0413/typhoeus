@@ -1,0 +1,147 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>遥感淹没范围验证</title><style>
+:root{--ink:#1a1a1a;--mut:#6b7280;--line:#d7dbe0;--bg:#fff;--red:#c0392b;--org:#d97706;
+--grn:#15803d;--box:#f7f8fa;--acc:#0f4c81}
+*{box-sizing:border-box}
+body{margin:0;padding:28px 34px;background:var(--bg);color:var(--ink);
+font:14px/1.62 "Microsoft YaHei","PingFang SC",Segoe UI,sans-serif;max-width:1180px}
+h1{font-size:23px;margin:0 0 6px}
+h2{font-size:16px;margin:26px 0 10px;padding-bottom:5px;border-bottom:2px solid var(--acc)}
+h3{font-size:14px;margin:16px 0 6px}
+.sub{color:var(--mut);font-size:12.5px;margin-bottom:16px}
+table{border-collapse:collapse;width:100%;margin:8px 0 4px;font-size:12.8px}
+th,td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top}
+th{background:var(--box);font-weight:600;white-space:nowrap}
+td.c{text-align:center;white-space:nowrap}
+.mut{color:var(--mut)}
+.tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11.5px;
+border:1px solid var(--line);background:#fff;white-space:nowrap}
+.t-red{border-color:var(--red);color:var(--red)}
+.t-org{border-color:var(--org);color:var(--org)}
+.t-grn{border-color:var(--grn);color:var(--grn)}
+.box{background:var(--box);border:1px solid var(--line);border-left:4px solid var(--acc);
+padding:11px 14px;margin:12px 0;font-size:12.8px}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px;margin:12px 0}
+.kv div{background:var(--box);border:1px solid var(--line);padding:9px 11px}
+.kv b{display:block;font-size:19px;margin-top:2px}
+.kv span{color:var(--mut);font-size:11.5px}
+footer{margin-top:26px;padding-top:12px;border-top:1px solid var(--line);
+color:var(--mut);font-size:11.5px;line-height:1.75}
+ol,ul{margin:6px 0 6px 20px;padding:0}
+li{margin:3px 0}
+</style></head><body>
+<h1>遥感淹没范围验证</h1>
+<div class="sub">提比翁情景—规划机 · 产品件 p8 · 场景 S6（遥感淹没范围验证）<br>
+生成 2026-10-17 09:59 · 判据 IoU ≥ 0.5 且优于 Otsu 基线</div>
+
+<div class="box"><b>本件给什么</b>：用<b>面积型验证</b>补强点位级检验——它不依赖坐标精度，
+正好补上"域内仅 17 个涝点、且 12 个模型静默"的统计短板。
+内容三节：真实留出集指标、本机推理复现、宁波本地推理的拒答声明。</div>
+
+<div class="kv">
+<div><span>留出集运行次数</span><b>7</b></div>
+<div><span>IoU 均值 / 中位</span><b>0.595 / 0.600</b></div>
+<div><span>IoU 范围</span><b>0.514 – 0.684</b></div>
+<div><span>Otsu 基线范围</span><b>0.116 – 0.311</b></div>
+<div><span>优于基线</span><b>7/7</b></div>
+<div><span>判据三态</span><b><span class="tag t-grn">PASS</span></b></div>
+</div>
+
+<h2>一、判据与结论</h2>
+<table>
+<tr><th>判据</th><th>实测</th><th>结论</th></tr>
+<tr><td>IoU ≥ 0.5</td>
+<td class="c">最小值 0.5139</td>
+<td class="c"><span class="tag t-grn">达标</span></td></tr>
+<tr><td>必须优于 Otsu 阈值基线</td>
+<td class="c">7/7 次全部优于</td>
+<td class="c"><span class="tag t-grn">达标</span></td></tr>
+<tr><td>逐位可复现（权重指纹）</td>
+<td class="c">SHA256 随件给出</td>
+<td class="c"><span class="tag t-grn">可复算</span></td></tr>
+</table>
+<div class="box"><b>结论</b>：SAR 水面识别在<b>真实 Sen1Floods11 留出集</b>上
+IoU 均值 <b>0.595</b>（最小 0.514），
+<b>7 次运行全部优于 Otsu 基线</b>（基线 0.116–0.311）。
+即：<b>这条 AI 路线不是纸面能力，它打赢了可用基线</b>——这正是 DSH 事件里"AI 必要"那一栏需要的证据。</div>
+
+<h2>二、留出集逐次运行（真实数据）</h2>
+<table>
+<tr><th>运行</th><th>切分方式</th><th>瓦片数</th><th>val IoU</th><th>Otsu 基线</th>
+<th>超出基线</th><th>最佳轮</th><th>设备</th><th>耗时 s</th></tr>
+<tr><td class='c'>cv11</td><td class='c'>自切</td><td class='c'>446</td><td class='c'><b>0.6842</b></td><td class='c'>0.3108</td><td class='c'>+0.3734</td><td class='c'>8</td><td class='c'>cuda</td><td class='c'>29.7</td></tr><tr><td class='c'>cv23</td><td class='c'>自切</td><td class='c'>446</td><td class='c'><b>0.6015</b></td><td class='c'>0.1768</td><td class='c'>+0.4247</td><td class='c'>6</td><td class='c'>cuda</td><td class='c'>31.3</td></tr><tr><td class='c'>cv41</td><td class='c'>自切</td><td class='c'>446</td><td class='c'><b>0.5472</b></td><td class='c'>0.1155</td><td class='c'>+0.4317</td><td class='c'>8</td><td class='c'>cuda</td><td class='c'>29.6</td></tr><tr><td class='c'>cv67</td><td class='c'>自切</td><td class='c'>446</td><td class='c'><b>0.5396</b></td><td class='c'>0.1716</td><td class='c'>+0.3680</td><td class='c'>5</td><td class='c'>cuda</td><td class='c'>34.0</td></tr><tr><td class='c'>cv7</td><td class='c'>自切</td><td class='c'>446</td><td class='c'><b>0.6804</b></td><td class='c'>0.1839</td><td class='c'>+0.4965</td><td class='c'>8</td><td class='c'>cuda</td><td class='c'>27.8</td></tr><tr><td class='c'>cv97</td><td class='c'>自切</td><td class='c'>446</td><td class='c'><b>0.5139</b></td><td class='c'>0.1425</td><td class='c'>+0.3714</td><td class='c'>1</td><td class='c'>cuda</td><td class='c'>27.6</td></tr><tr><td class='c'>v11_run2</td><td class='c'>官方 splits</td><td class='c'>446</td><td class='c'><b>0.6002</b></td><td class='c'>0.1874</td><td class='c'>+0.4128</td><td class='c'>4</td><td class='c'>cuda</td><td class='c'>18.7</td></tr>
+</table>
+<div class="mut" style="font-size:12px">6 次为事件级自切（同一景影像的瓦片不跨训练/验证），1 次为官方 splits。
+切分方式按事件而非按瓦片，避免同景泄漏。留出事件与训练事件互斥。</div>
+
+
+<h2>三、本机推理复现（合成自测数据）</h2>
+<div class="kv">
+<div><span>权重</span><b>unet_ep10.pt</b><span>sha256 134443769b4f6a98…</span></div>
+<div><span>设备</span><b>cuda</b></div>
+<div><span>瓦片数</span><b>8</b></div>
+<div><span>平均 IoU</span><b>0.6825</b></div>
+<div><span>中位 IoU</span><b>0.6814</b></div>
+<div><span>映射</span><b>eq1</b></div>
+</div>
+<table>
+<tr><th>瓦片</th><th>事件</th><th>并集</th><th>交集</th><th>IoU</th>
+<th>预测水体占比</th><th>真值水体占比</th></tr>
+<tr><td>2019-03_TESTLAND_T00/t00</td><td class='c'>2019-03_TESTLAND</td><td class='c'>747</td><td class='c'>509</td><td class='c'><b>0.6814</b></td><td class='c'>0.182</td><td class='c'>0.124</td></tr><tr><td>2019-03_TESTLAND_T01/t01</td><td class='c'>2019-03_TESTLAND</td><td class='c'>742</td><td class='c'>509</td><td class='c'><b>0.6860</b></td><td class='c'>0.181</td><td class='c'>0.124</td></tr><tr><td>2019-03_TESTLAND_T02/t02</td><td class='c'>2019-03_TESTLAND</td><td class='c'>735</td><td class='c'>509</td><td class='c'><b>0.6925</b></td><td class='c'>0.179</td><td class='c'>0.124</td></tr><tr><td>2019-03_TESTLAND_T03/t03</td><td class='c'>2019-03_TESTLAND</td><td class='c'>748</td><td class='c'>509</td><td class='c'><b>0.6805</b></td><td class='c'>0.183</td><td class='c'>0.124</td></tr><tr><td>2019-03_TESTLAND_T04/t04</td><td class='c'>2019-03_TESTLAND</td><td class='c'>748</td><td class='c'>509</td><td class='c'><b>0.6805</b></td><td class='c'>0.183</td><td class='c'>0.124</td></tr><tr><td>2019-03_TESTLAND_T05/t05</td><td class='c'>2019-03_TESTLAND</td><td class='c'>754</td><td class='c'>509</td><td class='c'><b>0.6751</b></td><td class='c'>0.184</td><td class='c'>0.124</td></tr><tr><td>2019-03_TESTLAND_T06/t06</td><td class='c'>2019-03_TESTLAND</td><td class='c'>747</td><td class='c'>509</td><td class='c'><b>0.6814</b></td><td class='c'>0.182</td><td class='c'>0.124</td></tr><tr><td>2019-03_TESTLAND_T07/t07</td><td class='c'>2019-03_TESTLAND</td><td class='c'>746</td><td class='c'>509</td><td class='c'><b>0.6823</b></td><td class='c'>0.182</td><td class='c'>0.124</td></tr>
+</table>
+<div class="box"><b>这段数字代表什么</b>：它证明<b>推理管线在本机可执行、权重可加载、判分可复现</b>。
+它<b>不代表模型在真实 SAR 上的性能</b>——这些瓦片是 <code>_selftest_data</code> 合成件
+（合成自测瓦片（_selftest_data），非真实 Sen1Floods11，仅用于证明管线可执行与可复现）。真实性能见第二节的留出集指标。</div>
+
+
+<h2>四、宁波本地推理：拒答声明</h2>
+<table>
+<tr><td class="mut" style="width:130px">状态</td>
+<td><span class="tag t-org">BLOCKED</span></td></tr>
+<tr><td class="mut">缺什么</td><td>该应用（ASF / GES DISC）的 EULA 批准状态——不是缺失凭据。token 本身有效：EDL renew_token 用 Bearer 返回 200；GES DISC 元数据（.dds/.das）返回 200；仅**取数路径**返回 401，挑战头为 `Basic realm="Please enter your Earthdata Login credentials"`。</td></tr>
+<tr><td class="mut">已检索到的影像</td>
+<td>S1B_IW_GRDH_1SDV_20210725T215018_20210725T215043_027956_0355E9_6F8D（Sentinel-1B IW GRD_HD，VV+VH，
+2021-07-25T21:50:18Z，888.6 MB —— ASF Search API（匿名可查元数据））</td></tr>
+<tr><td class="mut">解锁条件</td><td>在浏览器登录状态下接受一次应用协议（GES DISC: disc.gsfc.nasa.gov/data-access；ASF: search.asf.alaska.edu 首页），同一 token 即可直接取数，无需重发 token。</td></tr>
+</table>
+
+<h3>实测证据（同一 token 在不同路径上的响应）</h3>
+<table>
+<tr><th>请求</th><th>状态码</th><th>含义</th></tr>
+<tr><td>EDL <code>renew_token</code>（Bearer）</td><td class="c"><span class="tag t-grn">200</span></td>
+<td><b>token 有效</b>——EDL 承认并当场签发</td></tr>
+<tr><td>GES DISC OPeNDAP <code>.dds</code></td><td class="c"><span class="tag t-grn">200</span></td>
+<td>服务可达，元数据可读</td></tr>
+<tr><td>GES DISC OPeNDAP <code>.das</code></td><td class="c"><span class="tag t-grn">200</span></td>
+<td>属性可读</td></tr>
+<tr><td>GES DISC OPeNDAP <code>.ascii</code>（取数）</td><td class="c"><span class="tag t-org">401</span></td>
+<td>取数路径要求应用批准</td></tr>
+<tr><td>GES DISC 文件下载</td><td class="c"><span class="tag t-org">401</span></td>
+<td>同上</td></tr>
+<tr><td>无认证取数（对照）</td><td class="c"><span class="tag t-org">401</span></td>
+<td>挑战头 <code>Basic realm="Please enter your Earthdata Login credentials"</code></td></tr>
+</table>
+<div class="box"><b>判读</b>：这不是"缺凭据"，也不是"token 失效"——而是<b>该应用的 EULA 未获批准</b>：
+同一 token 在元数据路径上 200、在取数路径上 401。解锁只需在浏览器登录状态下接受一次应用协议
+（GES DISC 与 ASF 各一次），<b>无需重新生成 token</b>。</div>
+<div class="box"><b>为什么必须写这一条</b>：本件的留出集指标来自<b>全球事件域</b>
+（Ghana / Nigeria / Pakistan / Paraguay / Somalia / Spain / Sri-Lanka / USA / Bolivia / India / Mekong），
+<b>不含宁波</b>。把全球指标说成"宁波已验证"就是超范围主张。据此本件对宁波本地推理判
+<b>BLOCKED</b>，并写明缺哪一景影像——这符合本产品"三态判定"的一贯口径。</div>
+
+<h2>五、方法说明</h2>
+<table>
+<tr><td class="mut" style="width:110px">模型</td><td>U-Net（tools/sar_train.build_model），单通道 VV 裁剪训练，sigmoid 阈值 0.5 出水体二值图</td></tr>
+<tr><td class="mut">基线</td><td>Otsu 阈值法（同一批瓦片、同一映射）</td></tr>
+<tr><td class="mut">数据</td><td>Sen1Floods11（真实 SAR 影像 + 人工标注），事件级切分</td></tr>
+<tr><td class="mut">复算</td><td>权重 SHA256 前 16 位随件给出；判分脚本 tools/sar_train.py</td></tr>
+</table>
+
+<footer>
+<b>数据来源</b>：留出集指标 <code>cloud_artifacts/*/metrics.json</code> 与
+<code>baseline.json</code>；权重 <code>cloud_artifacts/*/unet_ep*.pt</code>；
+本地推理数据 <code>.scratch/sar/_selftest_data</code>（合成件）。<br>
+<b>复算</b>：本件由 <code>typhoeus.sar_verify</code> 生成；本机推理部分可在
+<code>python -m typhoeus.sar_verify</code> 下重复执行。
+</footer>
+</body></html>

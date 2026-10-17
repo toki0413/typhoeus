@@ -1,0 +1,25 @@
+# 数据文件不入库（体积大、且多数有第三方许可与再分发限制）
+data/*.csv
+data/*.tif
+data/osm/
+data/seed/*.npz
+data/seed/chirps/domain/*.tif
+data/seed/cmfd/*.nc
+data/seed/cmpas/*.nc
+data/seed/_selftest/
+data/seed/imerg/*.HDF5
+data/seed/imerg/*.nc
+
+# 产物可复算生成，但保留在库中便于评审直接查看
+# out/ 不忽略
+
+# 沙箱/审计临时目录
+.scratch/
+.benchmarks/
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# 打包件与云端权重（已有单独说明）
+typhoeus_core.tar.gz
+*.part

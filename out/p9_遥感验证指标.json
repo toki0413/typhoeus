@@ -1,0 +1,273 @@
+{
+  "名称": "遥感淹没范围验证件",
+  "件性质": "面积型验证——不依赖点位精度，用于替代/补强 17 个涝点的点位级检验",
+  "留出集指标": {
+    "运行次数": 7,
+    "val_IoU_均值": 0.5953,
+    "val_IoU_中位": 0.6002,
+    "val_IoU_最小": 0.5139,
+    "val_IoU_最大": 0.6842,
+    "val_IoU_标准差": 0.0624,
+    "Otsu_均值": 0.1841,
+    "Otsu_最小": 0.1155,
+    "Otsu_最大": 0.3108,
+    "优于Otsu的次数": "7/7"
+  },
+  "逐次运行": [
+    {
+      "运行": "cv11",
+      "val_iou": 0.6842,
+      "otsu_iou": 0.3108,
+      "最佳轮": 8,
+      "瓦片数": 446,
+      "切分方式": "自切",
+      "映射": "eq1",
+      "留出事件": 1,
+      "设备": "cuda",
+      "耗时_s": 29.7,
+      "权重": [
+        "unet_ep10.pt",
+        "unet_ep2.pt",
+        "unet_ep4.pt",
+        "unet_ep6.pt",
+        "unet_ep8.pt"
+      ]
+    },
+    {
+      "运行": "cv23",
+      "val_iou": 0.6015,
+      "otsu_iou": 0.1768,
+      "最佳轮": 6,
+      "瓦片数": 446,
+      "切分方式": "自切",
+      "映射": "eq1",
+      "留出事件": 1,
+      "设备": "cuda",
+      "耗时_s": 31.3,
+      "权重": [
+        "unet_ep10.pt",
+        "unet_ep2.pt",
+        "unet_ep4.pt",
+        "unet_ep6.pt",
+        "unet_ep8.pt"
+      ]
+    },
+    {
+      "运行": "cv41",
+      "val_iou": 0.5472,
+      "otsu_iou": 0.1155,
+      "最佳轮": 8,
+      "瓦片数": 446,
+      "切分方式": "自切",
+      "映射": "eq1",
+      "留出事件": 1,
+      "设备": "cuda",
+      "耗时_s": 29.6,
+      "权重": [
+        "unet_ep10.pt",
+        "unet_ep2.pt",
+        "unet_ep4.pt",
+        "unet_ep6.pt",
+        "unet_ep8.pt"
+      ]
+    },
+    {
+      "运行": "cv67",
+      "val_iou": 0.5396,
+      "otsu_iou": 0.1716,
+      "最佳轮": 5,
+      "瓦片数": 446,
+      "切分方式": "自切",
+      "映射": "eq1",
+      "留出事件": 1,
+      "设备": "cuda",
+      "耗时_s": 34.0,
+      "权重": [
+        "unet_ep10.pt",
+        "unet_ep2.pt",
+        "unet_ep4.pt",
+        "unet_ep6.pt",
+        "unet_ep8.pt"
+      ]
+    },
+    {
+      "运行": "cv7",
+      "val_iou": 0.6804,
+      "otsu_iou": 0.1839,
+      "最佳轮": 8,
+      "瓦片数": 446,
+      "切分方式": "自切",
+      "映射": "eq1",
+      "留出事件": 1,
+      "设备": "cuda",
+      "耗时_s": 27.8,
+      "权重": [
+        "unet_ep10.pt",
+        "unet_ep2.pt",
+        "unet_ep4.pt",
+        "unet_ep6.pt",
+        "unet_ep8.pt"
+      ]
+    },
+    {
+      "运行": "cv97",
+      "val_iou": 0.5139,
+      "otsu_iou": 0.1425,
+      "最佳轮": 1,
+      "瓦片数": 446,
+      "切分方式": "自切",
+      "映射": "eq1",
+      "留出事件": 1,
+      "设备": "cuda",
+      "耗时_s": 27.6,
+      "权重": [
+        "unet_ep10.pt",
+        "unet_ep2.pt",
+        "unet_ep4.pt",
+        "unet_ep6.pt",
+        "unet_ep8.pt"
+      ]
+    },
+    {
+      "运行": "v11_run2",
+      "val_iou": 0.6002,
+      "otsu_iou": 0.1874,
+      "最佳轮": 4,
+      "瓦片数": 446,
+      "切分方式": "官方 splits",
+      "映射": "eq1",
+      "留出事件": 1,
+      "设备": "cuda",
+      "耗时_s": 18.7,
+      "权重": [
+        "unet_ep2.pt",
+        "unet_ep4.pt",
+        "unet_ep6.pt",
+        "unet_ep8.pt"
+      ]
+    }
+  ],
+  "判据与三态": {
+    "判据": "IoU ≥ 0.5 且必须优于 Otsu 阈值基线",
+    "IoU达标": true,
+    "全部优于Otsu": true,
+    "三态": "PASS"
+  },
+  "本地推理复现": {
+    "可用": true,
+    "权重": "unet_ep10.pt",
+    "权重sha256": "134443769b4f6a98",
+    "设备": "cuda",
+    "映射": "eq1",
+    "瓦片数": 8,
+    "平均IoU": 0.6825,
+    "中位IoU": 0.6814,
+    "逐瓦片": [
+      {
+        "瓦片": "2019-03_TESTLAND_T00/t00",
+        "事件": "2019-03_TESTLAND",
+        "union": 747,
+        "intersection": 509,
+        "iou": 0.6814,
+        "预测水体占比": 0.1824,
+        "真值水体占比": 0.1243
+      },
+      {
+        "瓦片": "2019-03_TESTLAND_T01/t01",
+        "事件": "2019-03_TESTLAND",
+        "union": 742,
+        "intersection": 509,
+        "iou": 0.686,
+        "预测水体占比": 0.1812,
+        "真值水体占比": 0.1243
+      },
+      {
+        "瓦片": "2019-03_TESTLAND_T02/t02",
+        "事件": "2019-03_TESTLAND",
+        "union": 735,
+        "intersection": 509,
+        "iou": 0.6925,
+        "预测水体占比": 0.1794,
+        "真值水体占比": 0.1243
+      },
+      {
+        "瓦片": "2019-03_TESTLAND_T03/t03",
+        "事件": "2019-03_TESTLAND",
+        "union": 748,
+        "intersection": 509,
+        "iou": 0.6805,
+        "预测水体占比": 0.1826,
+        "真值水体占比": 0.1243
+      },
+      {
+        "瓦片": "2019-03_TESTLAND_T04/t04",
+        "事件": "2019-03_TESTLAND",
+        "union": 748,
+        "intersection": 509,
+        "iou": 0.6805,
+        "预测水体占比": 0.1826,
+        "真值水体占比": 0.1243
+      },
+      {
+        "瓦片": "2019-03_TESTLAND_T05/t05",
+        "事件": "2019-03_TESTLAND",
+        "union": 754,
+        "intersection": 509,
+        "iou": 0.6751,
+        "预测水体占比": 0.1841,
+        "真值水体占比": 0.1243
+      },
+      {
+        "瓦片": "2019-03_TESTLAND_T06/t06",
+        "事件": "2019-03_TESTLAND",
+        "union": 747,
+        "intersection": 509,
+        "iou": 0.6814,
+        "预测水体占比": 0.1824,
+        "真值水体占比": 0.1243
+      },
+      {
+        "瓦片": "2019-03_TESTLAND_T07/t07",
+        "事件": "2019-03_TESTLAND",
+        "union": 746,
+        "intersection": 509,
+        "iou": 0.6823,
+        "预测水体占比": 0.1821,
+        "真值水体占比": 0.1243
+      }
+    ],
+    "数据性质": "合成自测瓦片（_selftest_data），非真实 Sen1Floods11，仅用于证明管线可执行与可复现"
+  },
+  "宁波推理": {
+    "项": "宁波本地淹没范围推理",
+    "三态": "BLOCKED",
+    "缺什么": "该应用（ASF / GES DISC）的 EULA 批准状态——不是缺失凭据。token 本身有效：EDL renew_token 用 Bearer 返回 200；GES DISC 元数据（.dds/.das）返回 200；仅**取数路径**返回 401，挑战头为 `Basic realm=\"Please enter your Earthdata Login credentials\"`。",
+    "已检索到的影像": {
+      "granule": "S1B_IW_GRDH_1SDV_20210725T215018_20210725T215043_027956_0355E9_6F8D",
+      "平台": "Sentinel-1B",
+      "模式": "IW",
+      "级别": "GRD_HD",
+      "极化": "VV+VH",
+      "成像时刻": "2021-07-25T21:50:18Z",
+      "体积_MB": 888.6,
+      "来源": "ASF Search API（匿名可查元数据）"
+    },
+    "解锁条件": "在浏览器登录状态下接受一次应用协议（GES DISC: disc.gsfc.nasa.gov/data-access；ASF: search.asf.alaska.edu 首页），同一 token 即可直接取数，无需重发 token。",
+    "实测证据": {
+      "EDL_renew_token_Bearer": 200,
+      "GES_DISC_OPeNDAP_dds": 200,
+      "GES_DISC_OPeNDAP_das": 200,
+      "GES_DISC_OPeNDAP_ascii": 401,
+      "GES_DISC_文件下载": 401,
+      "无认证取数挑战头": "Basic realm=\"Please enter your Earthdata Login credentials\""
+    }
+  },
+  "方法": {
+    "模型": "U-Net（tools/sar_train.build_model），单通道 VV 裁剪训练，sigmoid 阈值 0.5 出水体二值图",
+    "基线": "Otsu 阈值法（同一批瓦片、同一映射）",
+    "数据": "Sen1Floods11（真实 SAR 影像 + 人工标注），事件级切分",
+    "复算": "权重 SHA256 前 16 位随件给出；判分脚本 tools/sar_train.py"
+  },
+  "生成模块": "typhoeus.sar_verify",
+  "生成时间": "2026-10-17T09:59:50"
+}

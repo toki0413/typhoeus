@@ -1,0 +1,15 @@
+{
+  "schema_version": "3.6.1",
+  "kernel_version": "0.6.0-demo",
+  "config_hash": "92cd76c2ea3f",
+  "source_hash": "40d07eb29407b4b6",
+  "outputs": [
+    "01_preset_plan",
+    "02_recovery_order",
+    "03_event_reconciliation",
+    "04_resilience_pricing",
+    "05_health_metrics",
+    "06_health_report"
+  ],
+  "caveat": "降雨驱动为 ERA5 再分析（经 Open-Meteo archive-api，免 key），非台风路径参数化合成。面雨量对域内站口径偏差 -8%、对官方全市面雨量 375 mm 偏差 -31%。该源已用域内 1 个实测站做分位数订正，订正锚点与门槛 15 的观测侧同源，故域内口径偏差（-8%）是自样本数字，不作判据。再分析能约束过程总量但不能约束对流尺度极值：涝点水深命中率（门槛 14）在面雨量口径改善的同时归零，峰值雨强只有参数化场的约三分之一，管网与地面积水按强度失效。未接 CMFD 2.0 与雷达实测。"
+}

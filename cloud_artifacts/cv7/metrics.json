@@ -1,0 +1,106 @@
+{
+ "root": "/root/autodl-tmp/sar_v11/x",
+ "layout": "官方 v1.1 扁平命名（S1Hand↔LabelHand 跨树配对）",
+ "split_mode": "自切",
+ "mapping": "eq1",
+ "mapping_evidence": {
+  "per_class_mean_vv": {
+   "-1": -10.0,
+   "0": -9.17,
+   "1": -14.82
+  },
+  "water_class": 1,
+  "margin_db": 4.82,
+  "mapping": "eq1",
+  "n_tiles_used": 40
+ },
+ "device": "cuda",
+ "n_tiles": 446,
+ "label_stats": {
+  "label_vals": [
+   -1,
+   0,
+   1
+  ],
+  "tile_shapes": [
+   [
+    512,
+    512
+   ]
+  ],
+  "vv_min": -89.79,
+  "vv_max": 22.99,
+  "n_sampled": 24
+ },
+ "baseline_otsu_iou": 0.1839,
+ "best": {
+  "epoch": 8,
+  "train_loss": 0.5994,
+  "val_iou": 0.6804,
+  "elapsed_s": 24.9
+ },
+ "history": [
+  {
+   "epoch": 0,
+   "train_loss": 1.2301,
+   "val_iou": 0.4526,
+   "elapsed_s": 3.4
+  },
+  {
+   "epoch": 1,
+   "train_loss": 0.985,
+   "val_iou": 0.5424,
+   "elapsed_s": 6.2
+  },
+  {
+   "epoch": 2,
+   "train_loss": 0.8699,
+   "val_iou": 0.6526,
+   "elapsed_s": 9.0
+  },
+  {
+   "epoch": 3,
+   "train_loss": 0.7515,
+   "val_iou": 0.6668,
+   "elapsed_s": 11.6
+  },
+  {
+   "epoch": 4,
+   "train_loss": 0.7247,
+   "val_iou": 0.6734,
+   "elapsed_s": 14.3
+  },
+  {
+   "epoch": 5,
+   "train_loss": 0.6912,
+   "val_iou": 0.6568,
+   "elapsed_s": 16.9
+  },
+  {
+   "epoch": 6,
+   "train_loss": 0.6745,
+   "val_iou": 0.6013,
+   "elapsed_s": 19.6
+  },
+  {
+   "epoch": 7,
+   "train_loss": 0.6623,
+   "val_iou": 0.6598,
+   "elapsed_s": 22.2
+  },
+  {
+   "epoch": 8,
+   "train_loss": 0.5994,
+   "val_iou": 0.6804,
+   "elapsed_s": 24.9
+  },
+  {
+   "epoch": 9,
+   "train_loss": 0.6465,
+   "val_iou": 0.6389,
+   "elapsed_s": 27.8
+  }
+ ],
+ "verdict": "网络打过阈值基线",
+ "elapsed_s": 27.8
+}

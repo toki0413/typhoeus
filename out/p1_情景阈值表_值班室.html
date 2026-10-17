@@ -1,0 +1,123 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>汛期值守与布点表</title><style>
+:root{--ink:#1a1a1a;--mut:#6b7280;--line:#d7dbe0;--bg:#fff;--red:#c0392b;--org:#d97706;
+--yel:#ca8a04;--grn:#15803d;--box:#f7f8fa;--acc:#0f4c81}
+*{box-sizing:border-box}
+body{margin:0;padding:28px 34px;background:var(--bg);color:var(--ink);
+font:14px/1.62 "Microsoft YaHei","PingFang SC",Segoe UI,sans-serif;max-width:1180px}
+h1{font-size:23px;margin:0 0 6px}
+h2{font-size:16px;margin:26px 0 10px;padding-bottom:5px;border-bottom:2px solid var(--acc)}
+.sub{color:var(--mut);font-size:12.5px;margin-bottom:16px}
+table{border-collapse:collapse;width:100%;margin:8px 0 4px;font-size:12.8px}
+th,td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top}
+th{background:var(--box);font-weight:600;white-space:nowrap}
+td.c{text-align:center;white-space:nowrap}
+.mut{color:var(--mut)}
+.tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11.5px;
+border:1px solid var(--line);background:#fff;white-space:nowrap}
+.t-red{border-color:var(--red);color:var(--red)}
+.t-org{border-color:var(--org);color:var(--org)}
+.t-yel{border-color:var(--yel);color:var(--yel)}
+.t-grn{border-color:var(--grn);color:var(--grn)}
+.box{background:var(--box);border:1px solid var(--line);border-left:4px solid var(--acc);
+padding:11px 14px;margin:12px 0;font-size:12.8px}
+.warn{border-left-color:var(--org)}
+.stop{border-left-color:var(--red)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px;margin:12px 0}
+.kv div{background:var(--box);border:1px solid var(--line);padding:9px 11px}
+.kv b{display:block;font-size:19px;margin-top:2px}
+.kv span{color:var(--mut);font-size:11.5px}
+footer{margin-top:26px;padding-top:12px;border-top:1px solid var(--line);
+color:var(--mut);font-size:11.5px;line-height:1.75}
+ol,ul{margin:6px 0 6px 20px;padding:0}
+li{margin:3px 0}
+.sig{margin-top:18px;border:1px dashed var(--line);padding:14px;background:#fcfcfd}
+.sig table{font-size:12.5px}
+</style></head><body>
+<h1>汛期值守与布点表</h1>
+<div class="sub">提比翁情景—规划机 · 第 1 件 · 防汛值班室 · 事件：2021 年第 6 号台风「烟花」（In-Fa）· 宁波鄞东南片区<br>
+生成 2026-10-17 09:59 · config_hash <code>92cd76c2ea3f</code> ·
+source_hash <code>40d07eb29407b4b6</code> · schema 3.6.1</div>
+
+<div class="box"><b>本件给什么</b>：四档降雨情景（p50 / p80 / p90 / p95）对应的
+<b>值守等级、巡查频次、人员与排涝车配置</b>，<b>7 处优先点位</b>清单，
+以及<b>越阈时刻</b>（哪一档在什么时候被触发）。值班室照第三列执行即可，无需再看其他文档。</div>
+
+<div class="kv">
+<div><span>预案启动线（p90）</span><b>338.8 mm</b></div>
+<div><span>模型建议布点数</span><b>12 处</b></div>
+<div><span>空间覆盖率</span><b>23.9%</b></div>
+<div><span>优先点位（本件给出）</span><b>7 处</b></div>
+<div><span>台账点名点位</span><b>28 处</b></div>
+<div><span>多事件标定</span><b>16 场 / 36 年</b></div>
+</div>
+
+
+<h2>一、逐时雨情与越阈时刻</h2>
+<div class="kv">
+<div><span>时间轴起点</span><b>2021-07-25T06:00</b></div>
+<div><span>窗口长度</span><b>72 h</b><span>步长 10 分钟</span></div>
+<div><span>事件累计面雨量</span><b>259.1 mm</b>
+<span>未标定 144.8 mm，标定系数 1.790</span></div>
+<div><span>峰值雨强（面平均）</span><b>11.2 mm/h</b>
+<span>07-25 07:00</span></div>
+<div><span>峰值雨强（格点最大）</span><b>12.5 mm/h</b>
+<span>07-25 07:00</span></div>
+<div><span>本场触发到的档位</span><b>1 / 4</b></div>
+</div>
+
+<table>
+<tr><th>情景档</th><th>阈值 mm</th><th>是否触发</th><th>首达时刻</th><th>历时</th></tr>
+<tr><td class='c'><b>p50</b></td><td class='c'>258.4</td><td class='c'><span class='tag t-org'>已达</span></td><td class='c'><b>07-28 05:30</b></td><td class='c'>71.5 h</td></tr><tr><td class='c'><b>p80</b></td><td class='c'>313.2</td><td class='c'><span class='tag t-grn'>未达</span></td><td class='c mut'>—</td><td class='c mut'>—</td></tr><tr><td class='c'><b>p90</b></td><td class='c'>338.8</td><td class='c'><span class='tag t-grn'>未达</span></td><td class='c mut'>—</td><td class='c mut'>—</td></tr><tr><td class='c'><b>p95</b></td><td class='c'>354.1</td><td class='c'><span class='tag t-grn'>未达</span></td><td class='c mut'>—</td><td class='c mut'>—</td></tr>
+</table>
+<div class="mut" style="font-size:12px">判据：累计面雨量首次达到该档阈值。2021 烟花（本场）累计
+259.1 mm，仅触及最低档；p80 及以上未被本场触发——
+这正是"情景分档"而非"单场预报"的意义：值守等级按档位预备，实际触发由雨情决定。</div>
+
+<h3 style="font-size:14px;margin:18px 0 6px">雨量最强的 6 个小时</h3>
+<table>
+<tr><th>时刻</th><th>小时雨量 mm</th><th>累计面雨量 mm</th><th>历时</th></tr>
+<tr><td class='c'>07-25 07:00</td><td class='c'>11.21</td><td class='c'>30.5</td><td class='c'>1.0 h</td></tr><tr><td class='c'>07-25 08:00</td><td class='c'>9.73</td><td class='c'>48.0</td><td class='c'>2.0 h</td></tr><tr><td class='c'>07-26 21:00</td><td class='c'>7.56</td><td class='c'>175.9</td><td class='c'>39.0 h</td></tr><tr><td class='c'>07-25 06:00</td><td class='c'>5.85</td><td class='c'>10.5</td><td class='c'>0.0 h</td></tr><tr><td class='c'>07-25 10:00</td><td class='c'>5.16</td><td class='c'>60.3</td><td class='c'>4.0 h</td></tr><tr><td class='c'>07-26 22:00</td><td class='c'>4.68</td><td class='c'>184.3</td><td class='c'>40.0 h</td></tr>
+</table>
+<div class="mut" style="font-size:12px">逐时剖面共 73 个小时，完整序列见
+<code>out/p7_逐时雨情.json</code>。面雨强为 144×270 格空间平均，另附格点最大口径。</div>
+
+
+<h2>一、情景—响应等级对照（照此执行）</h2>
+<table>
+<tr><th>情景</th><th>72 h 面雨量</th><th>损失倍数<br><span class="mut">相对 p50</span></th>
+<th>响应等级</th><th>动作要求</th><th>布点</th><th>人员与装备</th></tr>
+<tr><td class='c'><b>p50</b></td><td class='c'>258.4 mm</td><td class='c'>1.00 ×</td><td class='c'><span class='tag t-grn'>常态</span></td><td>按常规汛期巡查执行；优先点位每 12 h 一次</td><td class='c'>0 处</td><td>常规值守</td></tr><tr><td class='c'><b>p80</b></td><td class='c'>313.2 mm</td><td class='c'>1.50 ×</td><td class='c'><span class='tag t-yel'>加强</span></td><td>优先点位每 6 h 一次；下穿立交/桥洞派专人盯守</td><td class='c'>6 处</td><td>1 组（2 人）加强班</td></tr><tr><td class='c'><b>p90</b></td><td class='c'>338.8 mm</td><td class='c'>1.77 ×</td><td class='c'><span class='tag t-org'>三级响应（预案启动线）</span></td><td>优先点位每 2 h 一次；全部下穿立交预置警示与绕行牌</td><td class='c'>12 处（模型建议布点数）</td><td>2 组（4 人）+ 排涝车 1 台待命</td></tr><tr><td class='c'><b>p95</b></td><td class='c'>354.1 mm</td><td class='c'>1.94 ×</td><td class='c'><span class='tag t-red'>三级响应加强</span></td><td>优先点位连续盯守；低洼小区逐栋走访提示</td><td class='c'>12 处 + 低洼小区 7 处走访</td><td>3 组（6 人）+ 排涝车 2 台待命</td></tr>
+</table>
+<div class="mut" style="font-size:12px">损失倍数由 14 场实测标定的强度—损失关系
+Q ∝ 雨量<sup>2.109</sup> 推得（面雨量翻倍 → 损失增 4.3 倍），
+用于判断"雨情加严一档，代价放大多少"，是片区级指标。</div>
+
+<h2>二、优先点位清单（7 处，直接排班）</h2>
+<table>
+<tr><th>序</th><th>点名</th><th>区</th><th>结构</th><th>实测水深 m</th><th>通报级别</th><th>建议动作</th><th>观测来源</th></tr>
+<tr><td class='c'>1</td><td><b>海曙新芝路</b></td><td class='c'>海曙</td><td class='c'>低洼路段</td><td class='c'>0.64</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>每 4 h 巡查</td><td class='mut' style='font-size:11.5px'>人民日报客户端 07-27 报道</td></tr><tr><td class='c'>2</td><td><b>甬江大桥东江东北路下立交</b></td><td class='c'>江东</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>每 2 h 盯守 + 预置绕行牌</td><td class='mut' style='font-size:11.5px'>宁波市水利局 07-26 通报，9 个下穿立交之一</td></tr><tr><td class='c'>3</td><td><b>盛莫路1278弄立交</b></td><td class='c'>鄞州</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>每 2 h 盯守 + 预置绕行牌</td><td class='mut' style='font-size:11.5px'>宁波市水利局 07-26 通报</td></tr><tr><td class='c'>4</td><td><b>人民南路立交</b></td><td class='c'>海曙</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>每 2 h 盯守 + 预置绕行牌</td><td class='mut' style='font-size:11.5px'>宁波市水利局 07-26 通报</td></tr><tr><td class='c'>5</td><td><b>建兴路下立交</b></td><td class='c'>江东</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>每 2 h 盯守 + 预置绕行牌</td><td class='mut' style='font-size:11.5px'>宁波市水利局 07-26 通报</td></tr><tr><td class='c'>6</td><td><b>百宁街下立交</b></td><td class='c'>海曙</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>每 2 h 盯守 + 预置绕行牌</td><td class='mut' style='font-size:11.5px'>宁波市水利局 07-26 通报</td></tr><tr><td class='c'>7</td><td><b>宋诏桥路立交</b></td><td class='c'>海曙</td><td class='c'>下穿立交</td><td class='c'>0.20</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>每 2 h 盯守 + 预置绕行牌</td><td class='mut' style='font-size:11.5px'>宁波市水利局 07-26 通报，0.1-0.2 m 档</td></tr>
+</table>
+<div class="mut" style="font-size:12px">筛选口径：结构为下穿立交 / 桥洞，或实测积水达 0.45 m 以上。
+"实测水深"为 2021 烟花事件公开通报值，逐条附来源。</div>
+
+<h2>三、全部 28 处点位一览</h2>
+<table>
+<tr><th>编号</th><th>点名</th><th>区</th><th>结构</th><th>实测 m</th><th>级别</th>
+<th>p50</th><th>p80</th><th>p90</th><th>p95</th></tr>
+<tr><td>FP012</td><td>洞桥明苑南门</td><td class='c'>海曙</td><td class='c'>低洼路段</td><td class='c'>0.80</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>0.52</td><td class='c'>0.57</td><td class='c'>0.62</td><td class='c'>0.68</td></tr><tr><td>FP001</td><td>鄞州大道(雅源南路)</td><td class='c'>鄞州</td><td class='c'>下穿立交</td><td class='c'>0.68</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>0.68</td><td class='c'>0.75</td><td class='c'>0.82</td><td class='c'>0.88</td></tr><tr><td>FP002</td><td>海曙新芝路</td><td class='c'>海曙</td><td class='c'>低洼路段</td><td class='c'>0.64</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>0.42</td><td class='c'>0.46</td><td class='c'>0.50</td><td class='c'>0.54</td></tr><tr><td>FP003</td><td>甬江大桥东江东北路下立交</td><td class='c'>江东</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>0.50</td><td class='c'>0.55</td><td class='c'>0.60</td><td class='c'>0.65</td></tr><tr><td>FP004</td><td>盛莫路1278弄立交</td><td class='c'>鄞州</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>0.50</td><td class='c'>0.55</td><td class='c'>0.60</td><td class='c'>0.65</td></tr><tr><td>FP005</td><td>人民南路立交</td><td class='c'>海曙</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>0.50</td><td class='c'>0.55</td><td class='c'>0.60</td><td class='c'>0.65</td></tr><tr><td>FP006</td><td>建兴路下立交</td><td class='c'>江东</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>0.50</td><td class='c'>0.55</td><td class='c'>0.60</td><td class='c'>0.65</td></tr><tr><td>FP007</td><td>段三线绕城高速立交</td><td class='c'>鄞州</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>0.50</td><td class='c'>0.55</td><td class='c'>0.60</td><td class='c'>0.65</td></tr><tr><td>FP008</td><td>百宁街下立交</td><td class='c'>海曙</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>0.50</td><td class='c'>0.55</td><td class='c'>0.60</td><td class='c'>0.65</td></tr><tr><td>FP009</td><td>紫城路西侧桥洞</td><td class='c'>海曙</td><td class='c'>桥洞</td><td class='c'>0.50</td><td class='c'><span class='tag t-red'>红</span></td><td class='c'>0.50</td><td class='c'>0.55</td><td class='c'>0.60</td><td class='c'>0.65</td></tr><tr><td>FP013</td><td>西湾路</td><td class='c'>海曙</td><td class='c'>低洼路段</td><td class='c'>0.48</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.31</td><td class='c'>0.34</td><td class='c'>0.37</td><td class='c'>0.41</td></tr><tr><td>FP014</td><td>东柳社区793弄17号</td><td class='c'>鄞州</td><td class='c'>低洼小区</td><td class='c'>0.44</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.33</td><td class='c'>0.36</td><td class='c'>0.40</td><td class='c'>0.43</td></tr><tr><td>FP015</td><td>中塘路87弄</td><td class='c'>鄞州</td><td class='c'>低洼小区</td><td class='c'>0.41</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.31</td><td class='c'>0.34</td><td class='c'>0.37</td><td class='c'>0.40</td></tr><tr><td>FP027</td><td>象山起春路</td><td class='c'>象山</td><td class='c'>低洼路段</td><td class='c'>0.40</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.26</td><td class='c'>0.29</td><td class='c'>0.31</td><td class='c'>0.34</td></tr><tr><td>FP018</td><td>古中小区</td><td class='c'>江东</td><td class='c'>低洼小区</td><td class='c'>0.38</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.29</td><td class='c'>0.31</td><td class='c'>0.34</td><td class='c'>0.37</td></tr><tr><td>FP016</td><td>中华路</td><td class='c'>鄞州</td><td class='c'>低洼路段</td><td class='c'>0.37</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.24</td><td class='c'>0.26</td><td class='c'>0.29</td><td class='c'>0.31</td></tr><tr><td>FP017</td><td>苗圃路</td><td class='c'>鄞州</td><td class='c'>低洼路段</td><td class='c'>0.37</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.24</td><td class='c'>0.26</td><td class='c'>0.29</td><td class='c'>0.31</td></tr><tr><td>FP028</td><td>象山体育场路</td><td class='c'>象山</td><td class='c'>低洼路段</td><td class='c'>0.35</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.23</td><td class='c'>0.25</td><td class='c'>0.27</td><td class='c'>0.30</td></tr><tr><td>FP019</td><td>文昌街76号</td><td class='c'>海曙</td><td class='c'>低洼路段</td><td class='c'>0.34</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.22</td><td class='c'>0.24</td><td class='c'>0.27</td><td class='c'>0.29</td></tr><tr><td>FP020</td><td>体育场路30弄12号</td><td class='c'>江东</td><td class='c'>低洼小区</td><td class='c'>0.34</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.26</td><td class='c'>0.28</td><td class='c'>0.31</td><td class='c'>0.33</td></tr><tr><td>FP021</td><td>新芝小区95弄13号</td><td class='c'>海曙</td><td class='c'>低洼小区</td><td class='c'>0.31</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.23</td><td class='c'>0.26</td><td class='c'>0.28</td><td class='c'>0.30</td></tr><tr><td>FP022</td><td>清河路</td><td class='c'>海曙</td><td class='c'>低洼路段</td><td class='c'>0.30</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.20</td><td class='c'>0.21</td><td class='c'>0.23</td><td class='c'>0.25</td></tr><tr><td>FP023</td><td>裘市老街</td><td class='c'>海曙</td><td class='c'>低洼路段</td><td class='c'>0.26</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.17</td><td class='c'>0.19</td><td class='c'>0.20</td><td class='c'>0.22</td></tr><tr><td>FP024</td><td>张家新村</td><td class='c'>江东</td><td class='c'>低洼小区</td><td class='c'>0.25</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.19</td><td class='c'>0.21</td><td class='c'>0.22</td><td class='c'>0.24</td></tr><tr><td>FP026</td><td>五乡西路</td><td class='c'>鄞州</td><td class='c'>低洼路段</td><td class='c'>0.23</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.15</td><td class='c'>0.16</td><td class='c'>0.18</td><td class='c'>0.19</td></tr><tr><td>FP025</td><td>红梅小区</td><td class='c'>江东</td><td class='c'>低洼小区</td><td class='c'>0.22</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.17</td><td class='c'>0.18</td><td class='c'>0.20</td><td class='c'>0.21</td></tr><tr><td>FP010</td><td>鄞县大道立交</td><td class='c'>鄞州</td><td class='c'>下穿立交</td><td class='c'>0.20</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.20</td><td class='c'>0.22</td><td class='c'>0.24</td><td class='c'>0.26</td></tr><tr><td>FP011</td><td>宋诏桥路立交</td><td class='c'>海曙</td><td class='c'>下穿立交</td><td class='c'>0.20</td><td class='c'><span class='tag t-org'>橙</span></td><td class='c'>0.20</td><td class='c'>0.22</td><td class='c'>0.24</td><td class='c'>0.26</td></tr>
+</table>
+<div class="mut" style="font-size:12px">四档列值为按结构类型与情景加严比例换算的量级，用于<b>排班分档</b>；
+下穿立交/桥洞按 1.00、低洼小区 0.75、低洼路段 0.65 的敏感系数折算。</div>
+
+<h2>技术参数与适用边界</h2><table><tr><td class='mut' style='width:110px'>事件</td><td>2021 年第 6 号台风「烟花」（In-Fa）· 宁波鄞东南片区</td></tr><tr><td class='mut' style='width:110px'>降雨驱动</td><td>ERA5 再分析（Open-Meteo archive-api，免 key，本地缓存命中）＋ CHIRPS-2.0 卫星—站点融合日降水独立交叉验证</td></tr><tr><td class='mut' style='width:110px'>面雨量</td><td>259.1 mm / 72 h（ERA5 单链）；独立源 CHIRPS-2.0 事件累计 234.3 mm；官方全市口径 375 mm</td></tr><tr><td class='mut' style='width:110px'>情景分位</td><td>p50 258.4 / p80 313.2 / p90 338.8 / p95 354.1 mm（200 成员集合，51 分位保序订正）</td></tr><tr><td class='mut' style='width:110px'>内核</td><td>图守恒律求解器（守恒残差 2.52e-10）+ Green-Ampt 入渗 + Ghil-Sellers 能量平衡</td></tr><tr><td class='mut' style='width:110px'>地形</td><td>Copernicus GLO-30 DSM，30 m，重采样后格网 144 × 270（像元约 54 × 61 m）</td></tr><tr><td class='mut' style='width:110px'>点位</td><td>台账点名 28 处（域内 17 处），坐标精度 ±100 m（地名定位近似）</td></tr><tr><td class='mut' style='width:110px'>观测锚点</td><td>公开通报逐条溯源：宁波市水利局 9 条、央广网 15 条、人民日报客户端 2 条、人民网浙江 2 条</td></tr><tr><td class='mut' style='width:110px'>标定样本</td><td>18 场历史气旋目录，实算成功 16 场，跨 36 年（1990–2025）</td></tr><tr><td class='mut' style='width:110px'>复算指纹</td><td>config_hash 92cd76c2ea3f · source_hash 40d07eb29407b4b6 · schema 3.6.1</td></tr><tr><td class='mut' style='width:110px'>未纳入</td><td>潮位项、管网顶托高程与过流能力、逐路段通行实测、改造前后积水观测</td></tr></table>
+
+<footer>
+<b>数据来源</b>：面雨量与情景分位数 <code>out/01_preset_plan.json</code>；
+损失与恢复次序 <code>out/02_recovery_order.json</code>、<code>out/03_event_reconciliation.json</code>；
+强度—损失标定 <code>out/07_multievent_calibration.json</code>；
+涝点点名与实测水深 <code>data/seed/flood_points_2021_infa.csv</code>（逐条附公开通报来源）。<br>
+<b>复算</b>：本件由 <code>typhoeus.products</code> 随 <code>python -m typhoeus.cli run</code> 自动生成，
+输入未改动，同一 config_hash 下可逐位复算。
+</footer>
+</body></html>

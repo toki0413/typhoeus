@@ -1,0 +1,156 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>片区影响评估单</title><style>
+:root{--ink:#1a1a1a;--mut:#6b7280;--line:#d7dbe0;--bg:#fff;--red:#c0392b;--org:#d97706;
+--yel:#ca8a04;--grn:#15803d;--box:#f7f8fa;--acc:#0f4c81}
+*{box-sizing:border-box}
+body{margin:0;padding:28px 34px;background:var(--bg);color:var(--ink);
+font:14px/1.62 "Microsoft YaHei","PingFang SC",Segoe UI,sans-serif;max-width:1180px}
+h1{font-size:23px;margin:0 0 6px}
+h2{font-size:16px;margin:26px 0 10px;padding-bottom:5px;border-bottom:2px solid var(--acc)}
+.sub{color:var(--mut);font-size:12.5px;margin-bottom:16px}
+table{border-collapse:collapse;width:100%;margin:8px 0 4px;font-size:12.8px}
+th,td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top}
+th{background:var(--box);font-weight:600;white-space:nowrap}
+td.c{text-align:center;white-space:nowrap}
+.mut{color:var(--mut)}
+.tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11.5px;
+border:1px solid var(--line);background:#fff;white-space:nowrap}
+.t-red{border-color:var(--red);color:var(--red)}
+.t-org{border-color:var(--org);color:var(--org)}
+.t-yel{border-color:var(--yel);color:var(--yel)}
+.t-grn{border-color:var(--grn);color:var(--grn)}
+.box{background:var(--box);border:1px solid var(--line);border-left:4px solid var(--acc);
+padding:11px 14px;margin:12px 0;font-size:12.8px}
+.warn{border-left-color:var(--org)}
+.stop{border-left-color:var(--red)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px;margin:12px 0}
+.kv div{background:var(--box);border:1px solid var(--line);padding:9px 11px}
+.kv b{display:block;font-size:19px;margin-top:2px}
+.kv span{color:var(--mut);font-size:11.5px}
+footer{margin-top:26px;padding-top:12px;border-top:1px solid var(--line);
+color:var(--mut);font-size:11.5px;line-height:1.75}
+ol,ul{margin:6px 0 6px 20px;padding:0}
+li{margin:3px 0}
+.sig{margin-top:18px;border:1px dashed var(--line);padding:14px;background:#fcfcfd}
+.sig table{font-size:12.5px}
+</style></head><body>
+<h1>片区影响评估单</h1>
+<div class="sub">提比翁情景—规划机 · 第 2 件 · 规划岗 · 事件：2021 年第 6 号台风「烟花」（In-Fa）· 宁波鄞东南片区<br>
+生成 2026-10-17 09:59 · config_hash <code>92cd76c2ea3f</code> ·
+source_hash <code>40d07eb29407b4b6</code> · schema 3.6.1</div>
+
+<div class="box"><b>本件给什么</b>：本片区在一次台风事件中的 <b>功能损失总量 0.7272</b>、
+它的四项来源构成、四色面积分布，以及 <b>抢修先后次序</b>（次模贪心，对最优基线提升 27.9%）。
+规划岗拿它做"损失侧分母"，与第 3 件的投入侧对照即可立项论证。</div>
+
+<div class="kv">
+<div><span>事件总功能损失 Q</span><b>0.7272</b></div>
+<div><span>气候分量（不可干预）</span><b>0.6809</b></div>
+<div><span>超标分量（可干预）</span><b>0.1079</b></div>
+<div><span>工程失效分量（可干预）</span><b>0.0110</b></div>
+<div><span>可干预总量</span><b>0.1189</b></div>
+<div><span>分解闭合</span><b>成立（残差 10.0%）</b></div>
+</div>
+
+<h2>一、损失来源分解（决定投什么）</h2>
+<table>
+<tr><th>分量</th><th>数值</th><th>占比</th><th>含义与可干预性</th></tr>
+<tr><td><b>气候分量</b></td><td class="c">0.6809</td>
+<td class="c">93.6%</td>
+<td>本场降雨气候态本身的贡献；<b>不可通过工程干预</b></td></tr>
+<tr><td><b>超标分量</b></td><td class="c">0.1079</td>
+<td class="c">14.8%</td>
+<td>降雨超出设计标准的部分；<b>可通过提标改造干预</b></td></tr>
+<tr><td><b>工程失效分量</b></td><td class="c">0.0110</td>
+<td class="c">1.5%</td>
+<td>设施未达设计能力造成的部分；<b>可通过运维与改造干预</b></td></tr>
+<tr><td>残差</td><td class="c">-0.0726</td>
+<td class="c">10.0%</td><td>未归因部分（门槛容差 ≤20%，本次 10.0%）</td></tr>
+</table>
+<div class="mut" style="font-size:12px">四项相加等于事件总量（<b>闭合成立</b>），
+非按比例拆分，是四项独立预测后求残差。</div>
+
+<h2>二、损失形状（四色面积构成）</h2>
+<table><tr><th>分级</th><th>占总面积</th><th>格点数（144×270）</th></tr><tr><td class='c'>绿 <0.1m</td><td class='c'>84.3%</td><td class='c'>32,765 格</td></tr><tr><td class='c'>黄 0.1-0.2m</td><td class='c'>13.0%</td><td class='c'>5,057 格</td></tr><tr><td class='c'>橙 0.2-0.5m</td><td class='c'>2.7%</td><td class='c'>1,058 格</td></tr><tr><td class='c'>红 ≥0.5m</td><td class='c'>0.0%</td><td class='c'>0 格</td></tr></table>
+<div class="kv">
+<div><span>片区峰值水深</span><b>0.4930 m</b></div>
+<div><span>割点时刻（功能跌至最低点 80% 恢复水平）</span><b>见体检包</b></div>
+</div>
+
+<h2>三、恢复次序（谁先修）</h2>
+<table>
+<tr><th>策略</th><th>功能面积</th><th>清空全量所需步数</th><th>相对最优基线</th></tr>
+<tr><td><b>次模贪心（本方案）</b></td><td class="c">22122.8</td>
+<td class="c"><b>1323</b></td>
+<td class="c"><span class="tag t-grn">提升 27.9%</span></td></tr>
+<tr><td>随机基线</td><td class="c">30660.8</td>
+<td class="c">10451</td><td class="c mut">—</td></tr>
+<tr><td>按度基线</td><td class="c">28411.5</td>
+<td class="c">6105</td><td class="c mut">—</td></tr>
+</table>
+<div class="kv">
+<div><span>对最优基线（随机）提升</span><b>27.9%</b></div>
+<div><span>对按度基线提升</span><b>22.1%</b></div>
+<div><span>评分窗口</span><b>72.0 h</b></div>
+<div><span>同时优于两条基线</span><b>是</b></div>
+</div>
+
+<h2>四、情景加严下的损失放大</h2>
+<table><tr><th>情景</th><th>72 h 面雨量</th><th>相对 p50 的损失倍数</th></tr>
+<tr><td class='c'>p50</td><td class='c'>258.4 mm</td><td class='c'>1.00 ×</td></tr><tr><td class='c'>p80</td><td class='c'>313.2 mm</td><td class='c'>1.50 ×</td></tr><tr><td class='c'>p90</td><td class='c'>338.8 mm</td><td class='c'>1.77 ×</td></tr><tr><td class='c'>p95</td><td class='c'>354.1 mm</td><td class='c'>1.94 ×</td></tr>
+</table>
+<div class="mut" style="font-size:12px">由 14 场实测标定的强度—损失关系推得：
+面雨量翻倍 → 功能损失增 <b>4.3 倍</b>（超线性，R² 0.8833）。</div>
+
+
+<h2>四、情景矩阵：极端值口径（四档各跑一次内核）</h2>
+<table>
+<tr><th>情景</th><th>面雨量<br>mm</th><th>相对基准</th><th>空间峰值<br>水深 m</th><th>水深 p99<br>m</th>
+<th>超 0.25 m<br>格点数</th><th>橙色面积<br>0.2–0.5 m</th><th>红色面积<br>≥0.5 m</th>
+<th>峰值功能<br>损失</th><th>求解<br>耗时</th></tr>
+<tr><td class='c'><b>p50</b></td><td class='c'>258.4</td><td class='c'>×1.00</td><td class='c'><b>0.493</b><span class='mut' style='font-size:11px'>（×1.00）</span></td><td class='c'>0.243</td><td class='c'>336<span class='mut' style='font-size:11px'>（×1.00）</span></td><td class='c'>2.72%</td><td class='c'>0.000%</td><td class='c'>0.0125</td><td class='c'>0.0s</td></tr><tr><td class='c'><b>p80</b></td><td class='c'>313.2</td><td class='c'>×1.21</td><td class='c'><b>0.545</b><span class='mut' style='font-size:11px'>（×1.11）</span></td><td class='c'>0.263</td><td class='c'>531<span class='mut' style='font-size:11px'>（×1.58）</span></td><td class='c'>3.81%</td><td class='c'>0.005%</td><td class='c'>0.0151</td><td class='c'>12.6s</td></tr><tr><td class='c'><b>p90</b></td><td class='c'>338.8</td><td class='c'>×1.31</td><td class='c'><b>0.565</b><span class='mut' style='font-size:11px'>（×1.15）</span></td><td class='c'>0.272</td><td class='c'>625<span class='mut' style='font-size:11px'>（×1.86）</span></td><td class='c'>4.35%</td><td class='c'>0.008%</td><td class='c'>0.0163</td><td class='c'>11.6s</td></tr><tr><td class='c'><b>p95</b></td><td class='c'>354.1</td><td class='c'>×1.37</td><td class='c'><b>0.580</b><span class='mut' style='font-size:11px'>（×1.18）</span></td><td class='c'>0.278</td><td class='c'>687<span class='mut' style='font-size:11px'>（×2.04）</span></td><td class='c'>4.69%</td><td class='c'>0.008%</td><td class='c'>0.0170</td><td class='c'>5.6s</td></tr>
+</table>
+<div class="box"><b>为什么用极端值口径而不是均值</b>：按<b>空间峰值与超阈面积</b>看，
+p95 相对 p50 的<b>峰值水深上升 ×1.18</b>，而
+<b>超阈（≥0.25 m）面积扩大 ×2.04</b>
+（336 → 687 格）。
+即：<b>雨情加严一档，受影响"面积"比"深度"恶化得快得多</b>——这正是布点与巡查排班要盯的量。</div>
+<div class="kv">
+<div><span>p50 峰值水深</span><b>0.493 m</b></div>
+<div><span>p95 峰值水深</span><b>0.580 m</b><span>×1.18</span></div>
+<div><span>p50 超阈面积占比</span><b>0.86%</b></div>
+<div><span>p95 超阈面积占比</span><b>1.77%</b><span>×2.04</span></div>
+<div><span>峰值功能损失 p50 → p95</span><b>0.0125 → 0.0170</b></div>
+<div><span>四档求解总耗时</span><b>30 s</b></div>
+</div>
+<div class="mut" style="font-size:12px">
+矩阵为<b>降雨强度缩放</b>（p50→p95 对应 ×1.00→×1.37），
+地形、下渗与承灾体系数保持不变；峰值与分位数为<b>空间统计量</b>，不对应任一具体点位。
+参考线 0.25 m 取 <code>projection.ROAD_CAPACITY</code> 下穿立交中断系数。</div>
+
+
+
+<h2>三、多源面雨量交叉验证</h2>
+<table>
+<tr><th>来源</th><th>事件累计 mm</th><th>口径说明</th><th>相对驱动源偏差</th><th>判定</th></tr>
+<tr><td>ERA5 再分析 · 单链（本产品驱动） <b>（驱动）</b></td><td class='c'><b>259.1</b></td><td>主链 72 h 窗，订正后</td><td class='c'>+0.0%</td><td class='c'><span class='tag t-grn'>一致</span></td></tr><tr><td>ERA5 再分析 · 多事件批量</td><td class='c'><b>202.5</b></td><td>18 场标定口径，同一场台风</td><td class='c'>-21.8%</td><td class='c'><span class='tag t-yel'>同向偏低</span></td></tr><tr><td>CHIRPS-2.0 · 卫星—站点融合</td><td class='c'><b>234.3</b></td><td>独立于 ERA5 的第三方产品</td><td class='c'>-9.6%</td><td class='c'><span class='tag t-grn'>一致</span></td></tr><tr><td>CMFD 2.0 · 融合再分析（TPDC）</td><td class='c mut'>—</td><td>读取器已就绪，仅缺月文件（见 product-spec §7.1）</td><td class='c mut'>—</td><td class='c mut'>未取得</td></tr><tr><td>域内单站（宁波站，公开通报）</td><td class='c'><b>283.0</b></td><td>唯一域内站点累计量</td><td class='c'>+9.2%</td><td class='c'><span class='tag t-grn'>一致</span></td></tr><tr><td>官方全市面雨量</td><td class='c'><b>375.0</b></td><td>判据口径（与订正锚点不同源）</td><td class='c'>+44.7%</td><td class='c'><span class='tag t-org'>偏高</span></td></tr>
+</table>
+<div class='mut' style='font-size:12px'>CHIRPS 逐日：07.24 26.0 mm · 07.25 110.6 mm · 07.26 65.5 mm · 07.27 32.3 mm · 07.28 0.0 mm（峰值日 07.25）</div>
+<div class="box"><b>交叉验证结论</b>：驱动源 ERA5 单链给 <b>259.1 mm</b>；
+已接入的 <b>1 个独立源</b>给 234.3 mm，与驱动源同量级或同向偏低；
+域内单站 283 mm 略高但同量级。<b>官方全市 375 mm 的差异来自口径</b>——
+全市含北部暴雨中心（余姚 475 mm），非本计算域（121.55–121.70°E 鄞东南片区）。
+即：本产品的降雨驱动在<b>域内口径下与独立来源一致</b>，对全市口径的 −31% 是区域差异而非模型误差。</div>
+
+
+<h2>技术参数与适用边界</h2><table><tr><td class='mut' style='width:110px'>事件</td><td>2021 年第 6 号台风「烟花」（In-Fa）· 宁波鄞东南片区</td></tr><tr><td class='mut' style='width:110px'>降雨驱动</td><td>ERA5 再分析（Open-Meteo archive-api，免 key，本地缓存命中）＋ CHIRPS-2.0 卫星—站点融合日降水独立交叉验证</td></tr><tr><td class='mut' style='width:110px'>面雨量</td><td>259.1 mm / 72 h（ERA5 单链）；独立源 CHIRPS-2.0 事件累计 234.3 mm；官方全市口径 375 mm</td></tr><tr><td class='mut' style='width:110px'>情景分位</td><td>p50 258.4 / p80 313.2 / p90 338.8 / p95 354.1 mm（200 成员集合，51 分位保序订正）</td></tr><tr><td class='mut' style='width:110px'>内核</td><td>图守恒律求解器（守恒残差 2.52e-10）+ Green-Ampt 入渗 + Ghil-Sellers 能量平衡</td></tr><tr><td class='mut' style='width:110px'>地形</td><td>Copernicus GLO-30 DSM，30 m，重采样后格网 144 × 270（像元约 54 × 61 m）</td></tr><tr><td class='mut' style='width:110px'>点位</td><td>台账点名 28 处（域内 17 处），坐标精度 ±100 m（地名定位近似）</td></tr><tr><td class='mut' style='width:110px'>观测锚点</td><td>公开通报逐条溯源：宁波市水利局 9 条、央广网 15 条、人民日报客户端 2 条、人民网浙江 2 条</td></tr><tr><td class='mut' style='width:110px'>标定样本</td><td>18 场历史气旋目录，实算成功 16 场，跨 36 年（1990–2025）</td></tr><tr><td class='mut' style='width:110px'>复算指纹</td><td>config_hash 92cd76c2ea3f · source_hash 40d07eb29407b4b6 · schema 3.6.1</td></tr><tr><td class='mut' style='width:110px'>未纳入</td><td>潮位项、管网顶托高程与过流能力、逐路段通行实测、改造前后积水观测</td></tr></table>
+
+<footer>
+<b>数据来源</b>：面雨量与情景分位数 <code>out/01_preset_plan.json</code>；
+损失与恢复次序 <code>out/02_recovery_order.json</code>、<code>out/03_event_reconciliation.json</code>；
+强度—损失标定 <code>out/07_multievent_calibration.json</code>；
+涝点点名与实测水深 <code>data/seed/flood_points_2021_infa.csv</code>（逐条附公开通报来源）。<br>
+<b>复算</b>：本件由 <code>typhoeus.products</code> 随 <code>python -m typhoeus.cli run</code> 自动生成，
+输入未改动，同一 config_hash 下可逐位复算。
+</footer>
+</body></html>

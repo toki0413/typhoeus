@@ -1,0 +1,381 @@
+{
+ "src": "OSM 快照 china-260820.osm.pbf（ModelScope ocero4/china-260820-openstreetmap-pbf，匿名免key 下载），几何为 2020-08-26 时点，无高程",
+ "domain_bbox": {
+  "lon": [
+   121.55,
+   121.7
+  ],
+  "lat": [
+   29.84,
+   29.92
+  ]
+ },
+ "n_ways_in_bbox": 7368,
+ "n_named_vertices": 46963,
+ "rows": [
+  {
+   "point_id": "FP002",
+   "name": "海曙新芝路",
+   "structure_type": "低洼路段",
+   "old": [
+    121.556,
+    29.872
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 81,
+   "near_kinds": [
+    "bridge@",
+    "bridge@新江桥",
+    "bridge@江厦桥",
+    "yes@",
+    "yes@东门口站A口"
+   ]
+  },
+  {
+   "point_id": "FP003",
+   "name": "甬江大桥东江东北路下立交",
+   "structure_type": "下穿立交",
+   "old": [
+    121.559,
+    29.869
+   ],
+   "matched": true,
+   "matched_name": "江东北路",
+   "new": [
+    121.5568267,
+    29.8689396
+   ],
+   "shift_m": 127.0,
+   "name_hits": 538,
+   "underpass_within_300m": 16,
+   "near_kinds": [
+    "bridge@灵桥",
+    "building_passage@",
+    "yes@",
+    "yes@灵桥"
+   ]
+  },
+  {
+   "point_id": "FP004",
+   "name": "盛莫路1278弄立交",
+   "structure_type": "下穿立交",
+   "old": [
+    121.604,
+    29.844
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 42,
+   "near_kinds": [
+    "culvert@",
+    "yes@",
+    "yes@宜兴路",
+    "yes@宜园路",
+    "yes@环城南路高架"
+   ]
+  },
+  {
+   "point_id": "FP005",
+   "name": "人民南路立交",
+   "structure_type": "下穿立交",
+   "old": [
+    121.552,
+    29.857
+   ],
+   "matched": true,
+   "matched_name": "人民路",
+   "new": [
+    121.5552221,
+    29.8770532
+   ],
+   "shift_m": 2224.6,
+   "name_hits": 80,
+   "underpass_within_300m": 11,
+   "near_kinds": [
+    "yes@",
+    "yes@兴宁路"
+   ]
+  },
+  {
+   "point_id": "FP006",
+   "name": "建兴路下立交",
+   "structure_type": "下穿立交",
+   "old": [
+    121.573,
+    29.855
+   ],
+   "matched": true,
+   "matched_name": "建兴路",
+   "new": [
+    121.5539992,
+    29.8468605
+   ],
+   "shift_m": 1428.2,
+   "name_hits": 9,
+   "underpass_within_300m": 18,
+   "near_kinds": [
+    "yes@",
+    "yes@中兴南路",
+    "yes@兴宁路",
+    "yes@宁波轨道交通3号线"
+   ]
+  },
+  {
+   "point_id": "FP008",
+   "name": "百宁街下立交",
+   "structure_type": "下穿立交",
+   "old": [
+    121.566,
+    29.853
+   ],
+   "matched": true,
+   "matched_name": "百宁街",
+   "new": [
+    121.5873375,
+    29.851244
+   ],
+   "shift_m": 1260.5,
+   "name_hits": 30,
+   "underpass_within_300m": 20,
+   "near_kinds": [
+    "yes@",
+    "yes@中兴南路",
+    "yes@兴宁路",
+    "yes@杭深线"
+   ]
+  },
+  {
+   "point_id": "FP011",
+   "name": "宋诏桥路立交",
+   "structure_type": "下穿立交",
+   "old": [
+    121.551,
+    29.877
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 48,
+   "near_kinds": [
+    "bridge@新江桥",
+    "yes@",
+    "yes@东鼓道",
+    "yes@新江桥",
+    "yes@甬江大桥"
+   ]
+  },
+  {
+   "point_id": "FP014",
+   "name": "东柳社区793弄17号",
+   "structure_type": "低洼小区",
+   "old": [
+    121.578,
+    29.856
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 18,
+   "near_kinds": [
+    "building_passage@",
+    "yes@兴宁路",
+    "yes@宁波轨道交通3号线",
+    "yes@桑田路"
+   ]
+  },
+  {
+   "point_id": "FP015",
+   "name": "中塘路87弄",
+   "structure_type": "低洼小区",
+   "old": [
+    121.582,
+    29.862
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 20,
+   "near_kinds": [
+    "yes@",
+    "yes@百丈东路"
+   ]
+  },
+  {
+   "point_id": "FP016",
+   "name": "中华路",
+   "structure_type": "低洼路段",
+   "old": [
+    121.61,
+    29.85
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 24,
+   "near_kinds": [
+    "culvert@",
+    "yes@",
+    "yes@兴宁路",
+    "yes@河清南路",
+    "yes@海晏南路"
+   ]
+  },
+  {
+   "point_id": "FP017",
+   "name": "苗圃路",
+   "structure_type": "低洼路段",
+   "old": [
+    121.556,
+    29.862
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 6,
+   "near_kinds": [
+    "yes@",
+    "yes@江东南路"
+   ]
+  },
+  {
+   "point_id": "FP018",
+   "name": "古中小区",
+   "structure_type": "低洼小区",
+   "old": [
+    121.586,
+    29.872
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 23,
+   "near_kinds": [
+    "yes@",
+    "yes@惊驾路"
+   ]
+  },
+  {
+   "point_id": "FP020",
+   "name": "体育场路30弄12号",
+   "structure_type": "低洼小区",
+   "old": [
+    121.57,
+    29.876
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 8,
+   "near_kinds": [
+    "yes@宁徐路",
+    "yes@徐戎路",
+    "yes@惊驾路"
+   ]
+  },
+  {
+   "point_id": "FP021",
+   "name": "新芝小区95弄13号",
+   "structure_type": "低洼小区",
+   "old": [
+    121.554,
+    29.87
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 33,
+   "near_kinds": [
+    "bridge@",
+    "bridge@灵桥",
+    "yes@",
+    "yes@灵桥"
+   ]
+  },
+  {
+   "point_id": "FP022",
+   "name": "清河路",
+   "structure_type": "低洼路段",
+   "old": [
+    121.561,
+    29.886
+   ],
+   "matched": true,
+   "matched_name": "清河路",
+   "new": [
+    121.5518229,
+    29.8923506
+   ],
+   "shift_m": 883.0,
+   "name_hits": 67,
+   "underpass_within_300m": 89,
+   "near_kinds": [
+    "pier@"
+   ]
+  },
+  {
+   "point_id": "FP024",
+   "name": "张家新村",
+   "structure_type": "低洼小区",
+   "old": [
+    121.579,
+    29.866
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 19,
+   "near_kinds": [
+    "yes@中兴路",
+    "yes@中山东路",
+    "yes@宁波轨道交通3号线",
+    "yes@月明路",
+    "yes@桑田路"
+   ]
+  },
+  {
+   "point_id": "FP025",
+   "name": "红梅小区",
+   "structure_type": "低洼小区",
+   "old": [
+    121.591,
+    29.869
+   ],
+   "matched": false,
+   "matched_name": null,
+   "new": null,
+   "shift_m": null,
+   "name_hits": 0,
+   "underpass_within_300m": 8,
+   "near_kinds": [
+    "yes@",
+    "yes@姚隘路",
+    "yes@宁穿路"
+   ]
+  }
+ ]
+}

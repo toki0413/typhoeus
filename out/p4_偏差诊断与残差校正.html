@@ -1,0 +1,117 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>模型偏差诊断</title><style>
+:root{--ink:#1a1a1a;--mut:#6b7280;--line:#d7dbe0;--bg:#fff;--red:#c0392b;--org:#d97706;
+--grn:#15803d;--box:#f7f8fa;--acc:#0f4c81}
+*{box-sizing:border-box}
+body{margin:0;padding:28px 34px;background:var(--bg);color:var(--ink);
+font:14px/1.62 "Microsoft YaHei","PingFang SC",Segoe UI,sans-serif;max-width:1180px}
+h1{font-size:23px;margin:0 0 6px}
+h2{font-size:16px;margin:26px 0 10px;padding-bottom:5px;border-bottom:2px solid var(--acc)}
+.sub{color:var(--mut);font-size:12.5px;margin-bottom:16px}
+table{border-collapse:collapse;width:100%;margin:8px 0 4px;font-size:12.8px}
+th,td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top}
+th{background:var(--box);font-weight:600;white-space:nowrap}
+td.c{text-align:center;white-space:nowrap}
+.mut{color:var(--mut)}
+.tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11.5px;
+border:1px solid var(--line);background:#fff;white-space:nowrap}
+.t-red{border-color:var(--red);color:var(--red)}
+.t-org{border-color:var(--org);color:var(--org)}
+.t-grn{border-color:var(--grn);color:var(--grn)}
+.box{background:var(--box);border:1px solid var(--line);border-left:4px solid var(--acc);
+padding:11px 14px;margin:12px 0;font-size:12.8px}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px;margin:12px 0}
+.kv div{background:var(--box);border:1px solid var(--line);padding:9px 11px}
+.kv b{display:block;font-size:19px;margin-top:2px}
+.kv span{color:var(--mut);font-size:11.5px}
+footer{margin-top:26px;padding-top:12px;border-top:1px solid var(--line);
+color:var(--mut);font-size:11.5px;line-height:1.75}
+ol,ul{margin:6px 0 6px 20px;padding:0}
+li{margin:3px 0}
+</style></head><body>
+<h1>模型偏差诊断</h1>
+<div class="sub">提比翁情景—规划机 · 产品件 p4 · 事件：2021 年第 6 号台风「烟花」（In-Fa）· 宁波鄞东南片区<br>
+生成 2026-10-17 09:59 · config_hash <code>92cd76c2ea3f</code> ·
+source_hash <code>40d07eb29407b4b6</code></div>
+
+<div class="box"><b>本件给什么</b>：17 个域内配对点的逐点偏差诊断，回答一个具体问题——
+<b>这个偏差能不能用系数校正回来</b>。两道检验都要过才采用系数：
+① 模型在点位上有信息（Pearson +0.50、R² 0.249 —— <b>过</b>）；
+② 乘性校正真能把 MAE 降下来（0.359 → 0.517 m —— <b>不过</b>）。
+故本件<b>不采用系数校正</b>，并给出原因与证据。</div>
+
+<div class="kv">
+<div><span>域内配对数</span><b>17 点</b></div>
+<div><span>偏浅点数</span><b>17 / 17</b><span>全部偏浅</span></div>
+<div><span>MAE</span><b>0.359 m</b><span>残差中位 +0.369 m</span></div>
+<div><span>模型—实测相关</span><b>+0.50</b><span>R² 0.249（有信息）</span></div>
+<div><span>乘性校正后 MAE</span><b>0.517 m</b><span>上升，故不采用</span></div>
+<div><span>判定</span><b><span class="tag t-org">不采用系数校正</span></b></div>
+</div>
+
+<h2>一、两道检验（决定是否采用系数校正）</h2>
+<table>
+<tr><th>检验</th><th>判据</th><th>实测</th><th>结论</th></tr>
+<tr><td><b>① 模型有信息</b></td><td>Pearson > 0.3 且 R² > 0.09</td><td class="c">Pearson +0.4989，R² 0.2489</td>
+<td class="c"><span class="tag t-grn">
+通过</span></td></tr>
+<tr><td><b>② 校正有效</b></td><td>乘性校正后 MAE 必须低于原始 MAE</td><td class="c">原始 0.3594 → 乘性校正后 0.5167</td>
+<td class="c"><span class="tag t-org">
+未通过</span></td></tr>
+</table>
+<div class="box"><b>结论</b>：模型在点位上有统计相关性（Pearson +0.50，R² 0.249），但**乘性校正使 MAE 由 0.359 升到 0.517**——因模型输出量级仅 0.036 m 而实测均值 0.396 m，放大系数把微小噪声一并放大。故不采用系数校正；偏差属结构性缺失（管网顶托与地形分辨率），须补数据而非补系数。<br>
+<b>参考</b>：注入观测均值后 MAE 虽小（0.082 m），但那等于用观测均值当预测，不构成预测能力，故不作为产品口径</div>
+
+<h2>二、分组诊断（含两种校正的对照）</h2>
+<table>
+<tr><th>结构类型</th><th>样本</th><th>实测均值 m</th><th>模型均值 m</th><th>残差均值</th>
+<th>MAE 原</th><th>乘性校正后</th><th>注入均值后</th><th>乘性因子</th></tr>
+<tr><td><b>低洼小区</b></td><td class='c'>7</td><td class='c'>0.336</td><td class='c'>0.020</td><td class='c'>+0.316</td><td class='c'>0.316</td><td class='c'>0.563</td><td class='c'>0.065</td><td class='c'>× 17.0</td></tr><tr><td><b>下穿立交</b></td><td class='c'>6</td><td class='c'>0.450</td><td class='c'>0.041</td><td class='c'>+0.409</td><td class='c'>0.409</td><td class='c'>0.563</td><td class='c'>0.083</td><td class='c'>× 11.1</td></tr><tr><td><b>低洼路段</b></td><td class='c'>4</td><td class='c'>0.420</td><td class='c'>0.059</td><td class='c'>+0.360</td><td class='c'>0.360</td><td class='c'>0.366</td><td class='c'>0.110</td><td class='c'>× 7.1</td></tr>
+</table>
+<div class="mut" style="font-size:12px">乘性因子 = 该类实测均值 ÷ 模型均值，作诊断量展示；
+因检验②未通过，不作为产品校正系数。</div>
+
+<h2>三、静默点（12 点 / 71%）</h2>
+<table>
+<tr><th>项</th><th>值</th></tr>
+<tr><td>静默点数（模型水深 &lt; 0.05 m）</td><td class="c">12</td></tr>
+<tr><td>有响应点数</td><td class="c">5</td></tr>
+<tr><td>静默点实测均值</td><td class="c">0.367 m</td></tr>
+<tr><td>处理</td><td>模型水深 < 0.05 m 的点无法用乘性因子校正（0 × k = 0）；把它们抬到该类观测均值只等于用观测均值做预测，不构成预测能力</td></tr>
+</table>
+
+<h2>四、哪些输出受影响、哪些不受影响</h2>
+<table>
+<tr><th>用途</th><th>状态</th><th>依据</th></tr>
+<tr><td>排序类决策（谁先修、先巡哪里）</td><td class="c"><span class="tag t-grn">不受影响</span></td>
+<td>排序只用相对次序与功能面积差，不依赖点位绝对水深</td></tr>
+<tr><td>片区级损失量级与构成</td><td class="c"><span class="tag t-grn">不受影响</span></td>
+<td>单点偏差在片区聚合中被平均；四项分解闭合成立（残差 10.0%）</td></tr>
+<tr><td>情景分档与值守响应</td><td class="c"><span class="tag t-grn">不受影响</span></td>
+<td>档位由面雨量分位数决定，与水深无关</td></tr>
+<tr><td>单点水深读数</td><td class="c"><span class="tag t-org">不可用</span></td>
+<td>不采用：模型量级仅 0.036 m（实测均值 0.396 m），且偏差无有效校正，残余偏差大于四色分级绿黄间距 0.1 m</td></tr>
+<tr><td>偏差系数校正</td><td class="c"><span class="tag t-org">不可用</span></td>
+<td>不采用：乘性校正使 MAE 从 0.359 升到 0.517</td></tr>
+</table>
+
+<h2>五、逐点残差明细</h2>
+<table>
+<tr><th>编号</th><th>点名</th><th>结构</th><th>实测 m</th><th>模型 m</th><th>绝对偏差</th><th>模型状态</th></tr>
+<tr><td>FP002</td><td>海曙新芝路</td><td class='c'>低洼路段</td><td class='c'>0.64</td><td class='c'>0.172</td><td class='c'>+0.468</td><td class='c'>有响应</td></tr><tr><td>FP008</td><td>百宁街下立交</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'>0.149</td><td class='c'>+0.351</td><td class='c'>有响应</td></tr><tr><td>FP018</td><td>古中小区</td><td class='c'>低洼小区</td><td class='c'>0.38</td><td class='c'>0.138</td><td class='c'>+0.242</td><td class='c'>有响应</td></tr><tr><td>FP005</td><td>人民南路立交</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'>0.094</td><td class='c'>+0.406</td><td class='c'>有响应</td></tr><tr><td>FP022</td><td>清河路</td><td class='c'>低洼路段</td><td class='c'>0.30</td><td class='c'>0.065</td><td class='c'>+0.235</td><td class='c'>有响应</td></tr><tr><td>FP006</td><td>建兴路下立交</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'>0.001</td><td class='c'>+0.499</td><td class='c'>静默</td></tr><tr><td>FP016</td><td>中华路</td><td class='c'>低洼路段</td><td class='c'>0.37</td><td class='c'>0.001</td><td class='c'>+0.369</td><td class='c'>静默</td></tr><tr><td>FP003</td><td>甬江大桥东江东北路下立交</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'>0.000</td><td class='c'>+0.500</td><td class='c'>静默</td></tr><tr><td>FP004</td><td>盛莫路1278弄立交</td><td class='c'>下穿立交</td><td class='c'>0.50</td><td class='c'>0.000</td><td class='c'>+0.500</td><td class='c'>静默</td></tr><tr><td>FP011</td><td>宋诏桥路立交</td><td class='c'>下穿立交</td><td class='c'>0.20</td><td class='c'>0.000</td><td class='c'>+0.200</td><td class='c'>静默</td></tr><tr><td>FP014</td><td>东柳社区793弄17号</td><td class='c'>低洼小区</td><td class='c'>0.44</td><td class='c'>0.000</td><td class='c'>+0.440</td><td class='c'>静默</td></tr><tr><td>FP015</td><td>中塘路87弄</td><td class='c'>低洼小区</td><td class='c'>0.41</td><td class='c'>0.000</td><td class='c'>+0.410</td><td class='c'>静默</td></tr><tr><td>FP017</td><td>苗圃路</td><td class='c'>低洼路段</td><td class='c'>0.37</td><td class='c'>0.000</td><td class='c'>+0.370</td><td class='c'>静默</td></tr><tr><td>FP020</td><td>体育场路30弄12号</td><td class='c'>低洼小区</td><td class='c'>0.34</td><td class='c'>0.000</td><td class='c'>+0.340</td><td class='c'>静默</td></tr><tr><td>FP021</td><td>新芝小区95弄13号</td><td class='c'>低洼小区</td><td class='c'>0.31</td><td class='c'>0.000</td><td class='c'>+0.310</td><td class='c'>静默</td></tr><tr><td>FP024</td><td>张家新村</td><td class='c'>低洼小区</td><td class='c'>0.25</td><td class='c'>0.000</td><td class='c'>+0.250</td><td class='c'>静默</td></tr><tr><td>FP025</td><td>红梅小区</td><td class='c'>低洼小区</td><td class='c'>0.22</td><td class='c'>0.000</td><td class='c'>+0.220</td><td class='c'>静默</td></tr>
+</table>
+
+<h2>技术参数与适用边界</h2>
+<table>
+<tr><td class="mut" style="width:110px">样本</td><td>域内配对点 17 个</td></tr>
+<tr><td class="mut">观测来源</td><td>2021 烟花公开通报逐点实测水深（宁波市水利局 / 央广网 / 人民日报客户端 / 人民网浙江）</td></tr>
+<tr><td class="mut">模型输出</td><td>ERA5 驱动 + 图守恒律内核，取涝点邻域格点峰值水深</td></tr>
+<tr><td class="mut">判据</td><td>Pearson &gt; 0.3 且 R² &gt; 0.09 才认为点位上有区分能力</td></tr>
+<tr><td class="mut">未纳入</td><td>逐路段通行实测（无法验证通行能力）；管网顶托高程与过流能力（下穿立交静默的主因，属数据缺失不是可校正偏差）；改造前后积水观测（无法验证偏差的时不变性）</td></tr>
+</table>
+
+<footer>
+<b>数据来源</b>：逐点对照 <code>out/03_event_reconciliation.json</code>；台账 <code>data/seed/flood_points_2021_infa.csv</code>。<br>
+<b>复算</b>：本件由 <code>typhoeus.bias</code> 随 <code>python -m typhoeus.cli run</code> 生成，同一 config_hash 下可复算。
+</footer>
+</body></html>

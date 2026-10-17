@@ -1,0 +1,39 @@
+{
+ "otsu": {
+  "iou": 0.1155,
+  "n_tiles": 137
+ },
+ "label_stats": {
+  "label_vals": [
+   -1,
+   0,
+   1
+  ],
+  "tile_shapes": [
+   [
+    512,
+    512
+   ]
+  ],
+  "vv_min": -89.79,
+  "vv_max": 22.99,
+  "n_sampled": 24
+ },
+ "events": {
+  "train": [
+   "India",
+   "Mekong",
+   "Nigeria",
+   "Pakistan",
+   "Paraguay",
+   "Somalia",
+   "Spain",
+   "Sri-Lanka"
+  ],
+  "val": [
+   "Bolivia",
+   "Ghana",
+   "USA"
+  ]
+ }
+}
