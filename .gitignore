@@ -23,3 +23,10 @@ __pycache__/
 # 打包件与云端权重（已有单独说明）
 typhoeus_core.tar.gz
 *.part
+
+existing_probe/
+mode700/
+default/
+pytmp/
+pytest_base/
+tmp/
