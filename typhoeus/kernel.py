@@ -384,7 +384,11 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
     # 存在的"土壤储水 6889 m³"，读起来像真的有土层。
     if cfg.infiltration_mode == "green_ampt":
         cap = cfg.soil_capacity_mm / 1000.0 * (1.0 - cfg.impervious_frac)
-        soil = np.full((ny, nx), cap * cfg.soil_theta0, dtype=np.float64)
+        # impervious_frac 允许是**空间场**（如从 OSM 建筑足迹推出），也可为标量。
+        # 用 broadcast_to 而非 np.full：标量时两者逐位一致，数组时按格点生效；
+        # np.full 遇到数组会直接抛 ValueError（实测）。
+        soil = np.broadcast_to(cap * cfg.soil_theta0, (ny, nx)).astype(
+            np.float64).copy()
         soil_init = float(soil.sum()) * area
         # Green-Ampt 的 F 是累积下渗量。同样逐格独立，量纲 m。
         f_cum = np.zeros((ny, nx), dtype=np.float64)
@@ -448,7 +452,9 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
             # Green-Ampt：f = Ksat·(1 + ψ·Δθ/F)，F 是累积下渗量。
             # Δθ 用当前剩余吸力 Δθ = (S_cap - S)/S_cap，
             # 不是初始的 θ_s - θ_0 常数——后者算不出饱和衰减。
-            theta = np.clip(soil / max(cap, 1e-12), 0.0, 1.0)
+            # np.maximum 而非 max：cap 可能是空间场（OSM 不透水率），
+            # 内建 max 对数组会抛 "truth value of an array is ambiguous"。
+            theta = np.clip(soil / np.maximum(cap, 1e-12), 0.0, 1.0)
             d_theta = np.clip(1.0 - theta, 0.0, 1.0)
             # F 的下限不能取 0：F→0 时 f 发散，单步就把土层吸干。
             # 用一个时间尺度上的哨兵值 F_eps = Ksat·dt_h，
