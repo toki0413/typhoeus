@@ -32,7 +32,7 @@
 | numpy | 2.4.4 | 图守恒律求解器全部数值计算 |
 | scipy | 1.17.1 | GPD 极值分布拟合（`stats.genextreme`） |
 | rasterio | 1.5.2 | GLO-30 DEM 读取与重采样 |
-| pytest | 9.1.1 | 118 条回归测试 |
+| pytest | 9.1.1 | 140 条回归测试 |
 | mcp | 可选 | MCP 只读服务（7 个工具） |
 
 **无 pandas 依赖**（本机装有但代码未引用）。**零环境变量、零 API key** —— 外部网络调用只有 Open-Meteo archive-api 免 key 接口（降雨 + 土壤状态两条），且都带本地缓存。
@@ -116,11 +116,16 @@ pip install rasterio --only-binary=:all:
 ## 运行
 
 ```bash
-python -m typhoeus.cli run          # 跑全链，导出七份输出物（约 50 s）
+python -m typhoeus.cli demo         # ← 先跑这个：一条命令看完整决策链（约 1 s）
+python -m typhoeus.cli run          # 跑全链并导出全部输出物（约 90 s）
 python -m typhoeus.cli check        # 只跑门槛
 python -m typhoeus.cli report       # 打印体检摘要
 python -m typhoeus.cli multievent   # 18 场历史气旋批量标定（约 280 s）
 ```
+
+`demo` 只读现有产物，五段输出：这场雨多大 → 落哪一档 → 还来不来得及 →
+哪个点最危险、读数能不能用 → 这套结论多可信。
+加 `--run` 则先跑全链再演示。
 
 ### 参数
 
@@ -132,7 +137,7 @@ python -m typhoeus.cli multievent --catalog "2021:IN-FA,2014:FUNG-WONG"
 ### 测试
 
 ```bash
-python -m pytest typhoeus/tests.py -q          # 118 条，约 12 s
+python -m pytest typhoeus/tests.py -q          # 140 条，约 15 s
 python tools/mcp_selftest.py                   # MCP 通过率 + 故障注入 10 项
 python tools/infil_diag.py                     # 入渗机制 A/B 诊断
 python tools/gpd_sample_size.py                # GPD 样本量合成实验
