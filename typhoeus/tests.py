@@ -2253,6 +2253,12 @@ def test_validation_artifacts_have_conclusions_and_boundaries():
         "p58_加性偏移留出检验.json": "加性偏移留出检验",
         "p59_口径差检验.json": "口径差检验",
         "p60_洼地蓄水初损.json": "洼地蓄水初损",
+        "p61_汇流集中.json": "汇流集中 D8 路由",
+        "p62_洼地容量重测.json": "洼地容量重测",
+        "p63_排水异质接主链.json": "排水异质接主链",
+        "p64_填洼后路由.json": "填洼后路由",
+        "p65_机制组合与总结.json": "机制组合与总结",
+
     }
     missing, no_concl, no_bound = [], [], []
     for fn, what in need.items():

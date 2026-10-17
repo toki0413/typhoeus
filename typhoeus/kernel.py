@@ -64,6 +64,20 @@ class KernelParams:
     # 因 dataclass 允许动态设属性，赋值不报错但内核不读，形成**静默空操作**。
     drainage_mult: object = None
     drainage_profile: str = "uniform"
+    # ---- 汇流集中（D8 路由）----
+    # 每步把一部分地表水沿**最陡下降方向**移到下游格。0 = 关闭，逐位不变。
+    #
+    # 为什么需要它：Manning 通量 ∝ h^(5/3)，浅水时几乎不动，于是水被摊成
+    # 一大片薄层——实测湿格面积是 SAR 的 8.7 倍、点位水深只有观测的 1/10.8。
+    # 体积守恒算术显示两个误差是同一股水被摊薄（p60）：
+    # 0.0366 m × 8.72 = 0.319 m，而实测均值 0.396 m。
+    #
+    # D8 路由是水文学标准做法（非水力模型），只做"把水搬到低处"，
+    # 不引入动量方程。故本模型仍**不是水动力模型**。
+    concentration_rate: float = 0.0
+    # 路由用的高程是否先填洼。False = 原始 DSM（水会困在 4754 个小坑里，
+    # 实测湿格只到 15.6%）；True = priority-flood 填后地形（水可跨小坑到达真汇）。
+    concentration_use_filled: bool = False
     # 入渗机制。green_ampt 用土壤饱和度驱动，legacy 用地表水深驱动。
     # 两者都进 config_hash —— 机制选择本身就是模型身份的一部分。
     infiltration_mode: str = "green_ampt"
@@ -308,6 +322,74 @@ def rainfall_field(track, grid, cfg: KernelParams) -> np.ndarray:
     return acc.astype(np.float32)
 
 
+def priority_flood_fill(z: np.ndarray) -> np.ndarray:
+    """标准 priority-flood 填洼：返回每个格可排出的最低高程。
+
+    边界视为出口。填后地形上任意格都有通向边界的不上升路径，
+    故其 D8 下游不会困在局部小坑里。
+    """
+    import heapq
+
+    ny, nx = z.shape
+    filled = np.array(z, dtype=np.float64, copy=True)
+    closed = np.zeros((ny, nx), bool)
+    pq: list[tuple[float, int, int]] = []
+
+    def push(i: int, j: int, base: float) -> None:
+        if closed[i, j]:
+            return
+        filled[i, j] = max(float(z[i, j]), base)
+        closed[i, j] = True
+        heapq.heappush(pq, (filled[i, j], i, j))
+
+    for i in range(ny):
+        push(i, 0, -np.inf)
+        push(i, nx - 1, -np.inf)
+    for j in range(nx):
+        push(0, j, -np.inf)
+        push(ny - 1, j, -np.inf)
+
+    nb = ((-1, 0), (1, 0), (0, -1), (0, 1),
+          (-1, -1), (-1, 1), (1, -1), (1, 1))
+    while pq:
+        zc, i, j = heapq.heappop(pq)
+        for di, dj in nb:
+            a, b = i + di, j + dj
+            if 0 <= a < ny and 0 <= b < nx and not closed[a, b]:
+                push(a, b, zc)
+    return filled
+
+
+def d8_downstream(z: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """由高程场算 D8 最陡下降下游索引。
+
+    返回 `(rows, cols)`，均为 int64、形状同 z；`rows < 0` 表示该格**无下游**
+    （局部洼地或边界），水就留在那里——这正是"填洼成塘"的行为。
+
+    边界用 `mode="edge"` 填充，使边界格的域外邻居与自身等高，
+    故边界不会把水推出域外（出域由 `_rim_outflow` 单独处理）。
+    """
+    ny, nx = z.shape
+    zp = np.pad(z, 1, mode="edge")
+    best = np.full((ny, nx), 0.0)
+    ri = np.full((ny, nx), 0, dtype=np.int64)
+    ci = np.full((ny, nx), 0, dtype=np.int64)
+    steps = ((-1, -1, 2 ** 0.5), (-1, 0, 1.0), (-1, 1, 2 ** 0.5),
+             (0, -1, 1.0), (0, 1, 1.0),
+             (1, -1, 2 ** 0.5), (1, 0, 1.0), (1, 1, 2 ** 0.5))
+    for dy, dx, dist in steps:
+        cand = zp[1 + dy:1 + dy + ny, 1 + dx:1 + dx + nx]
+        slope = (z - cand) / dist
+        ok = (slope > 1e-12) & (slope > best)
+        best = np.where(ok, slope, best)
+        ri = np.where(ok, dy, ri)
+        ci = np.where(ok, dx, ci)
+    rows = np.arange(ny, dtype=np.int64)[:, None] + ri
+    cols = np.arange(nx, dtype=np.int64)[None, :] + ci
+    valid = best > 0.0
+    return (np.where(valid, rows, -1), np.where(valid, cols, -1))
+
+
 def drainage_fingerprint(cfg: KernelParams) -> str:
     """排水空间乘子场的定影串。
 
@@ -356,6 +438,15 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
     # 洼地填充：内部填平并给ε 排水梯度，边界不动地形。
     # 边界出流由 _rim_outflow 显式计算，不靠"把边缘压低"制造出口。
     z = _fill_depressions(elev)
+    # 汇流集中的 D8 下游索引：与时间无关，整场只算一次。
+    # 默认 concentration_rate=0 时不使用，故不影响既有结果。
+    if getattr(cfg, 'concentration_rate', 0.0) > 0.0:
+        _z_route = (priority_flood_fill(z)
+                    if getattr(cfg, 'concentration_use_filled', False) else z)
+        _d8_rows, _d8_cols = d8_downstream(_z_route)
+    else:
+        _d8_rows, _d8_cols = (None, None)
+
 
     h = np.zeros((ny, nx), dtype=np.float64)
     depth = np.zeros((nt, ny, nx), dtype=np.float32)
@@ -516,6 +607,17 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         drain = np.minimum(over, q_drain * dt_s)
         h -= drain
         total_drain += float(drain.sum() * area)
+
+        # ---- 汇流集中（D8 路由）：把一部分地表水移到最陡下降的下游格 ----
+        # 默认 rate=0 → 整段跳过，与既有行为逐位一致。
+        # 守恒：每个供体格失去的量恰好加到一个受体格，故总量不变；
+        #      无下游格（`_d8_rows < 0`）不参与，水留在原地（填洼成塘）。
+        _rate = float(getattr(cfg, "concentration_rate", 0.0))
+        if _rate > 0.0 and _d8_rows is not None:
+            _src = _d8_rows >= 0
+            _moved = np.where(_src, _rate * h, 0.0)
+            h -= _moved
+            np.add.at(h, (_d8_rows[_src], _d8_cols[_src]), _moved[_src])
 
         # 通量累积。三个硬约束，缺一个就会出现凭空产水：
         # 1) 必须用独立通量数组逐边累加，不能用切片互写——

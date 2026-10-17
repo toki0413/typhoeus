@@ -115,7 +115,7 @@ def sweep_doc_numbers() -> list[str]:
     # 按 stem 去重：p32_规划决策卡 同时有 .json 与 .html，属**同一件**产物。
     # 按文件计数会把它算两遍（此前巡检器自身就报过错 56 vs 54）。
     stems = {f.stem for f in list(OUT.glob("p*")) + list(OUT.glob("0*"))}
-    check("产物总数(去重)", len(stems), 67, 0)
+    check("产物总数(去重)", len(stems), 72, 0)
 
     # 指纹
     from typhoeus import config as CFG
@@ -275,6 +275,12 @@ def sweep_validation_set() -> list[str]:
         "p58_加性偏移留出检验.json": "加性偏移留出检验",
         "p59_口径差检验.json": "口径差检验",
         "p60_洼地蓄水初损.json": "洼地蓄水初损",
+        "p61_汇流集中.json": "汇流集中 D8 路由",
+        "p62_洼地容量重测.json": "洼地容量重测",
+        "p63_排水异质接主链.json": "排水异质接主链",
+        "p64_填洼后路由.json": "填洼后路由",
+        "p65_机制组合与总结.json": "机制组合与总结",
+
     }
     bad = []
     for fn, what in need.items():
