@@ -278,28 +278,48 @@ def main(argv: list[str] | None = None) -> int:
     # 第一轮实测表明"空间格局高度持久"，故把代理的职责收窄到只预测幅度时间线，
     # 空间模板直接用内核在峰值时刻单次求解得到的场（部署时只需一次内核）。
     def cum_feats(rain):
-        """每帧特征：瞬时面雨量、累计面雨量、峰值雨量。"""
+        """每帧特征（6 维）：瞬时面雨量、累计面雨量、峰值雨量、
+        进度比、累计占比、瞬时占比。
+
+        线性版只用前 3 维；加入进度与占比后，非线性模型才可能逼近 oracle 上界。
+        """
         inst = rain.mean(dim=(1, 2))                    # (T,)
         cum = inst.cumsum(0)
         peak = inst.max()
-        return torch.stack([inst, cum, peak.expand_as(inst)], dim=1)   # (T,3)
+        total = cum[-1].clamp(min=1e-9)
+        T = inst.shape[0]
+        prog = torch.arange(1, T + 1, device=inst.device, dtype=inst.dtype) / T
+        return torch.stack([inst, cum, peak.expand_as(inst),
+                            prog, cum / total, inst / peak.clamp(min=1e-9)], dim=1)
 
     def scale_of(field):
         """幅度序列：每帧空间均值 / 峰值帧空间均值。"""
         m = field.mean(dim=(1, 2))
         return m / (m.max() + 1e-9)
 
-    # 在训练集上拟合 特征→幅度 的线性回归（闭式解，无需梯度）
+    # 在训练集上拟合 特征→幅度 的小型 MLP（替代原来的 3 特征线性回归）
     Xs, ys = [], []
     with torch.no_grad():
         for j in range(Dtr.shape[1]):
-            d = Dtr[:, j]
-            f = cum_feats(Rtr[:, j])
-            Xs.append(torch.cat([f, torch.ones(f.shape[0], 1, device=dev)], dim=1))
-            ys.append(scale_of(d))
-    X = torch.cat(Xs, 0)
-    y = torch.cat(ys, 0)
-    w = torch.linalg.lstsq(X, y[:, None]).solution          # (4,1)
+            Xs.append(cum_feats(Rtr[:, j]))
+            ys.append(scale_of(Dtr[:, j]))
+    X, y = torch.cat(Xs, 0), torch.cat(ys, 0)
+    n_feat = X.shape[1]
+
+    from torch import nn as _nn
+    amp = _nn.Sequential(
+        _nn.Linear(n_feat, 32), _nn.ReLU(),
+        _nn.Linear(32, 32), _nn.ReLU(),
+        _nn.Linear(32, 1)).to(dev)
+    opt_a = torch.optim.Adam(amp.parameters(), lr=3e-3)
+    for it in range(1500):
+        opt_a.zero_grad()
+        loss_a = ((amp(X)[:, 0] - y) ** 2).mean()
+        loss_a.backward()
+        opt_a.step()
+        if (it + 1) % 500 == 0:
+            print(f"    幅度模型 iter {it+1}  mse {float(loss_a):.6f}", flush=True)
+    amp.eval()
 
     tl_rows = []
     with torch.no_grad():
@@ -311,10 +331,9 @@ def main(argv: list[str] | None = None) -> int:
             t_star = int(m.argmax())
             h_peak = d[t_star]                              # 空间模板（部署时一次内核给出）
             truth = d
-            # 代理幅度
+            # 代理幅度（非线性 MLP）
             f = cum_feats(r)
-            a_hat = torch.cat([f, torch.ones(f.shape[0], 1, device=dev)], dim=1) @ w
-            a_hat = a_hat[:, 0].clamp(min=0.0, max=1.5)
+            a_hat = amp(f)[:, 0].clamp(min=0.0, max=1.5)
             rec_hat = a_hat[:, None, None] * h_peak[None]
             # 参照一：真值幅度（上界，知道真实幅度）
             a_tru = scale_of(d)
