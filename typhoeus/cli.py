@@ -685,6 +685,14 @@ def main(argv=None) -> int:
                             str(Path(args.outdir) / "p9_遥感验证指标.json")]
             except Exception as e:                  # noqa: BLE001
                 print(f"[WARN] 遥感验证件未生成：{e}", file=sys.stderr)
+            # 生命线断供预判（p13）：把水深时序映射到生命线失效阈值。
+            # 注意：这一步要重跑一次内核取时序，约 +6 s；失败不阻断主链。
+            try:
+                from . import lifeline as LIFE
+                LIFE.run(args.outdir, verbose=False)
+                written += [str(Path(args.outdir) / "p13_生命线断供预判.json")]
+            except Exception as e:                  # noqa: BLE001
+                print(f"[WARN] 生命线断供预判未生成：{e}", file=sys.stderr)
             written += [str(Path(args.outdir) / "p6_情景矩阵.json"),
                         str(Path(args.outdir) / "p7_逐时雨情.json")]
             # 分阶段计时：产品与诊断层是内核之外的开销，须单独记账。
