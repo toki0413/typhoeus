@@ -2249,6 +2249,7 @@ def test_validation_artifacts_have_conclusions_and_boundaries():
         "p54_SAR摄入链复算.json": "SAR 摄入链",
         "p55_外部对标JRC.json": "外部对标 JRC",
         "p56_旱季基线差分.json": "旱季基线差分",
+        "p57_第三级反事实.json": "第三级反事实",
     }
     missing, no_concl, no_bound = [], [], []
     for fn, what in need.items():
