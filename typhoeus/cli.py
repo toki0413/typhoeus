@@ -692,6 +692,13 @@ def main(argv=None) -> int:
                     written += [str(Path(args.outdir) / "p14_SAR水面连通域.json")]
             except Exception as e:                  # noqa: BLE001
                 print(f"[WARN] SAR 连通域未生成：{e}", file=sys.stderr)
+            # 预警信息增益曲线（p18）：需真实 SAR 水面作真值，缺则跳过。
+            try:
+                from . import earlywarning as EW
+                if EW.build(args.outdir, verbose=False) is not None:
+                    written += [str(Path(args.outdir) / "p18_预警信息增益.json")]
+            except Exception as e:                  # noqa: BLE001
+                print(f"[WARN] 预警增益曲线未生成：{e}", file=sys.stderr)
             # 生命线断供预判（p13）：把水深时序映射到生命线失效阈值。
             # 注意：这一步要重跑一次内核取时序，约 +6 s；失败不阻断主链。
             try:
