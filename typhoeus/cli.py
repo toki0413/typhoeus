@@ -591,11 +591,18 @@ def main(argv=None) -> int:
     p_me.add_argument("--catalog", default=None,
                       help="事件目录 '年:名,年:名,...'，默认用 EVENT_CATALOG")
 
-    # 一条命令看完整决策链。读现有产物，秒级；加 --run 则先跑全链。
+    # 一条命令：给它你的数，它给你只属于这个数的答案。
     p_dm = sub.add_parser(
-        "demo", help="一条命令看完整决策链（读现有产物，秒级）")
-    p_dm.add_argument("--run", action="store_true",
-                      help="先跑全链再演示（约 90 s）")
+        "demo", help="给定雨量与剩余时间，出分级、动作、可行性与逐点读数")
+    p_dm.add_argument("--rain", type=float, default=None,
+                      help="面雨量 mm（缺省用 2021 烟花示例）")
+    p_dm.add_argument("--hours", type=float, default=None,
+                      help="历时 h（缺省 72）")
+    p_dm.add_argument("--basis", default=None, help="雨量口径（缺省 station）")
+    p_dm.add_argument("--remaining", type=float, default=None,
+                      help="从现在到首个险情还剩几小时")
+    p_dm.add_argument("--map", action="store_true",
+                      help="同时跑积水场（约 90 s）")
 
     args = ap.parse_args(argv)
     cmd = args.cmd or "run"
@@ -608,10 +615,21 @@ def main(argv=None) -> int:
     if cmd == "multievent":
         return _run_multievent(cfg, args.outdir, args.catalog)
 
-    # 一条命令看完整决策链。排在 run 之前分流，因为它默认不重算主链。
+    # 一条命令。排在 run 之前分流：默认只跑规则层，不重算主链。
     if cmd == "demo":
         from . import demo as DM
-        return DM.main(["--run"] if getattr(args, "run", False) else [])
+        av: list[str] = []
+        if getattr(args, "rain", None) is not None:
+            av += ["--rain", str(args.rain)]
+        if getattr(args, "hours", None) is not None:
+            av += ["--hours", str(args.hours)]
+        if getattr(args, "basis", None) is not None:
+            av += ["--basis", str(args.basis)]
+        if getattr(args, "remaining", None) is not None:
+            av += ["--remaining", str(args.remaining)]
+        if getattr(args, "map", False):
+            av += ["--map"]
+        return DM.main(av)
 
     # 两个交互入口：纯查询/聚合，不重算主链，故在 run_chain 之前分流。
     if cmd == "scenario":

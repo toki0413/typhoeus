@@ -116,16 +116,20 @@ pip install rasterio --only-binary=:all:
 ## 运行
 
 ```bash
-python -m typhoeus.cli demo         # ← 先跑这个：一条命令看完整决策链（约 1 s）
+# 给它你的数，它给你只属于这个数的答案（秒级）
+python -m typhoeus.cli demo --rain 320 --remaining 8
+python -m typhoeus.cli demo --rain 320 --remaining 8 --map   # 再跑积水场（+90 s）
+
 python -m typhoeus.cli run          # 跑全链并导出全部输出物（约 90 s）
 python -m typhoeus.cli check        # 只跑门槛
 python -m typhoeus.cli report       # 打印体检摘要
 python -m typhoeus.cli multievent   # 18 场历史气旋批量标定（约 280 s）
 ```
 
-`demo` 只读现有产物，五段输出：这场雨多大 → 落哪一档 → 还来不来得及 →
-哪个点最危险、读数能不能用 → 这套结论多可信。
-加 `--run` 则先跑全链再演示。
+`demo` 的五段输出全部由你的输入决定：你的输入 → 该启动什么 → 来不来得及 →
+逐点积水（可选）→ 这条结论的边界。**换雨量或换剩余时间，答案就变。**
+
+不给参数时用 2021 年台风「烟花」作示例。
 
 ### 参数
 

@@ -2281,20 +2281,47 @@ def test_validation_artifacts_have_conclusions_and_boundaries():
     assert not no_concl, f"验证件缺『结论』：{no_concl}"
     assert not no_bound, f"验证件缺『边界』（否定性结论会被误读为通过）：{no_bound}"
 
-def test_demo_runs_and_reports_corrected_depths():
-    """一条命令演示：能跑通，且报告里带校正读数与样本外口径。
-
-    为什么要断言 0.0909：样本内 MAE 是 0.086，样本外（留一法）是 0.0909。
-    若报告只出现样本内数字，读者会把 0.086 当成成绩，所以这里锁死样本外口径。
-    """
+def _demo(*args):
     import subprocess
     import sys
 
-    r = subprocess.run([sys.executable, "-m", "typhoeus.demo"],
-                       capture_output=True, timeout=600)
+    r = subprocess.run([sys.executable, "-m", "typhoeus.cli", "demo", *args],
+                       capture_output=True, timeout=900)
     assert r.returncode == 0, r.stderr.decode("utf-8", "replace")[-800:]
-    out = r.stdout.decode("utf-8", "replace")
-    for must in ("落哪一档", "还来不来得及", "多可信", "0.0909"):
-        assert must in out, f"演示缺「{must}」"
-    # 校正值必须与带宽同时出现
+    return r.stdout.decode("utf-8", "replace")
+
+
+def test_demo_is_input_driven_not_a_canned_report():
+    """核心产品性质：换输入必须换输出。
+
+    若两次不同雨量给出同一个落档，那它就是一份写死的报告，不是工具。
+    """
+    a = _demo("--rain", "259.1")
+    b = _demo("--rain", "354.1")
+    assert "p50" in a or "p90" in a or "p80" in a
+    assert "p95" in b, "354.1 mm 应落 p95"
+    assert a != b, "换雨量后输出未变化——说明是固定报告"
+    # 落档必须随雨量单调
+    for mm, want in (("258.4", "p50"), ("313.2", "p80"),
+                     ("338.8", "p90"), ("354.1", "p95")):
+        assert f"落档　　{want}" in _demo("--rain", mm), f"{mm} mm 应落 {want}"
+
+
+def test_demo_feasibility_responds_to_remaining_time():
+    """换剩余时间必须换可行性判定。"""
+    tight = _demo("--rain", "320", "--remaining", "2")
+    loose = _demo("--rain", "320", "--remaining", "20")
+    assert "缺口" in tight
+    assert tight != loose
+    # 20 h 时人员转移（12 h）应来得及
+    assert "✓ 人员转移" in loose
+    # 2 h 时封道（2.0 h）恰好够，余量 0；泵车（6 h）必然来不及
+    assert "✗ 泵车" in tight
+
+
+def test_demo_map_path_reports_corrected_with_band():
+    """--map 路径：必须同时给出校正值、带宽与样本外口径。"""
+    out = _demo("--rain", "320", "--map")
+    assert "校正" in out
     assert "±" in out, "校正值未与带宽同时出现"
+    assert "0.0909" in out, "缺样本外口径，读者会把样本内数字当成绩"

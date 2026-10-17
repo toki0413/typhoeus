@@ -1,22 +1,29 @@
-"""一条命令看完整决策链。
+"""一条命令：给它你的数，它给你只属于这个数的答案。
 
 用法：
-    python -m typhoeus.demo            # 读现有产物，秒级
-    python -m typhoeus.demo --run      # 先跑全链再演示（约 90 s）
+    python -m typhoeus.cli demo                          # 用 2021 烟花作示例
+    python -m typhoeus.cli demo --rain 320               # 换成你的雨量（秒级）
+    python -m typhoeus.cli demo --rain 320 --remaining 8 # 再给你的剩余时间
+    python -m typhoeus.cli demo --rain 320 --map         # 再跑积水场（约 90 s）
 
-设计原则：只读产物，不重算模型。所有数字都能在 out/ 里查到出处。
+为什么拆两条路径：
+    分级、动作、时间可行性是**规则层**，不需要算积水，秒级。
+    积水场要跑内核，约 90 秒。默认只跑规则层，`--map` 才跑内核。
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "out"
-
 BAR = "=" * 66
 SUB = "-" * 66
+
+DEFAULT_MM = 259.1      # 2021 烟花，ERA5 域内口径
+DEFAULT_HOURS = 72.0
 
 
 def _j(name: str) -> dict:
@@ -29,118 +36,173 @@ def _j(name: str) -> dict:
         return {}
 
 
-def main(argv: list[str] | None = None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
+def _parse(argv: list[str]) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(prog="typhoeus demo")
+    ap.add_argument("--rain", type=float, default=DEFAULT_MM,
+                    help=f"面雨量 mm（缺省 {DEFAULT_MM}，即 2021 烟花）")
+    ap.add_argument("--hours", type=float, default=DEFAULT_HOURS,
+                    help=f"历时 h（缺省 {DEFAULT_HOURS}）")
+    ap.add_argument("--basis", default="station",
+                    help="雨量口径（缺省 station）")
+    ap.add_argument("--remaining", type=float, default=None,
+                    help="从现在到首个险情还剩几小时")
+    ap.add_argument("--map", action="store_true",
+                    help="同时跑积水场（约 90 s）")
+    return ap.parse_args(argv)
 
-    if "--run" in argv:
-        print("先跑全链（约 90 s）……")
-        from typhoeus import cli as CLI
-        CLI.main(["run"])
+
+def _run_map(target_mm: float, hours: float) -> dict:
+    """按目标总量缩放缓存降雨后重跑内核，返回逐点校正读数。"""
+    import numpy as np
+
+    from typhoeus import cards as C
+    from typhoeus import cli as CLI
+    from typhoeus import config as CFG
+    from typhoeus import data as D
+    from typhoeus import kernel as K
+    from typhoeus import observe as OB
+    from typhoeus import rainsrc as RS
+
+    cfg = CFG.Config()
+    inp = D.load_all(cfg.l2.bbox, cfg.l4.resample)
+    g = inp.grid
+    rain, _ = RS.get_rainfall(g, stations=OB.load_rain_stations(),
+                              use_cache=True, calibrate=cfg.l2.rain_calibrate,
+                              verbose=False)
+    rain = np.asarray(rain, float)
+    got = float(rain.mean() * hours)
+    k = target_mm / got if got > 0 else 1.0
+    kp = CLI._kernel_params(cfg)
+    res = K.run(g, rain * k, kp)
+    peak = np.asarray(res.depth).max(axis=0)
+
+    lon, lat = np.asarray(g.lon), np.asarray(g.lat)
+    rows = []
+    for fp in OB.load_flood_points():
+        if not (lon.min() <= fp.lon <= lon.max()
+                and lat.min() <= fp.lat <= lat.max()):
+            continue
+        i = int(np.abs(lat - fp.lat).argmin())
+        j = int(np.abs(lon - fp.lon).argmin())
+        m = float(peak[i, j])
+        rows.append({"id": fp.point_id, "name": fp.name,
+                     "obs": float(fp.depth_m), "raw": m,
+                     "cor": round(m + C.BIAS_M, 3),
+                     "band": C.BIAS_BAND_M})
+    return {"rows": rows, "scale": k, "sec": float(res.mass_resid)}
+
+
+def main(argv: list[str] | None = None) -> int:
+    a = _parse(sys.argv[1:] if argv is None else argv)
 
     from typhoeus import scenario as SC
 
+    is_default = (abs(a.rain - DEFAULT_MM) < 1e-9
+                  and abs(a.hours - DEFAULT_HOURS) < 1e-9)
+    r = SC.match(a.rain, basis=a.basis, hours=a.hours)
+
     print(BAR)
-    print("提比翁 · 台风内涝决策链　一条命令看全链")
+    print("提比翁 · 台风内涝决策链")
+    if is_default:
+        print("（未给参数，用 2021 年台风「烟花」作示例；--rain 换成你的数）")
     print(BAR)
-    print()
-    print("地点　宁波鄞东南片区　16.5 × 8.9 km（121.55–121.70E / 29.84–29.92N）")
-    print("事件　2021 年第 6 号台风「烟花」(In-Fa)")
-    print("网格　144 × 270 @ 54 m")
     print()
 
-    # ---------- 一、雨有多大 ----------
     print(SUB)
-    print("一、这场雨到底多大")
+    print("一、你的输入")
     print(SUB)
-    print("  三个独立来源：ERA5 259.1 mm ｜ CHIRPS 234.3 mm ｜ 批量 202.5 mm")
-    hm = _j("05_health_metrics.json")
-    print("  域内口径偏差 −8.4%　全市口径 −30.9%　相差 22.5 个百分点")
-    print("  → 所以任何雨量或损失数字，必须带口径一起说")
-    print()
-
-    # ---------- 二、落哪一档 ----------
-    print(SUB)
-    print("二、落哪一档")
-    print(SUB)
-    r = SC.match(338.8, basis="station", hours=72.0)
-    print(f"  输入 338.8 mm / 72 h")
+    print(f"  面雨量　{a.rain:.1f} mm / {a.hours:.0f} h")
+    print(f"  口径　　{a.basis}")
     print(f"  落档　　{r['情景档']}")
-    print(f"  等级　　{r['响应等级']}")
-    print(f"  人员　　{r['人员与装备']}")
-    print(f"  布点　　{r['布点']}")
-    print(f"  动作　　{r['动作要求']}")
+    print()
+    print(f"  口径适用：{str(r['口径'])[:66]}…")
     print()
 
-    # ---------- 三、还来不来得及 ----------
     print(SUB)
-    print("三、还来不来得及")
+    print("二、该启动什么")
     print(SUB)
-    dec = _j("p23_决策可行域.json")
-    blank = (dec.get("空白") or {}).get("相对道路封道_h")
-    anchors = (dec.get("时间锚点_相对首事件_h") or {})
-    t_mod = anchors.get("模型首次越阈")
-    t_road = anchors.get("道路封道")
-    if blank is not None and t_mod is not None and t_road is not None:
-        print(f"  模型在事件前 {abs(t_mod):.1f} h 已有判据；"
-              f"道路封道在事件后 {t_road:.1f} h")
-        print(f"  中间空白 {blank} h —— 这就是可用的提前量")
+    print(f"  响应等级　{r['响应等级']}")
+    print(f"  人员装备　{r['人员与装备']}")
+    print(f"  布点　　　{r['布点']}")
+    print(f"  动作要求　{r['动作要求']}")
+    print()
+
+    print(SUB)
+    print("三、来不来得及")
+    print(SUB)
+    from typhoeus import decision as DC
+
+    gap = a.remaining
+    if gap is None:
+        dec = _j("p23_决策可行域.json")
+        gap = ((dec.get("空白") or {}).get("相对道路封道_h"))
+        if gap is not None:
+            print(f"  （未给 --remaining，用本片区实测空白 {gap:.1f} h）")
+            print()
+    if gap is None:
+        print("  无法判定：需要 --remaining（从现在到首个险情还剩几小时）")
+    else:
+        print(f"  可用提前量　{gap:.1f} h")
         print()
-    lst = (dec.get("按参考空白下的可执行清单") or {})
-    for a in (lst.get("可执行") or []):
-        print(f"    ✓ {a['动作']:<14} 需 {a['所需提前_h']:>5.1f} h　"
-              f"余量 {a['余量_h']:>5.1f} h")
-    for a in (lst.get("不可执行") or []):
-        print(f"    ✗ {a['动作']:<14} 需 {a['所需提前_h']:>5.1f} h　"
-              f"缺口 {a['缺口_h']:>6.1f} h")
-    print()
-    print("  ★ 「人员转移」差 0.5 h —— 这一条的意思是：必须现在就启动，不等雨来")
-    print()
-
-    # ---------- 四、哪个点最危险、能不能信 ----------
-    print(SUB)
-    print("四、哪个点最危险、读数能不能用")
-    print(SUB)
-    fc = _j("08_flood_cards.json")
-    cards = fc.get("卡片") or []
-    vis = [c for c in cards if c.get("model_depth_corrected_m") is not None]
-    raw_mae = cor_mae = 0.0
-    if vis:
-        raw_mae = sum(abs(c["model_depth_m"] - c["obs_depth_m"])
-                      for c in vis) / len(vis)
-        cor_mae = sum(abs(c["model_depth_corrected_m"] - c["obs_depth_m"])
-                      for c in vis) / len(vis)
-    print(f"  台账 {len(cards)} 点，其中 {len(vis)} 点模型可见")
-    if vis:
-        print(f"  模型原始误差 MAE {raw_mae:.3f} m → 校正后 {cor_mae:.3f} m")
-        print(f"  （样本外口径以留一法为准：0.0909 m）")
+        # ACTIONS 是 (名称, 所需提前_h, 依据类型, 依据) 的元组列表
+        acts = [a for a in getattr(DC, "ACTIONS", []) if len(a) >= 2]
+        for name, need, *_ in acts:
+            left = gap - need
+            ok = "✓" if left >= 0 else "✗"
+            tail = (f"余量 {left:>6.1f} h" if left >= 0
+                    else f"缺口 {-left:>6.1f} h")
+            print(f"    {ok} {name:<14} 需 {need:>6.1f} h　{tail}")
         print()
-        top = sorted(vis, key=lambda c: -c["model_depth_corrected_m"])[:3]
-        print("  校正后最深的三个点：")
-        for c in top:
-            print(f"    {c['point_id']} {c['name'][:18]:<18} "
-                  f"{c['model_depth_corrected_m']:.3f} ± "
-                  f"{c['correction_band_m']:.3f} m　"
-                  f"实测 {c['obs_depth_m']:.2f}")
-    print()
-    print("  ★ 校正值是经验修正，只用于与通报口径对齐，不是物理真值")
-    print("  ★ 域外点一律不产模型结论（R1）")
+        tight = [name for name, need, *_ in acts if need > gap]
+        if tight:
+            print(f"  ★ 来不及的：{'、'.join(tight)}")
+            print("    这几条要现在就启动，或者接受做不到")
+        else:
+            print("  ★ 全部动作都来得及")
     print()
 
-    # ---------- 五、这套结论有多可信 ----------
     print(SUB)
-    print("五、这套结论有多可信")
+    print("四、逐点积水（校正读数）")
     print(SUB)
+    if a.map:
+        print("  正在跑积水场……（约 90 s）")
+        m = _run_map(a.rain, a.hours)
+        rows = m["rows"]
+        print(f"  降雨缩放系数 {m['scale']:.3f}　守恒残差 {m['sec']:.1e}")
+        raw_mae = sum(abs(x["raw"] - x["obs"]) for x in rows) / len(rows)
+        cor_mae = sum(abs(x["cor"] - x["obs"]) for x in rows) / len(rows)
+        print(f"  {len(rows)} 个域内点：原始 MAE {raw_mae:.3f} → "
+              f"校正 {cor_mae:.3f} m")
+        print()
+        for x in sorted(rows, key=lambda y: -y["cor"])[:5]:
+            print(f"    {x['id']} {x['name'][:18]:<18} "
+                  f"校正 {x['cor']:.3f} ± {x['band']:.3f} m　"
+                  f"实测 {x['obs']:.2f}")
+        print()
+        print("  ★ 校正为经验值（留一法 MAE 0.0909），只作口径对齐，非物理真值")
+    else:
+        print("  未跑积水场。加 --map 给出逐点校正读数（约 90 s）。")
+        print("  分级、动作、可行性三项不需要它——由雨量与规则直接决定。")
+        print("  逐点校正的样本外误差：留一法 MAE 0.0909 m（基线 0.3593 m）。")
+    print()
+
+    print(SUB)
+    print("五、这条结论的边界")
+    print(SUB)
+    def _bullets(v) -> str:
+        items = v if isinstance(v, (list, tuple)) else [v]
+        return "\n          ".join(f"· {str(x)}" for x in items if str(x).strip())
+
+    print(f"  能回答：{_bullets(r.get('能回答'))}")
+    print(f"  不能答：{_bullets(r.get('不能回答'))}")
+    hm = _j("05_health_metrics.json")
     if hm:
-        print(f"  27 条门槛：{hm.get('PASS')} 通过 / {hm.get('FAIL')} 不通过 / "
+        print(f"  门槛　：{hm.get('PASS')} 通过 / {hm.get('FAIL')} 不通过 / "
               f"{hm.get('BLOCKED')} 缺外部数据")
-    print("  5 条不通过、7 条缺数据，逐条写明缺哪个读数")
-    print("  缺口全部指向同一件事：管网台账与雷达 QPE")
     print()
 
-    # ---------- 六、一句话 ----------
     print(BAR)
-    print("它交付的不是一张淹没图。")
-    print("是一条能说清「哪里能信、哪里不能信、不能信的地方该怎么办」的决策链。")
+    print("给它一个数，它给一个只属于这个数的答案。")
     print(BAR)
     return 0
 
