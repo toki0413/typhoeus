@@ -260,6 +260,26 @@ python -m typhoeus.cli scenario --percentile 0.95
 python -m typhoeus.cli scenario --json           # 用当前事件面雨量，输出 JSON
 ```
 
+### 单一决策入口（三条腿咬合）
+
+```bash
+python -m typhoeus.cli decide                    # 净可用预警 → 可执行动作清单
+python -m typhoeus.cli decide --lag 12.4         # 假定披露提速 1 小时会怎样
+python -m typhoeus.cli decide --lead 24 --json   # 假定模型更准 + 机器可读
+```
+
+**净可用预警 = 模型提前量（p18: 19.33 h）− 公开滞后（p16: 13.37 h）= 5.96 h**
+
+| 动作 | 所需提前 | 结论 |
+|---|---|---|
+| 电梯停梯 | 1 h | ✅ 余量 5.0 h |
+| 道路封道 | 2 h | ✅ 余量 4.0 h |
+| **泵车调度** | **6 h** | ❌ **缺口 0.04 h ≈ 2.4 分钟** |
+| 人员转移 | 12 h | ❌ 缺口 6.04 h |
+
+这是三条腿**唯一真正的交互点**：任一条腿的时间量变化，可执行清单随之变化。
+详见 [docs/decision-coupling.md](docs/decision-coupling.md)。
+
 ### 分阶段耗时（`run` 结束自动打印）
 
 | 段 | 默认 | `--skip-matrix` |

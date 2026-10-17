@@ -576,6 +576,15 @@ def main(argv=None) -> int:
     p_me.add_argument("--catalog", default=None,
                       help="事件目录 '年:名,年:名,...'，默认用 EVENT_CATALOG")
 
+    # 单一决策入口：不是又输出一份报告，而是直接回答"现在能做什么"
+    p_dc = sub.add_parser(
+        "decide", help="单一决策入口：按净可用预警时间给出可执行/不可执行动作清单")
+    p_dc.add_argument("--lead", type=float, default=None,
+                      help="模型提前量（h），默认取 p18 的 19.33")
+    p_dc.add_argument("--lag", type=float, default=None,
+                      help="公开滞后（h），默认取 p16 的 13.37")
+    p_dc.add_argument("--json", action="store_true")
+
     args = ap.parse_args(argv)
     cmd = args.cmd or "run"
 
@@ -596,6 +605,12 @@ def main(argv=None) -> int:
         if args.json:
             argv2 += ["--json"]
         return SCN.main(argv2)
+
+    # 单一决策入口：轻量，不跑内核，只做时间预算与动作可行性判定。
+    if cmd == "decide":
+        from . import decision as DEC
+        return DEC.main(["--json"] if args.json else [],
+                        lead=args.lead, lag=args.lag)
 
     ctx = run_chain(cfg, outdir=getattr(args, "outdir", None),
                     skip_matrix=bool(getattr(args, "skip_matrix", False)))
