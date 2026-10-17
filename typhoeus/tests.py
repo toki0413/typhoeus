@@ -776,8 +776,11 @@ def test_mcp_tools_match_artifacts_exactly():
     from typhoeus import mcp_server as MS
     from typhoeus.compile import COMPILERS
     from typhoeus import calib_sheet as CSH
-    # 第七份产物由 calib_sheet 产出，文件名在 cli 里定死
-    standalone = {"07_multievent_calibration"}
+    # 独立产物（不并入 COMPILERS）：
+    #   07 多事件标定单 —— 由 calib_sheet 从批量标定结果编译
+    #   08 涝点转译卡   —— 由 cards 模块从对账单 + 台账编译
+    # 两者都有独立入口与各自的时间成本，故对齐关系必须显式写出。
+    standalone = {"07_multievent_calibration", "08_flood_cards"}
     assert set(MS._TOOL_FILES.values()) == set(COMPILERS) | standalone, (
         f"工具与产物不对齐：{sorted(MS._TOOL_FILES.values())} "
         f"vs {sorted(set(COMPILERS) | standalone)}")
@@ -1724,9 +1727,17 @@ def test_seventh_tool_registered_and_readable():
     assert r["数据"]["名称"] == "多事件标定单"
 
 
-def test_desc_budget_still_ok_with_seven_tools():
+def test_desc_budget_still_ok_with_eight_tools():
+    """八个只读工具的描述总量仍在预算内。
+
+    原名为 `..._with_seven_tools` 并断言 7 —— 那是第 8 个工具
+    （`get_flood_cards`）被工作树覆盖丢失期间的版本。恢复后工具数为 8，
+    材料也声明 8 个，故基准改为 8，并把工具数断言写成与 `_TOOL_FILES`
+    一致，避免再出现"测试与实况各说各话"。
+    """
     from typhoeus import mcp_server as MS
-    assert len(MS._TOOL_FNS) == 7
+    assert len(MS._TOOL_FNS) == len(MS._TOOL_FILES) == 8, (
+        f"工具数 {len(MS._TOOL_FNS)} / 映射 {len(MS._TOOL_FILES)}，应为 8")
     n = MS.desc_bytes()
     assert n <= MS.DESC_BUDGET_B, f"描述总量 {n} B 超预算"
 

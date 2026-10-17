@@ -202,10 +202,10 @@ python -m typhoeus.cli run            # 单链约 27 s，出 13 个产物
 
 ## 9. 已知口径冲突（写进文档，不藏）
 
-1. **同一场台风两个雨量**：2021 IN-FA 在**单链**为 259.1 mm（[01_preset_plan.json](out/01_preset_plan.json:69)），在**多事件批量**为 202.5 mm（[07_multievent_calibration.json](out/07_multievent_calibration.json) 场次明细）。两个口径各自落盘、未互相标注，评审若发现将被追问。
+1. **同一场台风两个雨量**：2021 IN-FA 在**单链**为 259.1 mm（[01_preset_plan.json](../out/01_preset_plan.json:69)），在**多事件批量**为 202.5 mm（[07_multievent_calibration.json](../out/07_multievent_calibration.json) 场次明细）。两个口径各自落盘、未互相标注，评审若发现将被追问。
 2. **门槛 6 窗口表整表偏移**：同一 state 实测 3.80/6.80/11.80/20.32/**27.85**/41.18/58.65%，代码 docstring 记 4.3/7.6/12.9/21.9/**29.6**/43.1/60.3%。
 3. **门槛 14 根因文案**：写"入渗 0.0 mm / 0.0%"，实际 4.83 mm / 1.9%；同段"5 处下立交观测全为 0.50 m"实际为 6 处、其中 2 处 0.2 m。
-4. **守恒不是运行时硬约束**：[README.md:21](README.md:21) 称"任一不满足则 raise"，实际仅正性（[cli.py:144](typhoeus/cli.py:144)）与 D 单调性（[cli.py:163](typhoeus/cli.py:163)）会在运行时拒绝输出；`mass_resid` 的断言只在 `tests.py`。
+4. **守恒不是运行时硬约束**：[README.md:21](../README.md:21) 称"任一不满足则 raise"，实际仅正性（[cli.py:144](../typhoeus/cli.py:144)）与 D 单调性（[cli.py:163](../typhoeus/cli.py:163)）会在运行时拒绝输出；`mass_resid` 的断言只在 `tests.py`。
 5. **`06` 与 `05` 结论不一致**：`05` 报 27 条门槛 15/5/7，`06` 结论仍写"15 条门槛中 5 通过、4 不达标、6 未验证"。
 6. **`07`/`08` 与转译卡无复算指纹**：`manifest.outputs` 仅列 6/13 个产物，`07/08` 的 `config_hash`/`source_hash` 为 null。
 
