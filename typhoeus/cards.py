@@ -89,6 +89,15 @@ def build(outdir: str | Path) -> dict:
             "rel_err_allcity_pct": round((rc.get("rel_err_allcity") or 0) * 100, 1),
             "in_sample": bool(rc.get("in_sample")),
             "basis_note": rc.get("sampling_bias", ""),
+            # 下面四个键是 G18（双口径完整率）的契约字段名。
+            # 本件把「输入层校验」重命名成「降雨双来源」时会丢掉原名，
+            # 导致 G18 认不出这一段——实测 G18 因此报 80% FAIL（见 agent_gates
+            # 的 _PAIR_RULES）。值与上面的 _pct 字段同源，只是保留契约名，
+            # 不改任何数值。
+            "rel_err_verdict": rc.get("rel_err"),
+            "rel_err_allcity": rc.get("rel_err_allcity"),
+            "verdict_basis": "域内站（判据口径）",
+            "domain_basis": bbox,
         }
 
     cards = []

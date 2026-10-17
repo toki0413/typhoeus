@@ -46,6 +46,10 @@ _TOOL_FILES = {
     "get_health_metrics": "05_health_metrics",
     "get_health_report": "06_health_report",
     "get_multievent_calibration": "07_multievent_calibration",
+    # 第 8 件：逐点风险卡。最该被 Agent 调用的一件，因为它**自带可信度字段**
+    # （trust / trust_why / model_visible / in_domain），
+    # 所以"返回一个数让用户误信"的风险在数据层就已处理，不需要靠提示词约束。
+    "get_flood_cards": "08_flood_cards",
 }
 
 
@@ -196,6 +200,12 @@ def get_multievent_calibration(outdir: str | None = None) -> dict:
                 "多事件标定单")
 
 
+def get_flood_cards(outdir: str | None = None) -> dict:
+    """某个涝点的积水读数与可信度：实测多少、模型多少、这个读数能不能用。"""
+    d = Path(outdir) if outdir else DEFAULT_OUTDIR
+    return _deliver_budgeted(d, _TOOL_FILES["get_flood_cards"], "逐点风险卡")
+
+
 _TOOL_FNS = {
     "get_preset_plan": get_preset_plan,
     "get_recovery_order": get_recovery_order,
@@ -204,6 +214,7 @@ _TOOL_FNS = {
     "get_health_metrics": get_health_metrics,
     "get_health_report": get_health_report,
     "get_multievent_calibration": get_multievent_calibration,
+    "get_flood_cards": get_flood_cards,
 }
 
 #工具描述总字节数。这是本server 的显式预算，不是估计——超了就在

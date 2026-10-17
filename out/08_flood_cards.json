@@ -14,7 +14,11 @@
     "rel_err_domain_pct": -8.4,
     "rel_err_allcity_pct": -30.9,
     "in_sample": true,
-    "basis_note": "域内仅 1 站且集中于南部，均值不含北部暴雨中心余姚（官方 475 mm），观测侧偏低，故 rel_err 偏乐观；对全市口径的偏差为 -31%"
+    "basis_note": "域内仅 1 站且集中于南部，均值不含北部暴雨中心余姚（官方 475 mm），观测侧偏低，故 rel_err 偏乐观；对全市口径的偏差为 -31%",
+    "rel_err_verdict": -0.0844,
+    "rel_err_allcity": -0.3091,
+    "verdict_basis": "域内站（判据口径）",
+    "domain_basis": "grid.lon/lat 实际范围"
   },
   "计算域": "grid.lon/lat 实际范围",
   "卡片": [
