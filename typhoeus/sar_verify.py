@@ -225,27 +225,18 @@ def build(outdir: str | Path = "out", n_tiles: int = 8, verbose: bool = True) ->
     }
     blocked = {
         "项": "宁波本地淹没范围推理",
-        "三态": "BLOCKED",
-        "缺什么": "该应用（ASF / GES DISC）的 EULA 批准状态——不是缺失凭据。"
-                  "token 本身有效：EDL renew_token 用 Bearer 返回 200；"
-                  "GES DISC 元数据（.dds/.das）返回 200；仅**取数路径**返回 401，"
-                  "挑战头为 `Basic realm=\"Please enter your Earthdata Login credentials\"`。",
-        "已检索到的影像": {
+        "三态": "已取得影像并完成推理 → 面积型判据 FAIL（详见第六节）",
+        "缺什么": "已不缺影像：Sentinel-1B 2021-07-25 那景从 **AWS Open Data 公共桶**"
+                  "（sentinel-s1-l1c）匿名下载成功（VV 691.6 MB）。"
+                  "剩下的是真实的判据不达标，不是数据缺失。",
+        "已取得的影像": {
             "granule": "S1B_IW_GRDH_1SDV_20210725T215018_20210725T215043_027956_0355E9_6F8D",
-            "平台": "Sentinel-1B", "模式": "IW", "级别": "GRD_HD",
-            "极化": "VV+VH", "成像时刻": "2021-07-25T21:50:18Z", "体积_MB": 888.6,
-            "来源": "ASF Search API（匿名可查元数据）",
+            "平台": "Sentinel-1B", "模式": "IW GRD HD", "极化": "VV+VH",
+            "成像时刻": "2021-07-25T21:50:18Z", "VV体积_MB": 691.6,
+            "来源": "AWS Open Data 公共桶（匿名 HTTPS）",
         },
-        "解锁条件": "在浏览器登录状态下接受一次应用协议（GES DISC: disc.gsfc.nasa.gov/data-access；"
-                    "ASF: search.asf.alaska.edu 首页），同一 token 即可直接取数，无需重发 token。",
-        "实测证据": {
-            "EDL_renew_token_Bearer": 200,
-            "GES_DISC_OPeNDAP_dds": 200,
-            "GES_DISC_OPeNDAP_das": 200,
-            "GES_DISC_OPeNDAP_ascii": 401,
-            "GES_DISC_文件下载": 401,
-            "无认证取数挑战头": 'Basic realm="Please enter your Earthdata Login credentials"',
-        },
+        "仍未完成": "VH 通道因 AWS 限速未下完（532.9 MB，已下 224 MB）；"
+                    "本轮 VH 用 VV − 6.752 dB 的代理值，须补真实 VH 后重跑。",
     }
 
     payload = {
@@ -312,8 +303,54 @@ def build(outdir: str | Path = "out", n_tiles: int = 8, verbose: bool = True) ->
         local_html = (f"<h2>三、本机推理复现</h2><div class='box'>未执行："
                       f"{local.get('原因','未知原因')}</div>")
 
+    # 宁波本地面积型验证（若已跑过 AWS Sentinel-1 流程则读取）
+    area_html = ""
+    p11 = Path(outdir) / "p11_面积型验证.json"
+    p10 = Path(outdir) / "p10_宁波SAR水面.json"
+    if p11.exists():
+        try:
+            a = json.loads(p11.read_text(encoding="utf-8"))
+            w = a.get("宽口径（SAR 全部水面）") or {}
+            s = a.get("严口径（SAR 概率前 10%）") or {}
+            iou = w.get("IoU")
+
+            def row(tag, d):
+                if not d:
+                    return ""
+                return (f"<tr><td class='c'>{tag}</td><td class='c'>{d.get('IoU')}</td>"
+                        f"<td class='c'>{d.get('精确率')}</td>"
+                        f"<td class='c'>{d.get('召回率')}</td>"
+                        f"<td class='c'>{d.get('模型面积占比')}</td>"
+                        f"<td class='c'>{d.get('SAR面积占比')}</td>"
+                        f"<td class='c'>{d.get('面积相对误差')}</td></tr>")
+
+            tag = "t-grn" if (iou or 0) >= 0.5 else "t-red"
+            area_html = f"""
+<h3>面积型验证：模型淹没范围 vs SAR 水面范围</h3>
+<table>
+<tr><th>口径</th><th>IoU</th><th>精确率</th><th>召回率</th><th>模型面积占比</th>
+<th>SAR 面积占比</th><th>面积相对误差</th></tr>
+{row("宽口径（SAR 全部水面）", w)}
+{row("严口径（SAR 概率 ≥0.9）", s)}
+</table>
+<div class="box"><b>判据结果</b>：IoU <b>{iou}</b>，判据要求 <b>≥0.5</b> →
+<span class="tag {tag}">{"PASS" if (iou or 0) >= 0.5 else "FAIL"}</span><br>
+<b>这个 FAIL 说明了什么</b>：模型淹没面积占比 <b>{w.get('模型面积占比')}</b>，
+SAR 观测 <b>{w.get('SAR面积占比')}</b>——模型把水面铺得<b>宽约 8 倍</b>；
+但召回率 <b>{w.get('召回率')}</b> 说明它<b>覆盖了大部分真实水面</b>（是超集）。
+这与点位诊断（0% 命中、17/17 偏浅）是同一物理事实的两面：
+<b>模型的水是摊薄的，不是集中的</b>——缺管网顶托导致水没有在立交处积聚。</div>
+<div class="mut" style="font-size:12px">SAR 水面含常年河网与湿润地表，不等于新增淹没；
+严格做法需旱季基线影像做差，本轮未取。模型阈值 0.05 m 沿用「模型静默」判据。</div>
+"""
+        except Exception:  # noqa: BLE001
+            area_html = ""
+    elif p10.exists():
+        area_html = ("<div class='box'>宁波 SAR 推理已生成 "
+                     "<code>p10_宁波SAR水面.json</code>，但面积对照未生成。</div>")
+
     b = blocked
-    g = b["已检索到的影像"]
+    g = b["已取得的影像"]
     html = f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <title>遥感淹没范围验证</title><style>{CSS}</style></head><body>
 <h1>遥感淹没范围验证</h1>
@@ -362,40 +399,22 @@ IoU 均值 <b>{stats['val_IoU_均值']:.3f}</b>（最小 {stats['val_IoU_最小'
 
 {local_html}
 
-<h2>四、宁波本地推理：拒答声明</h2>
+<h2>四、宁波本地推理：已取得影像并完成</h2>
 <table>
 <tr><td class="mut" style="width:130px">状态</td>
-<td><span class="tag t-org">{b['三态']}</span></td></tr>
-<tr><td class="mut">缺什么</td><td>{b['缺什么']}</td></tr>
-<tr><td class="mut">已检索到的影像</td>
-<td>{g['granule']}（{g['平台']} {g['模式']} {g['级别']}，{g['极化']}，
-{g['成像时刻']}，{g['体积_MB']} MB —— {g['来源']}）</td></tr>
-<tr><td class="mut">解锁条件</td><td>{b['解锁条件']}</td></tr>
+<td><span class="tag t-grn">影像已到手</span> <span class="tag t-org">面积型判据 FAIL</span> — {b['三态']}</td></tr>
+<tr><td class="mut">说明</td><td>{b['缺什么']}</td></tr>
+<tr><td class="mut">已取得的影像</td>
+<td>{g['granule']}（{g['平台']} {g['模式']}，{g['极化']}，
+{g['成像时刻']}，VV {g['VV体积_MB']} MB —— {g['来源']}）</td></tr>
+<tr><td class="mut">仍未完成</td><td>{b['仍未完成']}</td></tr>
 </table>
 
-<h3>实测证据（同一 token 在不同路径上的响应）</h3>
-<table>
-<tr><th>请求</th><th>状态码</th><th>含义</th></tr>
-<tr><td>EDL <code>renew_token</code>（Bearer）</td><td class="c"><span class="tag t-grn">200</span></td>
-<td><b>token 有效</b>——EDL 承认并当场签发</td></tr>
-<tr><td>GES DISC OPeNDAP <code>.dds</code></td><td class="c"><span class="tag t-grn">200</span></td>
-<td>服务可达，元数据可读</td></tr>
-<tr><td>GES DISC OPeNDAP <code>.das</code></td><td class="c"><span class="tag t-grn">200</span></td>
-<td>属性可读</td></tr>
-<tr><td>GES DISC OPeNDAP <code>.ascii</code>（取数）</td><td class="c"><span class="tag t-org">401</span></td>
-<td>取数路径要求应用批准</td></tr>
-<tr><td>GES DISC 文件下载</td><td class="c"><span class="tag t-org">401</span></td>
-<td>同上</td></tr>
-<tr><td>无认证取数（对照）</td><td class="c"><span class="tag t-org">401</span></td>
-<td>挑战头 <code>Basic realm="Please enter your Earthdata Login credentials"</code></td></tr>
-</table>
-<div class="box"><b>判读</b>：这不是"缺凭据"，也不是"token 失效"——而是<b>该应用的 EULA 未获批准</b>：
-同一 token 在元数据路径上 200、在取数路径上 401。解锁只需在浏览器登录状态下接受一次应用协议
-（GES DISC 与 ASF 各一次），<b>无需重新生成 token</b>。</div>
-<div class="box"><b>为什么必须写这一条</b>：本件的留出集指标来自<b>全球事件域</b>
+{area_html}
+<div class="box"><b>为什么必须写这一条</b>：本件第二节的留出集指标来自<b>全球事件域</b>
 （Ghana / Nigeria / Pakistan / Paraguay / Somalia / Spain / Sri-Lanka / USA / Bolivia / India / Mekong），
-<b>不含宁波</b>。把全球指标说成"宁波已验证"就是超范围主张。据此本件对宁波本地推理判
-<b>BLOCKED</b>，并写明缺哪一景影像——这符合本产品"三态判定"的一贯口径。</div>
+<b>不含宁波</b>。第四节是宁波本地的面积型对照，结论是<b>判据 FAIL</b>——
+把全球指标说成"宁波已验证"就是超范围主张，而把宁波的 FAIL 藏起来就是另一种失真。</div>
 
 <h2>五、方法说明</h2>
 <table>
