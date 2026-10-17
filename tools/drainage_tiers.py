@@ -97,9 +97,12 @@ def main() -> int:
 
     all_points = [t for v in groups.values() for t in v]
 
-    def run_and_score(m: np.ndarray | None):
+    def run_and_score(m: np.ndarray | None, prof: str = "uniform"):
         kp = copy.copy(kp_base)
         kp.drainage_mult = m
+        # 乘子场不进 config_hash，必须带档案名（kernel.run 会拒两种静默错配），
+        # 并把定影串记进每一档的结果行，供外部复算时核对用的是哪一个场。
+        kp.drainage_profile = prof
         t0 = time.perf_counter()
         res = K.run(g, rain, kp)
         el = time.perf_counter() - t0
@@ -107,24 +110,27 @@ def main() -> int:
         per = {t["编号"]: float(peak[t["i"], t["j"]]) for t in all_points}
         mae = float(np.mean([abs(per[t["编号"]] - t["观测_m"])
                              for t in all_points if t["观测_m"]]))
-        return el, per, mae, float(peak.max())
+        return el, per, mae, float(peak.max()), res.drainage_fingerprint
 
     results = []
     # 基线（全 1.0，drainage_mult=None 等价）
-    el, per0, mae0, gmax0 = run_and_score(None)
+    el, per0, mae0, gmax0, fp0 = run_and_score(None)
     print(f"基线      MAE {mae0:.4f}  全域峰值 {gmax0:.4f}")
-    results.append({"档": "基线(现状标量)", "乘子": {}, "MAE_m": round(mae0, 4),
-                    "全域峰值_m": round(gmax0, 4)})
+    results.append({"档": "基线(现状标量)", "乘子": {}, "排水指纹": fp0,
+                    "MAE_m": round(mae0, 4), "全域峰值_m": round(gmax0, 4)})
 
     best = {"mae": mae0, "comm": 1.0, "road": 1.0}
     for comm in SCAN:
         for road in SCAN:
             m = mult_map(UNDERPASS_MULT, comm, road)
-            el, per, mae, gmax = run_and_score(m)
+            prof = (f"tiers3_disc{RADIUS_CELLS}_u{UNDERPASS_MULT}"
+                    f"_c{comm}_d{road}")
+            el, per, mae, gmax, fp = run_and_score(m, prof)
             results.append({
                 "档": f"下穿×{UNDERPASS_MULT}/小区×{comm}/路段×{road}",
                 "乘子": {"下穿立交": UNDERPASS_MULT, "低洼小区": comm,
                         "低洼路段": road},
+                "排水指纹": fp,
                 "MAE_m": round(mae, 4), "全域峰值_m": round(gmax, 4),
                 "内核_s": round(el, 1),
                 "FP006_m": round(per.get("FP006", float("nan")), 4),

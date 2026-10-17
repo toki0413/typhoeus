@@ -94,11 +94,16 @@ def main(argv: list[str] | None = None) -> int:
         import copy
         kp = copy.copy(kp_base)
         kp.drainage_mult = m if mult < 1.0 else None
+        # 乘子场不进 config_hash，必须声明档案名并落定影串（kernel.run 会
+        # 拒绝"有场无档案名"和"有档案名无场"两种静默错配）
+        kp.drainage_profile = ("uniform" if mult >= 1.0
+                               else f"probe_disc{RADIUS_CELLS}_x{mult}")
         t0 = time.perf_counter()
         res = K.run(g, rain, kp)
         el = time.perf_counter() - t0
         peak = np.asarray(res.depth).max(axis=0)
         row = {"乘子": mult, "内核_s": round(el, 1),
+               "排水指纹": res.drainage_fingerprint,
                "全域峰值_m": round(float(peak.max()), 4)}
         for t in targets:
             row[t["编号"]] = round(float(peak[t["i"], t["j"]]), 4)
@@ -138,7 +143,9 @@ def main(argv: list[str] | None = None) -> int:
             "空间乘子": MULTS,
             "作用范围": f"6 处下穿立交周围半径 {RADIUS_CELLS} 格的圆盘",
             "其余": "全域乘子 1.0（与主链一致）",
-            "字段": "KernelParams.drainage_mult（新增可选字段，None 时逐位不变）",
+            "字段": "KernelParams.drainage_mult（None 时逐位不变）+ drainage_profile（档案名）",
+            "指纹": "每档带 drainage_fingerprint 落盘；该场不进 config_hash，"
+                    "故由档案名+场摘要单独定影，见 kernel.drainage_fingerprint",
         },
         "扫描结果": results,
         "逐点": reach,

@@ -83,6 +83,8 @@ def new_bundle(ctx, outputs: dict) -> "Bundle":
         gates=ctx["gates"],
         outputs=outputs,
         caveat=demo_note(ctx),
+        drainage_fingerprint=ctx.get("kernel", {}).get(
+            "drainage_fingerprint", "uniform"),
     )
 
 
@@ -99,6 +101,10 @@ class Bundle:
     # 全局caveat 随降雨源变，写死就成错误声明。构造时由调用方从ctx
     # 取好传进来：Bundle 只持有产物，不持有 ctx。
     caveat: str = ""
+    # 排水空间乘子场的定影串。config_hash 覆盖不到它（它是 KernelParams 上的
+    # 场，不是 Config 四层参数），所以它必须独立落进清单，否则同一
+    # config_hash 可以对应两种推演结果，"同 hash 才能复算"这条主张就漏了。
+    drainage_fingerprint: str = "uniform"
 
     def write(self, outdir: str) -> list[str]:
         d = Path(outdir)
@@ -126,6 +132,10 @@ class Bundle:
             "kernel_version": KERNEL_VERSION,
             "config_hash": self.config_hash,
             "source_hash": self.source_hash,
+            # 排水空间乘子场不进 config_hash（它是 KernelParams 上的场，不是
+            # Config 四层参数），所以它的定影串必须在这里单独落一份：
+            # 少了这一行，同一 config_hash 可以对应两种推演，复算主张就漏了。
+            "drainage_fingerprint": self.drainage_fingerprint,
             "outputs": sorted(self.outputs.keys()),
             "caveat": self.caveat or (
                 "未提供全局 caveat。Bundle 构造时须传入 demo_note(ctx) 的结果，"

@@ -300,6 +300,9 @@ def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
             # "改入渗能不能抬涝点水深"这个问题有没有意义。
             "infil_mm": float(res.budget_mm()["下渗"]),
             "rain_total_mm": float(res.rain_cum[-1]),
+            # 排水空间乘子场的定影。config_hash 覆盖不到这个场，所以它要
+            # 单独进清单：没有这一行，非均匀排水的run会顶着旧 hash 出数。
+            "drainage_fingerprint": res.drainage_fingerprint,
         },
         "cell_m": inputs.grid.cell_m,
         "measure": mo.as_dict(),

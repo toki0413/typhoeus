@@ -1953,3 +1953,82 @@ def test_cards_html_self_contained_and_level_boundaries():
     assert "<script src=" not in html
     assert "http://" not in html and "https://" not in html
     assert "避险" in html and "对账" in html
+
+
+# ---------------------------------------------------------------- 排水乘子场定影
+
+def test_uniform_run_fingerprint_is_uniform(grid):
+    """主链（不设乘子）的定影串必须是 "uniform"。
+
+    这条锁的是"新增字段没有偷偷改变既有行为"：None 场的指纹必须是一个
+    固定词，而不是 None 或空串，否则清单里那一行会随实现漂移。
+    """
+    res = K.run(grid, _storm(37, 30, 30, 20.0), _kga())
+    assert res.drainage_fingerprint == "uniform"
+
+
+def test_field_without_profile_raises(grid):
+    """给了乘子场却不声明档案名 → 必须抛，不允许静默出数。
+
+    这是 config_hash 覆盖不到这个场所留下的唯一漏洞：同一个 hash 能对应
+    两种推演。宁可在这里停住，也不能让不可归因的结果带着旧 hash 落盘。
+    """
+    import pytest as _pt
+    kp = _kga()
+    kp.drainage_mult = np.ones((30, 30), dtype="float64") * 0.1
+    with _pt.raises(ValueError, match="drainage_profile"):
+        K.run(grid, _storm(13, 30, 30, 20.0), kp)
+
+
+def test_profile_without_field_raises(grid):
+    """声明了档案名却没有场 → 同样抛：档案名与实际推演用的场必须配对。"""
+    import pytest as _pt
+    kp = _kga()
+    kp.drainage_profile = "probe_disc2_x0.10"
+    with _pt.raises(ValueError, match="drainage_mult"):
+        K.run(grid, _storm(13, 30, 30, 20.0), kp)
+
+
+def test_fingerprint_stable_and_discriminating(grid):
+    """同一个场两次定影逐位相同；换一个场必须不同。
+
+    摘要走 np.round(6) 量化，是为了让浮点噪声不会把"同一个场"判成两个场；
+    真正不同的乘子值必须换指纹，否则这行清单只是装饰。
+    """
+    a = np.ones((30, 30), dtype="float64") * 0.10
+    b = np.ones((30, 30), dtype="float64") * 0.10
+    c = np.ones((30, 30), dtype="float64") * 0.25
+
+    def fp(m, prof):
+        kp = _kga()
+        kp.drainage_mult = m
+        kp.drainage_profile = prof
+        return K.drainage_fingerprint(kp)
+
+    assert fp(a, "probe") == fp(b, "probe")
+    assert fp(a, "probe") != fp(c, "probe")
+    assert fp(a, "probe") != fp(a, "probe2")
+
+
+def test_manifest_carries_drainage_fingerprint(tmp_path):
+    """清单里必须有这一行，且非均匀run要带出档案名。
+
+    只看 manifest 的键存在不够——还要证明一个真实的非均匀 run 的指纹
+    能一路传到清单：否则这条治理链在最后一公里断掉。
+    """
+    from typhoeus import compile as C
+
+    kp = _kga()
+    kp.drainage_mult = np.ones((30, 30), dtype="float64") * 0.05
+    kp.drainage_profile = "disc2_x0.05"
+    res = K.run(_Grid(), _storm(13, 30, 30, 20.0), kp)
+    assert res.drainage_fingerprint.startswith("disc2_x0.05@30x30:")
+
+    ctx = {"config_hash": "testhash", "source_hash": "src",
+           "kernel": {"drainage_fingerprint": res.drainage_fingerprint},
+           "measure": {}, "event_name": "e", "conclusion": "c",
+           "gates": [], "rain_source": {"driver": "era5-cache"}}
+    b = C.new_bundle(ctx, {})
+    b.write(str(tmp_path))
+    man = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert man["drainage_fingerprint"] == res.drainage_fingerprint
