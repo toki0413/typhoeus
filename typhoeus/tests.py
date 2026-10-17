@@ -2260,6 +2260,8 @@ def test_validation_artifacts_have_conclusions_and_boundaries():
         "p65_机制组合与总结.json": "机制组合与总结",
         "p66_杠杆指标一致性.json": "杠杆指标一致性",
         "p67_雨型第五轴.json": "雨型第五轴",
+        "p68_边界条件两轴.json": "边界条件两轴",
+        "p69_竖向改造.json": "竖向改造",
 
     }
     missing, no_concl, no_bound = [], [], []

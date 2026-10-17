@@ -78,6 +78,15 @@ class KernelParams:
     # 路由用的高程是否先填洼。False = 原始 DSM（水会困在 4754 个小坑里，
     # 实测湿格只到 15.6%）；True = priority-flood 填后地形（水可跨小坑到达真汇）。
     concentration_use_filled: bool = False
+    # ---- 外边界进水（客水）----
+    # 每秒从边界环进入计算域的水量（m³/s），按边界格数均摊。
+    # 0.0 = 关闭，逐位不变。真实城市上游来水是重要致涝源，
+    # 而本内核原本只有 `_rim_outflow`（出流），**没有任何入流路径**。
+    rim_inflow_m3s: float = 0.0
+    # ---- 顶托时程（潮位）----
+    # 形如 (nt,) 的数组，逐步给 drainage_invert_m。None = 用标量常数。
+    # 真实潮位是时间序列（半日潮 + 风暴潮），而原实现是一个标量常数。
+    drainage_invert_series: object = None
     # 入渗机制。green_ampt 用土壤饱和度驱动，legacy 用地表水深驱动。
     # 两者都进 config_hash —— 机制选择本身就是模型身份的一部分。
     infiltration_mode: str = "green_ampt"
@@ -138,6 +147,7 @@ class RunResult:
     infil_total_m3: float      # 累计下渗，m³
     drain_total_m3: float      # 累计排水，m³
     boundary_out_m3: float     # 累计边界出流，m³
+    boundary_in_m3: float     # 累计边界进水（客水），m³
     dry_loss_m3: float         # 干湿判别截断的水量，m³（数值损耗，非物理）
     cap_loss_m3: float         # 水深上限截断的水量，m³（数值损耗，非物理）
     neg_loss_m3: float         # 负水深修正的水量，m³（数值损耗，非物理）
@@ -479,6 +489,7 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
     total_infil = 0.0
     total_drain = 0.0
     total_boundary_out = 0.0
+    total_boundary_in = 0.0
     total_dry_loss = 0.0
     total_cap_loss = 0.0
     total_neg_loss = 0.0
@@ -591,7 +602,11 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         # 若按"全市铺满设计标准"的无条件面通量建模，434 mm 降雨会推出
         # 7.4 m 的积水，那是均匀排水假设的产物，不是内涝。
         # 顶托高程需由甲方管网台账标定，Demo 取 0.05 m。
-        over = np.clip(h - cfg.drainage_invert_m, 0.0, None)
+        _inv = cfg.drainage_invert_m
+        _ser = getattr(cfg, "drainage_invert_series", None)
+        if _ser is not None:
+            _inv = float(np.asarray(_ser)[min(k, len(_ser) - 1)])
+        over = np.clip(h - _inv, 0.0, None)
         # 排水能力可乘一个**空间异质乘子场**（`drainage_mult`）。
         # None 时与原行为逐位一致；非 None 时按格点生效。
         # 该场不进 config_hash（它是 KernelParams 上的场，不是 Config 四层参数），
@@ -602,7 +617,7 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         coeff_eff = cfg.drainage_coeff_m_s
         if getattr(cfg, "drainage_mult", None) is not None:
             coeff_eff = cfg.drainage_coeff_m_s * np.asarray(cfg.drainage_mult)
-        q_drain = coeff_eff * np.sqrt(cfg.drainage_invert_m + over) \
+        q_drain = coeff_eff * np.sqrt(_inv + over) \
             * over ** cfg.flux_exponent
         drain = np.minimum(over, q_drain * dt_s)
         h -= drain
@@ -698,6 +713,19 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         # 这一项才是真正的"离开计算域的水"，内部边一进一出严格抵消，
         # 若把rim 内部边当成出域通量计入，会得到一个虚高的 qedge，
         # 守恒核算随之出现无法归因的缺口。
+        # 外边界进水（客水）。默认 0.0 → 整段跳过，逐位不变。
+        _qin = float(getattr(cfg, "rim_inflow_m3s", 0.0))
+        if _qin > 0.0:
+            # 注在**边界内一圈**而不是边界环上：边界环会被 `_rim_outflow`
+            # 当场抽走，实测注在环上时即使 100 m³/s 也不产生任何红格。
+            _rim = np.zeros_like(h, dtype=bool)
+            _rim[1, 1:-1] = _rim[-2, 1:-1] = True
+            _rim[1:-1, 1] = _rim[1:-1, -2] = True
+            _nrim = int(_rim.sum())
+            if _nrim:
+                _add = _qin * dt_s / (_nrim * area)
+                h[_rim] += _add
+                total_boundary_in += _qin * dt_s
         dh = _rim_outflow(h, cfg, dt_s)
         qedge = float(-dh.sum() * area)          # 出流为正
         h = h + dh
@@ -778,6 +806,7 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         infil_total_m3=total_infil,
         drain_total_m3=total_drain,
         boundary_out_m3=total_boundary_out,
+        boundary_in_m3=total_boundary_in,
         dry_loss_m3=total_dry_loss,
         cap_loss_m3=total_cap_loss,
         neg_loss_m3=total_neg_loss,
