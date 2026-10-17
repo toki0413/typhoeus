@@ -263,22 +263,35 @@ python -m typhoeus.cli scenario --json           # 用当前事件面雨量，�
 ### 单一决策入口（三条腿咬合）
 
 ```bash
-python -m typhoeus.cli decide                    # 净可用预警 → 可执行动作清单
-python -m typhoeus.cli decide --lag 12.4         # 假定披露提速 1 小时会怎样
-python -m typhoeus.cli decide --lead 24 --json   # 假定模型更准 + 机器可读
+python -m typhoeus.cli decide                    # 信息—行动空白 → 可执行动作清单
+python -m typhoeus.cli decide --gap 4            # 假定空白压到 4 小时会怎样
+python -m typhoeus.cli decide --json             # 机器可读
 ```
 
-**净可用预警 = 模型提前量（p18: 19.33 h）− 公开滞后（p16: 13.37 h）= 5.96 h**
+**核心数字（依据 p24 官方时间线）**：
+
+| 时刻 | 相对首事件 |
+|---|---|
+| 官方 Ⅰ 级响应 | **−27.0 h** |
+| **模型首次越阈** | **−1.5 h** |
+| 道路封道 | +10.0 h |
+| 强排作业 | +16.0 h |
+
+⇒ **官方比模型早 25.5 h（预警层面官方赢）；模型比封道早 11.5 h、比强排早 17.5 h（处置层面模型赢）。**
+
+按空白 11.5 h 判定：
 
 | 动作 | 所需提前 | 结论 |
 |---|---|---|
-| 电梯停梯 | 1 h | ✅ 余量 5.0 h |
-| 道路封道 | 2 h | ✅ 余量 4.0 h |
-| **泵车调度** | **6 h** | ❌ **缺口 0.04 h ≈ 2.4 分钟** |
-| 人员转移 | 12 h | ❌ 缺口 6.04 h |
+| 电梯停梯 | 1 h | ✅ 余量 10.5 h |
+| 道路封道 | 2 h | ✅ 余量 9.5 h |
+| 泵车/移动泵调度 | 6 h | ✅ 余量 5.5 h |
+| **人员转移** | 12 h | ❌ **缺口 0.5 h** |
+
+**信息已经够支撑三类动作；离人员转移只差半小时。**
 
 这是三条腿**唯一真正的交互点**：任一条腿的时间量变化，可执行清单随之变化。
-详见 [docs/decision-coupling.md](docs/decision-coupling.md)。
+详见 [docs/official-timeline.md](docs/official-timeline.md) 与 [docs/decision-coupling.md](docs/decision-coupling.md)。
 
 ### 分阶段耗时（`run` 结束自动打印）
 

@@ -578,11 +578,9 @@ def main(argv=None) -> int:
 
     # 单一决策入口：不是又输出一份报告，而是直接回答"现在能做什么"
     p_dc = sub.add_parser(
-        "decide", help="单一决策入口：按净可用预警时间给出可执行/不可执行动作清单")
-    p_dc.add_argument("--lead", type=float, default=None,
-                      help="模型提前量（h），默认取 p18 的 19.33")
-    p_dc.add_argument("--lag", type=float, default=None,
-                      help="公开滞后（h），默认取 p16 的 13.37")
+        "decide", help="单一决策入口：信息—行动空白 → 可执行/不可执行动作清单")
+    p_dc.add_argument("--gap", type=float, default=None,
+                      help="假定把「信息→行动」空白压到多少小时（默认取实测 11.5 h）")
     p_dc.add_argument("--json", action="store_true")
 
     args = ap.parse_args(argv)
@@ -609,8 +607,7 @@ def main(argv=None) -> int:
     # 单一决策入口：轻量，不跑内核，只做时间预算与动作可行性判定。
     if cmd == "decide":
         from . import decision as DEC
-        return DEC.main(["--json"] if args.json else [],
-                        lead=args.lead, lag=args.lag)
+        return DEC.main(["--json"] if args.json else [], gap=args.gap)
 
     ctx = run_chain(cfg, outdir=getattr(args, "outdir", None),
                     skip_matrix=bool(getattr(args, "skip_matrix", False)))
