@@ -52,6 +52,12 @@ class KernelParams:
     # Demo 用0.05 m 作为等效起排阈值，具体值由管网台账标定。
     drainage_invert_m: float = 0.05
     drainage_coeff_m_s: float = 1.2e-3
+    # 排水能力的**空间乘子场**（可选）。None = 全域均匀，与既有行为逐位一致。
+    # 真实管网的输水能力沿街道强异质：主干管与支管差一个量级，
+    # 下穿立交往往只靠一根支管。用统一标量会把低洼点"抽干"，
+    # 使模型在这些点始终无积水（p13/p17 的"模型无水型"）。
+    # 不进 config_hash（hash 只覆盖 Config 的四层参数）。
+    drainage_mult: object = None
     # 入渗机制。green_ampt 用土壤饱和度驱动，legacy 用地表水深驱动。
     # 两者都进 config_hash —— 机制选择本身就是模型身份的一部分。
     infiltration_mode: str = "green_ampt"
@@ -465,7 +471,11 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         # 7.4 m 的积水，那是均匀排水假设的产物，不是内涝。
         # 顶托高程需由甲方管网台账标定，Demo 取 0.05 m。
         over = np.clip(h - cfg.drainage_invert_m, 0.0, None)
-        q_drain = cfg.drainage_coeff_m_s * np.sqrt(cfg.drainage_invert_m + over) \
+        # 排水能力可乘一个空间异质乘子（None 时与旧行为逐位一致）
+        coeff_eff = cfg.drainage_coeff_m_s
+        if cfg.drainage_mult is not None:
+            coeff_eff = cfg.drainage_coeff_m_s * np.asarray(cfg.drainage_mult)
+        q_drain = coeff_eff * np.sqrt(cfg.drainage_invert_m + over) \
             * over ** cfg.flux_exponent
         drain = np.minimum(over, q_drain * dt_s)
         h -= drain
