@@ -394,8 +394,19 @@ def get_rainfall(grid: Grid, stations: list[dict] | None = None,
     """
     log = (lambda *a: print(*a, flush=True)) if verbose else (lambda *a: None)
 
+    # ---- 缓存必须按网格分辨（2026-10-18 修的缺陷）----
+    # `fetch_era5(grid)` 是**按给定网格**建场的，而 `save_cache` 无条件覆盖、
+    # `load_cache` 不校验形状。于是跑一次 30 m（resample=1）就会把 54 m 的缓存
+    # 冲成 289×541，随后主链 144×270 直接 broadcast 报错、整链不可用。
+    # 现按网格形状分名，两种分辨率各存各的。
+    try:
+        _ny, _nx = (int(grid.elev.shape[0]), int(grid.elev.shape[1]))
+    except Exception:                                    # noqa: BLE001
+        _ny, _nx = (0, 0)
+    _cache_name = f"era5_{_ny}x{_nx}" if _ny and _nx else "era5"
+
     if use_cache:
-        cached = load_cache()
+        cached = load_cache(_cache_name)
         if cached is not None:
             log(f"     降雨源 ERA5 缓存命中  面雨量 {cached.grid_accum_mm:.1f} mm")
             return _finalize(cached, grid, stations, calibrate, "era5-cache")
@@ -405,7 +416,7 @@ def get_rainfall(grid: Grid, stations: list[dict] | None = None,
         fld = fetch_era5(grid)
         log(f"     {fld.n_timesteps} 步  {len(fld.node_lats)} 节点  "
             f"插值后面雨量 {fld.grid_accum_mm:.1f} mm")
-        save_cache(fld)
+        save_cache(fld, _cache_name)
         return _finalize(fld, grid, stations, calibrate, "era5")
     except RainSourceError as e:
         log(f"[!] ERA5 不可用：{e}")

@@ -2251,6 +2251,8 @@ def test_validation_artifacts_have_conclusions_and_boundaries():
         "p56_旱季基线差分.json": "旱季基线差分",
         "p57_第三级反事实.json": "第三级反事实",
         "p58_加性偏移留出检验.json": "加性偏移留出检验",
+        "p59_口径差检验.json": "口径差检验",
+        "p60_洼地蓄水初损.json": "洼地蓄水初损",
     }
     missing, no_concl, no_bound = [], [], []
     for fn, what in need.items():
