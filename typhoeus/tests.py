@@ -2259,6 +2259,7 @@ def test_validation_artifacts_have_conclusions_and_boundaries():
         "p64_填洼后路由.json": "填洼后路由",
         "p65_机制组合与总结.json": "机制组合与总结",
         "p66_杠杆指标一致性.json": "杠杆指标一致性",
+        "p67_雨型第五轴.json": "雨型第五轴",
 
     }
     missing, no_concl, no_bound = [], [], []
