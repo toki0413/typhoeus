@@ -37,7 +37,7 @@ q_drain = drainage_coeff_m_s * sqrt(invert + over) * over**(5/3)
 ### 做了什么
 
 给 `KernelParams` 加一个可选字段 `drainage_mult`（默认 `None` ⇒ 逐位不变，
-`config_hash` 仍为 `92cd76c2ea3f`），在 6 处下穿立交周围给半径 2 格的乘子盘。
+`config_hash` 仍为 `e464fea5962b`），在 6 处下穿立交周围给半径 2 格的乘子盘。
 
 ### 结果
 

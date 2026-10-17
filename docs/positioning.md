@@ -134,7 +134,7 @@ p25 序数技能检验：
 |---|---|
 | 许可 | **MIT**（`LICENSE`）+ `NOTICE.md` 列第三方条款 |
 | 代码 | 56 个模块、1.4 万行，全部入库（327 文件） |
-| 复算 | 双指纹 `config_hash 92cd76c2ea3f` / `source_hash 40d07eb29407b4b6` |
+| 复算 | 双指纹 `config_hash e464fea5962b` / `source_hash 40d07eb29407b4b6` |
 | 产物 | 32 件 `p*` + 8 件 `0*`，全部可由 `python -m typhoeus.cli run` 重生成 |
 | 否决记录 | 5 条 FAIL 全部公开，不隐藏 |
 

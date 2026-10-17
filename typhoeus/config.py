@@ -164,6 +164,9 @@ class L4_Solver:
     # 数值保险丝。Demo 实测峰值 0.94 m，取 3.0 有3倍余量；
     # 触发即说明物理或标定出了问题，截断量单列登记为数值损耗。
     max_depth_m: float = 3.0
+    # 注：`flux_relax` 目前**未被任何代码读取**（实测 grep 仅此处一处），
+    # 但因进入 L4_solver 而参与 config_hash。保留原样以避免改动他人工作，
+    # 也避免再动一次指纹。若将来实装到 kernel，请同步更新全部材料引用。
     flux_relax: int = 3
 
 

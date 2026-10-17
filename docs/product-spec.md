@@ -1,7 +1,7 @@
 # 提比翁 Typhoeus 产品规格书
 
 版本 v1.0 · 2026-10-16 · 对应内核 0.6.0-demo / 输出物格式 3.6.1
-复算指纹 `config_hash 92cd76c2ea3f` · `source_hash 40d07eb29407b4b6`
+复算指纹 `config_hash e464fea5962b` · `source_hash 40d07eb29407b4b6`
 
 ---
 
