@@ -44,7 +44,7 @@ EXPECT = {
     "p6_scenarios": 4,
     "gate_total": 27,
     "test_functions": 130,
-    "min_products": 64,      # p* + 0*
+    "min_products": 65,      # p* + 0*
 }
 
 
