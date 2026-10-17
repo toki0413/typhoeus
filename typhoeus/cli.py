@@ -574,7 +574,12 @@ def main(argv=None) -> int:
     # 导致材料里的 `cli scenario` / `cli decide` 无法执行（视频录制会当场失败）。
     # 功能一直在 `scenario.py` / `decision.py` 里，缺的只是接线。
     p_sc = sub.add_parser("scenario", help="给定面雨量，查落档、响应等级与动作")
-    p_sc.add_argument("mm", type=float, help="72 h 面雨量（mm）")
+    p_sc.add_argument("mm", type=float, nargs="?",
+                      help="面雨量累计量（mm）；口径与历时用 --basis / --hours 声明")
+    p_sc.add_argument("--basis", default=None,
+                      help="输入口径：station（阈值适用）/ era5 / param / forecast")
+    p_sc.add_argument("--hours", type=float, default=None,
+                      help="累计历时（h）；阈值适用 72")
 
     p_dc = sub.add_parser("decide", help="信息—行动空白与逐条动作可行性")
     p_dc.add_argument("--gap", type=float, default=None,
@@ -600,7 +605,12 @@ def main(argv=None) -> int:
     # 两个交互入口：纯查询/聚合，不重算主链，故在 run_chain 之前分流。
     if cmd == "scenario":
         from . import scenario as SC
-        return SC.main([str(args.mm)])
+        argv = [str(args.mm)] if args.mm is not None else []
+        if args.basis is not None:
+            argv += ["--basis", args.basis]
+        if args.hours is not None:
+            argv += ["--hours", str(args.hours)]
+        return SC.main(argv)
 
     if cmd == "decide":
         from . import decision as DC

@@ -97,12 +97,17 @@ def main(argv: list[str] | None = None) -> int:
     def q(p: float) -> float:
         return vals[min(n - 1, max(0, int(round(p * (n - 1)))))]
 
-    # 每个成员落档（复用既有 scenario.match，口径与主链一致）
+    # 每个成员落档。**必须声明 basis="forecast"**：集合给的是格点预报值，
+    # 而阈值是在「148 站插值」口径下标定的（实测单场差约 0.73 倍）。
+    # 不声明就会假装两者同源，把落档概率算得系统性偏低。
     levels = {}
+    match_warns: list[str] = []
     for k, mm in totals.items():
         try:
-            m = SC.match(mm)
+            m = SC.match(mm, basis="forecast")
             lv = m.get("情景档") if isinstance(m, dict) else str(m)
+            if isinstance(m, dict) and m.get("告警") and not match_warns:
+                match_warns = list(m["告警"])[:1]
         except Exception:  # noqa: BLE001
             lv = "无法落档"
         levels[lv] = levels.get(lv, 0) + 1
@@ -156,6 +161,13 @@ def main(argv: list[str] | None = None) -> int:
         },
         "落档分布": [{"落档": k, "成员数": v,
                    "占比_pct": round(v / n * 100, 1)} for k, v in lv_sorted],
+        # 落档用的阈值是在「148 站插值」口径下标定的，而集合给的是格点预报值
+        # （实测单场差约 0.73 倍）。不把这条写进产物，概率会被读成绝对值。
+        "口径告警": match_warns,
+        "口径落差说明": (
+            "集合成员是格点预报值（GFS 0.25°），阈值却是在『148 站插值 + 标定』"
+            "口径下标定的；实测单场约为站插的 0.73 倍（189.9/259.1，样本 1）。"
+            "故本件的落档概率**系统性偏低**，偏低的量级未标定，不可当绝对值引用。"),
         "响应等级分布": [{"等级": k, "成员数": v,
                     "占比_pct": round(v / n * 100, 1)} for k, v in resp_sorted],
         "按中位数准备会漏掉": {
