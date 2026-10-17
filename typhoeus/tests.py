@@ -2280,3 +2280,21 @@ def test_validation_artifacts_have_conclusions_and_boundaries():
     assert not missing, f"验证件缺失：{missing}"
     assert not no_concl, f"验证件缺『结论』：{no_concl}"
     assert not no_bound, f"验证件缺『边界』（否定性结论会被误读为通过）：{no_bound}"
+
+def test_demo_runs_and_reports_corrected_depths():
+    """一条命令演示：能跑通，且报告里带校正读数与样本外口径。
+
+    为什么要断言 0.0909：样本内 MAE 是 0.086，样本外（留一法）是 0.0909。
+    若报告只出现样本内数字，读者会把 0.086 当成成绩，所以这里锁死样本外口径。
+    """
+    import subprocess
+    import sys
+
+    r = subprocess.run([sys.executable, "-m", "typhoeus.demo"],
+                       capture_output=True, timeout=600)
+    assert r.returncode == 0, r.stderr.decode("utf-8", "replace")[-800:]
+    out = r.stdout.decode("utf-8", "replace")
+    for must in ("落哪一档", "还来不来得及", "多可信", "0.0909"):
+        assert must in out, f"演示缺「{must}」"
+    # 校正值必须与带宽同时出现
+    assert "±" in out, "校正值未与带宽同时出现"

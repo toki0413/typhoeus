@@ -67,6 +67,7 @@ cli decide  ──→ 我还有几小时、我有几个人 → 逐条动作能�
 ## 二、怎么验证
 
 ```bash
+python -m typhoeus.cli demo        # 一条命令看全链，约 1 s
 python -m typhoeus.cli run          # 全链约 90 s，纯 CPU、零 API key
 python -m typhoeus.selfcheck        # → score 1.0
 python tools/sweep.py               # → 7 段全绿

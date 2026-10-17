@@ -591,6 +591,12 @@ def main(argv=None) -> int:
     p_me.add_argument("--catalog", default=None,
                       help="事件目录 '年:名,年:名,...'，默认用 EVENT_CATALOG")
 
+    # 一条命令看完整决策链。读现有产物，秒级；加 --run 则先跑全链。
+    p_dm = sub.add_parser(
+        "demo", help="一条命令看完整决策链（读现有产物，秒级）")
+    p_dm.add_argument("--run", action="store_true",
+                      help="先跑全链再演示（约 90 s）")
+
     args = ap.parse_args(argv)
     cmd = args.cmd or "run"
 
@@ -601,6 +607,11 @@ def main(argv=None) -> int:
     # 全链40 s，批量 6 min，混在一起会让日常回归跑不掉。
     if cmd == "multievent":
         return _run_multievent(cfg, args.outdir, args.catalog)
+
+    # 一条命令看完整决策链。排在 run 之前分流，因为它默认不重算主链。
+    if cmd == "demo":
+        from . import demo as DM
+        return DM.main(["--run"] if getattr(args, "run", False) else [])
 
     # 两个交互入口：纯查询/聚合，不重算主链，故在 run_chain 之前分流。
     if cmd == "scenario":

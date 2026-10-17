@@ -26,6 +26,20 @@ from . import config as CFG
 from . import observe as OB
 from . import projection as PRJ
 
+# ---- 加性偏移校正（p58 留出验证；p59 排除了口径差的大半）----
+# 17 点残差全为正，均值 0.3593 m、标准差 0.1034 m。
+# 留一法 MAE 0.3593 -> 0.0909（改善 74.7%），四型三结构全部改善。
+# **成因未完全分离**：p59 实测四种空间聚合最多解释 22.6%，
+# 故这 0.359 m 主要是模型系统性偏浅，不是"点位值 vs 格点面平均"的口径差。
+# 用法约束：只作与通报口径对齐的经验修正，**不当作物理水深真值**。
+BIAS_M = 0.359
+BIAS_BAND_M = 0.103
+BIAS_NOTE = (
+    "经验校正：+0.359 m（带宽 ±0.103 m）。来自 17 点残差的留出验证，"
+    "MAE 0.3593→0.0909。只用它与通报口径对齐，不作物理真值。"
+    "原值见 model_depth_m。"
+)
+
 MODEL_SILENT_M = 0.05      # 低于此预测水深视为"模型看不见"
 LEVEL_BOUNDS = PRJ.DEPTH_LEVELS          # (0.10, 0.20, 0.50) 宁波官方四色
 LEVEL_NAMES = PRJ.LEVEL_NAMES
@@ -132,6 +146,14 @@ def build(outdir: str | Path) -> dict:
             "model_level": LEVEL_NAMES[lv_mod] if lv_mod is not None else None,
             "model_visible": visible,
             "in_domain": vis_dom,
+            # 校正读数：仅在有模型值时给；**不参与 trust 判定**（见文件头约束 2）
+            "model_depth_corrected_m": (
+                round(model_m + BIAS_M, 3) if model_m is not None else None),
+            "correction_band_m": BIAS_BAND_M if model_m is not None else None,
+            "model_level_corrected": (
+                LEVEL_NAMES[level_of(model_m + BIAS_M)] if model_m is not None
+                else None),
+            "correction_note": BIAS_NOTE if model_m is not None else None,
             "trust": trust, "trust_why": why,
             "查询": (f"{fp.district} {fp.name}｜{fp.structure_type}｜"
                      f"实测积水 {obs_m:.2f} m（{LEVEL_NAMES[lv_obs]}）｜"
@@ -170,6 +192,8 @@ def build(outdir: str | Path) -> dict:
             "引用任何 model_depth_m 时，必须同时引用该卡的 trust 与 model_visible。",
             "model_visible=false 时不得报出模型水深，只能报实测值与 trust_why。",
             "model_depth_m=null 表示模型未覆盖（域外），不得以 0 代替。",
+            "引用 model_depth_corrected_m 时，必须同时报 correction_band_m 与 correction_note；不得只报校正值而不报带宽。",
+            "校正值不改变 trust 与 model_visible——那两项只由未校正的 model_depth_m 决定，以免循环论证。",
             "本批 28 个点中仅 5 个 model_visible=true；其余点一律转人工巡查。",
         ],
         "卡片": cards,
