@@ -390,6 +390,26 @@ def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
     ctx["gates"] = G.check_all(ctx)
     # 结论依赖门槛统计，必须在 gates 之后算
     ctx["conclusion"] = _conclusion(ctx)
+
+    # ---- 情景矩阵（p6）：基准档复用刚算完的 res.depth，不重算 ----
+    # 为什么放在这里：p6 是唯一没有其它模块生成的产物（全包只有
+    # scenario_matrix.py 自己写它），若不在此调用，新跑一次 `run`
+    # 不会产出 p6，而 p2/p32 与一页正文都引用它的四档结论——
+    # "一条命令复算全部"就在这里断掉。实测过这个断点。
+    #
+    # 口径提示：scenario_matrix.compute 内部用 `_kernel_params(cfg)`，
+    # 不传 soilcal 的观测标定；故四档之间自洽，但与主链的 p50
+    # 有微小差异（实测峰值 0.492 对主链 0.4928，橙格 1053 对 1058）。
+    # 这是既有的实现差异，不在此改动他人的标定路径，只如实记录。
+    try:
+        from . import scenario_matrix as SMX
+        SMX.compute(outdir=Path(outdir or "out"), verbose=False,
+                    base_rows=[SMX.rows_from_depth(res.depth,
+                                                   SMX.SCENARIOS[0][1], 1.0)])
+        log("     [情景矩阵] 四档 p50–p95 已写入 p6_情景矩阵.json")
+    except Exception as e:                                  # noqa: BLE001
+        log(f"     [!] 情景矩阵未算：{e}")
+
     return ctx
 
 
