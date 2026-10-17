@@ -603,6 +603,10 @@ def main(argv=None) -> int:
                       help="从现在到首个险情还剩几小时")
     p_dm.add_argument("--map", action="store_true",
                       help="同时跑积水场（约 90 s）")
+    p_dm.add_argument("--rain-series", default=None,
+                      help="逐时雨量序列，逗号或空格分隔（每格为该小时 mm）")
+    p_dm.add_argument("--rain-series-file", default=None,
+                      help="逐时雨量序列文件（每行一个数，# 为注释）")
 
     args = ap.parse_args(argv)
     cmd = args.cmd or "run"
@@ -629,6 +633,10 @@ def main(argv=None) -> int:
             av += ["--remaining", str(args.remaining)]
         if getattr(args, "map", False):
             av += ["--map"]
+        if getattr(args, "rain_series", None) is not None:
+            av += ["--rain-series", str(args.rain_series)]
+        if getattr(args, "rain_series_file", None) is not None:
+            av += ["--rain-series-file", str(args.rain_series_file)]
         return DM.main(av)
 
     # 两个交互入口：纯查询/聚合，不重算主链，故在 run_chain 之前分流。

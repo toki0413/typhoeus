@@ -2325,3 +2325,45 @@ def test_demo_map_path_reports_corrected_with_band():
     assert "校正" in out
     assert "±" in out, "校正值未与带宽同时出现"
     assert "0.0909" in out, "缺样本外口径，读者会把样本内数字当成绩"
+
+def _demo_series(vals: str, *args):
+    import subprocess
+    import sys
+
+    r = subprocess.run(
+        [sys.executable, "-m", "typhoeus.cli", "demo",
+         "--rain-series", vals, *args],
+        capture_output=True, timeout=900)
+    assert r.returncode == 0, r.stderr.decode("utf-8", "replace")[-800:]
+    return r.stdout.decode("utf-8", "replace")
+
+
+def test_series_input_unlocks_the_timing_question():
+    """逐时序列必须解锁「什么时候越阈」——这是标量输入明确答不了的。
+
+    构造 72 h 单峰序列（峰在中段），断言出现三档越阈时刻与峰值时刻，
+    且第五节不再把「什么时候」列为不能答。
+    """
+    # 72 个小时值，单峰在中段
+    vals = ",".join(
+        "%.2f" % (34.0 * (2.718281828 ** (-0.5 * ((h - 34) / 3.0) ** 2)))
+        for h in range(72))
+    out = _demo_series(vals)
+    for must in ("什么时候越阈", "黄 ≥ 0.10 m", "橙 ≥ 0.20 m",
+                 "红 ≥ 0.50 m", "峰值水深"):
+        assert must in out, f"序列输出缺「{must}」"
+    # 「答不了什么时候」这句必须消失
+    assert "越阈时刻对雨型极敏感" not in out, \
+        "给了时间序列却仍声明答不了时刻"
+
+
+def test_non_72h_duration_refuses_to_grade():
+    """历时不是 72 h 时必须拒绝给档，而不是凑一个档。
+
+    分位阈值只对 72 h 标定过。凑档与 R3 单一口径拒绝是同一条纪律：
+    宁可不给，也不给一个读者分辨不出的错档。
+    """
+    out = _demo_series("8,7,6,5,4,3,3,3,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2")
+    assert "不适用" in out, "非 72 h 历时未拒绝给档"
+    assert "只对 72 h 历时标定过" in out
+    assert "无法给出" in out

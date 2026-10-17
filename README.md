@@ -120,6 +120,10 @@ pip install rasterio --only-binary=:all:
 python -m typhoeus.cli demo --rain 320 --remaining 8
 python -m typhoeus.cli demo --rain 320 --remaining 8 --map   # 再跑积水场（+90 s）
 
+# 给它气象台的逐时预报曲线 —— 这样它才能回答「什么时候」
+python -m typhoeus.cli demo --rain-series-file storm.csv --remaining 6
+python -m typhoeus.cli demo --rain-series "0.5,0.8,2.1,3.4" 
+
 python -m typhoeus.cli run          # 跑全链并导出全部输出物（约 90 s）
 python -m typhoeus.cli check        # 只跑门槛
 python -m typhoeus.cli report       # 打印体检摘要
@@ -127,7 +131,10 @@ python -m typhoeus.cli multievent   # 18 场历史气旋批量标定（约 280 s
 ```
 
 `demo` 的五段输出全部由你的输入决定：你的输入 → 该启动什么 → 来不来得及 →
-逐点积水（可选）→ 这条结论的边界。**换雨量或换剩余时间，答案就变。**
+逐点积水与越阈时刻 → 这条结论的边界。**换雨量、换剩余时间、换时间形状，答案都变。**
+
+标量输入只能答「多严重」，**逐时序列才能答「什么时候」**——
+实测同一总量、不同时间形状，越阈时刻相差 26 小时。
 
 不给参数时用 2021 年台风「烟花」作示例。
 

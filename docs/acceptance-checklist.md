@@ -70,6 +70,7 @@ cli decide  ──→ 我还有几小时、我有几个人 → 逐条动作能�
 # 输入驱动：换雨量或剩余时间，答案就变
 python -m typhoeus.cli demo --rain 320 --remaining 8   # 秒级
 python -m typhoeus.cli demo --rain 320 --remaining 8 --map  # 再跑积水场 +90 s
+python -m typhoeus.cli demo --rain-series-file storm.csv     # 逐时预报曲线
 python -m typhoeus.cli run          # 全链约 90 s，纯 CPU、零 API key
 python -m typhoeus.selfcheck        # → score 1.0
 python tools/sweep.py               # → 7 段全绿
