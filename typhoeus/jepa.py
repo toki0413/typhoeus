@@ -358,6 +358,106 @@ def main(argv: list[str] | None = None) -> int:
     tl_pers = float(np.mean([r["NMSE_峰值持续性"] for r in tl_rows]))
     tl_rate = float(np.mean([r["相对上界达成率"] for r in tl_rows]))
 
+    # ============ 路线 A''：借鉴 Tadpole-DFT 的「接回 skip connection」 ============
+    # A' 是秩1分解 a(t)·h_peak(x)，等价于只保留瓶颈、砍掉 skip。
+    # Tadpole 的做法是接回 skip 并用零初始化缩放因子——这里实现为：
+    #   h(t,x) = a(t)·h_peak(x) + Σ_k c_k(t)·φ_k(x)
+    # 其中 φ_k 由「oracle 幅度的残差」做 SVD 得到（共享空间基），
+    # c_k(t) 由雨特征预测。k=0 时严格退化为 A'，符合零初始化的要求。
+    RES_K = 8
+    with torch.no_grad():
+        # 在训练集上取残差（用 oracle 幅度，使残差纯粹是无法被模板解释的部分）
+        resid = []
+        for j in range(Dtr.shape[1]):
+            d = Dtr[:, j]
+            a_tru = scale_of(d)
+            t_star = int(d.mean(dim=(1, 2)).argmax())
+            h_peak = d[t_star]
+            resid.append((d - a_tru[:, None, None] * h_peak[None]).reshape(d.shape[0], -1))
+        Rmat = torch.cat(resid, 0)                       # (ΣT, H*W)
+        U, S, Vh = torch.linalg.svd(Rmat, full_matrices=False)
+        phi = Vh[:RES_K]                                 # (k, H*W) 空间基
+        energy = float((S[:RES_K] ** 2).sum() / (S ** 2).sum())
+        print(f"    残差基 k={RES_K}  解释能量 {energy:.1%}")
+
+    # 系数预测器：雨特征 → k 个系数
+    coeff = _nn.Sequential(
+        _nn.Linear(n_feat, 64), _nn.ReLU(),
+        _nn.Linear(64, 64), _nn.ReLU(),
+        _nn.Linear(64, RES_K)).to(dev)
+    Xc, yc = [], []
+    with torch.no_grad():
+        for j in range(Dtr.shape[1]):
+            d = Dtr[:, j]
+            a_tru = scale_of(d)
+            t_star = int(d.mean(dim=(1, 2)).argmax())
+            h_peak = d[t_star]
+            r_res = (d - a_tru[:, None, None] * h_peak[None]).reshape(d.shape[0], -1)
+            Xc.append(cum_feats(Rtr[:, j]))
+            yc.append(r_res @ phi.T)                     # (T,k)
+    Xc, yc = torch.cat(Xc, 0), torch.cat(yc, 0)
+    opt_c = torch.optim.Adam(coeff.parameters(), lr=3e-3)
+    for it in range(1500):
+        opt_c.zero_grad()
+        # 系数尺度很小，做标准化后再回归
+        lc = ((( coeff(Xc) - yc) / (yc.std(0, keepdim=True) + 1e-8)) ** 2).mean()
+        lc.backward()
+        opt_c.step()
+    coeff.eval()
+
+    ap_rows = []
+    with torch.no_grad():
+        for j in range(Dva.shape[1]):
+            s = int(va[j])
+            d, r = Dva[:, j], Rva[:, j]
+            m = d.mean(dim=(1, 2))
+            t_star = int(m.argmax())
+            h_peak = d[t_star]
+            # A' 重建
+            a_hat = amp(cum_feats(r))[:, 0].clamp(min=0.0, max=1.5)
+            rec_Ap = a_hat[:, None, None] * h_peak[None]
+            # A'' 加上残差基
+            c_hat = coeff(cum_feats(r))                  # (T,k)
+            rec_App = rec_Ap + (c_hat @ phi).reshape(d.shape)
+            # oracle 上界
+            a_tru = scale_of(d)
+            rec_orc = a_tru[:, None, None] * h_peak[None]
+
+            def nmse(x, y_):
+                return float(((x - y_) ** 2).mean() / ((y_ ** 2).mean() + 1e-9))
+
+            # 「关键格点」口径：取真值最深的 1% 格点，单独算误差
+            flat_t = d.reshape(d.shape[0], -1)
+            thr = torch.quantile(flat_t.max(0).values, 0.99) if hasattr(torch, "quantile") else None
+            if thr is None:
+                sv = torch.sort(flat_t.max(0).values).values
+                thr = sv[int(0.99 * (sv.numel() - 1))]
+            mask = (flat_t.max(0).values >= thr)
+            def deep_err(x):
+                fx = x.reshape(x.shape[0], -1)[:, mask]
+                tx = flat_t[:, mask]
+                return float(((fx - tx) ** 2).mean() / ((tx ** 2).mean() + 1e-9))
+
+            ap_rows.append({
+                "情景": int(recs[s].get("i", s)),
+                "NMSE_A'": round(nmse(rec_Ap, d), 4),
+                "NMSE_A''": round(nmse(rec_App, d), 4),
+                "NMSE_oracle": round(nmse(rec_orc, d), 4),
+                "深处1%误差_A'": round(deep_err(rec_Ap), 4),
+                "深处1%误差_A''": round(deep_err(rec_App), 4),
+                "深处1%误差_oracle": round(deep_err(rec_orc), 4),
+                "深度格点数": int(mask.sum()),
+            })
+
+    ap_Ap = float(np.mean([r["NMSE_A'"] for r in ap_rows]))
+    ap_Ap2 = float(np.mean([r["NMSE_A''"] for r in ap_rows]))
+    ap_orc = float(np.mean([r["NMSE_oracle"] for r in ap_rows]))
+    dp_Ap = float(np.mean([r["深处1%误差_A'"] for r in ap_rows]))
+    dp_Ap2 = float(np.mean([r["深处1%误差_A''"] for r in ap_rows]))
+    dp_orc = float(np.mean([r["深处1%误差_oracle"] for r in ap_rows]))
+    print(f"    A'' 全局NMSE {ap_Ap2:.4f}（A' {ap_Ap:.4f} / oracle {ap_orc:.4f}）")
+    print(f"    A'' 深处1%误差 {dp_Ap2:.4f}（A' {dp_Ap:.4f} / oracle {dp_orc:.4f}）")
+
     with torch.no_grad():
         h0 = Dva[0, 0]
         t0 = time.perf_counter()
@@ -405,6 +505,25 @@ def main(argv: list[str] | None = None) -> int:
             "说明": ("代理只预测幅度时间线 a(t)，空间用内核峰值帧一次求解作模板；"
                      "部署代价从「每步一次内核」降为「整场一次内核 + 线性回归」。"),
             "逐情景": tl_rows,
+        },
+        "路线A双撇_接回空间残差（借鉴Tadpole-DFT）": {
+            "做法": ("h(t,x) = a(t)·h_peak(x) + Σ_k c_k(t)·φ_k(x)；"
+                     "φ_k 为残差 SVD 的共享空间基，c_k 由雨特征预测；"
+                     "k=0 严格退化为 A'，对应 Tadpole 的零初始化缩放因子。"),
+            "残差基维度": RES_K,
+            "残差能量占比": round(energy, 4),
+            "全局NMSE": {"A'": round(ap_Ap, 4), "A''": round(ap_Ap2, 4),
+                        "oracle": round(ap_orc, 4)},
+            "深处1%格点NMSE": {"A'": round(dp_Ap, 4), "A''": round(dp_Ap2, 4),
+                             "oracle": round(dp_orc, 4)},
+            "判据": {
+                "全局NMSE_A''优于A'": bool(ap_Ap2 < ap_Ap),
+                "深处1%误差_A''优于A'": bool(dp_Ap2 < dp_Ap),
+            },
+            "逐情景": ap_rows,
+            "解读": ("全局 NMSE 由大面积浅水主导，接不接回残差基几乎看不出来；"
+                     "真正该看的是最深处 1% 格点的误差——那才是台账上会报的涝点。"
+                     "这正是 Tadpole 用 skip connection 而非纯潜空间的理由。"),
         },
         "逐情景": rows,
         "边界": [
