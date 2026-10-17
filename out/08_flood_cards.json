@@ -21,6 +21,12 @@
     "domain_basis": "grid.lon/lat 实际范围"
   },
   "计算域": "grid.lon/lat 实际范围",
+  "读数规则": [
+    "引用任何 model_depth_m 时，必须同时引用该卡的 trust 与 model_visible。",
+    "model_visible=false 时不得报出模型水深，只能报实测值与 trust_why。",
+    "model_depth_m=null 表示模型未覆盖（域外），不得以 0 代替。",
+    "本批 28 个点中仅 5 个 model_visible=true；其余点一律转人工巡查。"
+  ],
   "卡片": [
     {
       "point_id": "FP001",

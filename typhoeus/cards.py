@@ -163,6 +163,15 @@ def build(outdir: str | Path) -> dict:
         },
         "降雨双来源": rain_pair,
         "计算域": bbox,
+        # 读数规则随每次返回一起走。写在 payload 里而不是只写进工具描述，
+        # 是因为本项目的一贯判据是"护栏放工具层、不放提示词层"——
+        # 描述是给模型看的建议，这段是数据自带的约束，会跟着返回进入上下文。
+        "读数规则": [
+            "引用任何 model_depth_m 时，必须同时引用该卡的 trust 与 model_visible。",
+            "model_visible=false 时不得报出模型水深，只能报实测值与 trust_why。",
+            "model_depth_m=null 表示模型未覆盖（域外），不得以 0 代替。",
+            "本批 28 个点中仅 5 个 model_visible=true；其余点一律转人工巡查。",
+        ],
         "卡片": cards,
     }
 

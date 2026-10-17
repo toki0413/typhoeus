@@ -201,7 +201,11 @@ def get_multievent_calibration(outdir: str | None = None) -> dict:
 
 
 def get_flood_cards(outdir: str | None = None) -> dict:
-    """某个涝点的积水读数与可信度：实测多少、模型多少、这个读数能不能用。"""
+    """某个涝点的积水读数与可信度：实测多少、模型多少、这个读数能不能用。
+
+    不回答单点水深绝对值：28 个点里仅 5 个模型可见，其余点须读该卡的
+    trust 与 model_visible 再决定是否引用；看不见的点只能转人工巡查。
+    """
     d = Path(outdir) if outdir else DEFAULT_OUTDIR
     return _deliver_budgeted(d, _TOOL_FILES["get_flood_cards"], "逐点风险卡")
 
