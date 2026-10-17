@@ -570,6 +570,16 @@ def main(argv=None) -> int:
     sub.add_parser("check", help="只跑门槛")
     sub.add_parser("report", help="打印体检摘要")
 
+    # 交互式查询与决策入口。**曾因工作树覆盖整体丢失**，
+    # 导致材料里的 `cli scenario` / `cli decide` 无法执行（视频录制会当场失败）。
+    # 功能一直在 `scenario.py` / `decision.py` 里，缺的只是接线。
+    p_sc = sub.add_parser("scenario", help="给定面雨量，查落档、响应等级与动作")
+    p_sc.add_argument("mm", type=float, help="72 h 面雨量（mm）")
+
+    p_dc = sub.add_parser("decide", help="信息—行动空白与逐条动作可行性")
+    p_dc.add_argument("--gap", type=float, default=None,
+                      help="参照空白小时数，缺省用模块内置口径")
+
     p_me = sub.add_parser(
         "multievent", help="跑 18 场历史气旋批量标定（多事件序列）")
     p_me.add_argument("--outdir", default="out")
@@ -586,6 +596,15 @@ def main(argv=None) -> int:
     # 全链40 s，批量 6 min，混在一起会让日常回归跑不掉。
     if cmd == "multievent":
         return _run_multievent(cfg, args.outdir, args.catalog)
+
+    # 两个交互入口：纯查询/聚合，不重算主链，故在 run_chain 之前分流。
+    if cmd == "scenario":
+        from . import scenario as SC
+        return SC.main([str(args.mm)])
+
+    if cmd == "decide":
+        from . import decision as DC
+        return DC.main(["--gap", str(args.gap)] if args.gap is not None else [])
 
     ctx = run_chain(cfg, outdir=getattr(args, "outdir", None))
 

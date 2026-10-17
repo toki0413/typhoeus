@@ -211,6 +211,49 @@ def sweep_docs_links() -> list[str]:
     return bad
 
 
+
+def sweep_cli_commands() -> list[str]:
+    """材料里写的 CLI 子命令，是否真的存在。
+
+    为什么需要这一段：`cli scenario` 与 `cli decide` 曾因工作树覆盖整体丢失，
+    而**模块、产物、工具、门槛全部照常**，巡检前五段全绿——
+    失效点是"文档里教用户敲的命令不存在"，只有真去敲才会发现。
+    视频脚本会当场失败，是最贵的失效。
+    """
+    sec("6) 命令行子命令 vs 材料")
+    import re
+
+    import typhoeus.cli as CLI
+
+    # 取 argparse 实际注册的子命令
+    import argparse
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd")
+    # 复用真实 main 的注册逻辑：直接解析已知命令的 help 不可靠，
+    # 改为从源码里抽 add_parser 的第一个参数。
+    src = (ROOT / "typhoeus" / "cli.py").read_text(encoding="utf-8")
+    real = set(re.findall(r'add_parser\(\s*"([a-z_]+)"', src))
+
+    # 取材料里教用户敲的命令
+    docs = [ROOT / "README.md", *sorted((ROOT / "submission").glob("*.md"))]
+    documented: dict[str, list[str]] = {}
+    for f in docs:
+        if not f.exists():
+            continue
+        t = f.read_text(encoding="utf-8")
+        for m in re.findall(r"typhoeus\.cli\s+([a-z_]+)", t):
+            documented.setdefault(m, []).append(f.name)
+
+    bad = []
+    print(f"  实际注册 {len(real)} 个：{sorted(real)}")
+    for cmd, where in sorted(documented.items()):
+        ok = cmd in real
+        print(f"    {'✓' if ok else '✗'} cli {cmd:<12} 被 {', '.join(sorted(set(where)))} 引用")
+        if not ok:
+            bad.append(f"cli {cmd} 不存在，但 {', '.join(sorted(set(where)))} 要求它")
+    return bad
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="sweep")
     ap.add_argument("--fast", action="store_true", help="跳过模块导入")
@@ -223,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
     allbad["工具"] = sweep_tools()
     allbad["数字"] = sweep_doc_numbers()
     allbad["链接"] = sweep_docs_links()
+    allbad["命令行"] = sweep_cli_commands()
 
     sec("汇总")
     total = sum(len(v) for v in allbad.values())
