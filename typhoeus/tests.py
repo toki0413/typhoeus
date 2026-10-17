@@ -2190,3 +2190,20 @@ def _compile_ctx(kernel: dict) -> dict:
         "conclusion": {"门槛数": 27, "通过": 15},
     }
     assert sec["净短波_实际使用_W_m2"] == 0.0
+def test_selfcheck_closure_is_clean():
+    """体系自检闭合：规模与覆盖不得静默缩小。
+
+    背景：本项目曾出现三处**静默退步**，全部通过了 130 条测试与 G16–G20：
+      1) get_flood_cards 工具消失（8→7）
+      2) _CALIBER_SECTIONS 退回 2 项，G18 分母 5→4 但仍报 PASS
+      3) cli.py 丢失情景矩阵阶段，p6 只剩 p50 而材料引用四档
+    三者都不抛异常、不改结论，只缩小覆盖面——所以必须把**分母**本身
+    作为判据，而不能只看比率。
+    """
+    from typhoeus import selfcheck as SC
+
+    r = SC.measure()
+    failed = [c for c in r["逐项"] if not c["通过"]]
+    msg = "; ".join(f"{c['判据']} 实测 {c['实测']} 应为 {c['应为']}"
+                    for c in failed)
+    assert r["score"] == 1.0, f"自检未闭合（score={r['score']}）：{msg}"
