@@ -2218,3 +2218,50 @@ def test_selfcheck_closure_is_clean():
     msg = "; ".join(f"{c['判据']} 实测 {c['实测']} 应为 {c['应为']}"
                     for c in failed)
     assert r["score"] == 1.0, f"自检未闭合（score={r['score']}）：{msg}"
+
+def test_validation_artifacts_have_conclusions_and_boundaries():
+    """五项科研级验证件必须都存在，且各自带「结论」与「边界」。
+
+    这五项是 2026-10-18 为回应「这算科研级标准吗」补齐的：
+      p50 留出验证与 bootstrap
+      p51 参数集合不确定性
+      p52 常水体差分影响（解析判定）
+      p53 标度指数对标
+      p54 SAR 摄入链复算
+      p55 外部对标 JRC
+      p56 旱季基线差分
+
+    **为什么断言「边界」而不只是「存在」**：
+    这七件里有五件的结论是**否定性的**（指数不可识别、差分无效、
+    红格中位为 0、Q 无外部 referent）。若边界丢了，
+    否定性结论会被读成「已经验证通过」，方向完全反了。
+    所以边界不是附属说明，是这些件唯一的价值所在。
+    """
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    need = {
+        "p50_验证与统计.json": "留出验证与 bootstrap",
+        "p51_参数集合不确定性.json": "参数集合不确定性",
+        "p52_常水体差分影响.json": "常水体差分",
+        "p53_标度指数对标.json": "标度指数对标",
+        "p54_SAR摄入链复算.json": "SAR 摄入链",
+        "p55_外部对标JRC.json": "外部对标 JRC",
+        "p56_旱季基线差分.json": "旱季基线差分",
+    }
+    missing, no_concl, no_bound = [], [], []
+    for fn, what in need.items():
+        p = root / "out" / fn
+        if not p.exists():
+            missing.append(f"{fn}（{what}）")
+            continue
+        d = json.loads(p.read_text(encoding="utf-8"))
+        if not d.get("结论"):
+            no_concl.append(fn)
+        if not d.get("边界"):
+            no_bound.append(fn)
+
+    assert not missing, f"验证件缺失：{missing}"
+    assert not no_concl, f"验证件缺『结论』：{no_concl}"
+    assert not no_bound, f"验证件缺『边界』（否定性结论会被误读为通过）：{no_bound}"
