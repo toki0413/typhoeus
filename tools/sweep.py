@@ -115,7 +115,7 @@ def sweep_doc_numbers() -> list[str]:
     # 按 stem 去重：p32_规划决策卡 同时有 .json 与 .html，属**同一件**产物。
     # 按文件计数会把它算两遍（此前巡检器自身就报过错 56 vs 54）。
     stems = {f.stem for f in list(OUT.glob("p*")) + list(OUT.glob("0*"))}
-    check("产物总数(去重)", len(stems), 56, 0)
+    check("产物总数(去重)", len(stems), 60, 0)
 
     # 指纹
     from typhoeus import config as CFG
@@ -254,6 +254,45 @@ def sweep_cli_commands() -> list[str]:
     return bad
 
 
+
+def sweep_validation_set() -> list[str]:
+    """科研级五项验证件是否都在、且都带结论与边界。
+
+    这五项是 2026-10-18 为回应「这算科研级标准吗」补齐的。
+    它们最容易在后续改动中被静默丢掉的，是「边界」段——
+    而边界正是这些件唯一的价值所在，所以必须单独断言。
+    """
+    sec("7) 科研级验证件")
+    need = {
+        "p50_验证与统计.json": "留出验证与 bootstrap",
+        "p51_参数集合不确定性.json": "参数集合不确定性",
+        "p52_常水体差分影响.json": "常水体差分",
+        "p53_标度指数对标.json": "标度指数对标",
+    }
+    bad = []
+    for fn, what in need.items():
+        p = OUT / fn
+        if not p.exists():
+            bad.append(f"{fn} 缺失（{what}）")
+            print(f"    ✗ {fn} 缺失")
+            continue
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            bad.append(f"{fn} 解析失败")
+            print(f"    ✗ {fn} 解析失败")
+            continue
+        has_c = bool(d.get("结论"))
+        has_b = bool(d.get("边界"))
+        print(f"    {'✓' if has_c and has_b else '✗'} {fn:<28} "
+              f"结论{len(d.get('结论') or [])} 条 / 边界{len(d.get('边界') or [])} 条")
+        if not has_c:
+            bad.append(f"{fn} 缺『结论』")
+        if not has_b:
+            bad.append(f"{fn} 缺『边界』")
+    return bad
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="sweep")
     ap.add_argument("--fast", action="store_true", help="跳过模块导入")
@@ -267,6 +306,7 @@ def main(argv: list[str] | None = None) -> int:
     allbad["数字"] = sweep_doc_numbers()
     allbad["链接"] = sweep_docs_links()
     allbad["命令行"] = sweep_cli_commands()
+    allbad["验证件"] = sweep_validation_set()
 
     sec("汇总")
     total = sum(len(v) for v in allbad.values())

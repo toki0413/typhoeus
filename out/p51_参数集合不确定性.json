@@ -1,0 +1,467 @@
+{
+  "名称": "参数集合不确定性：峰值与红格的分布",
+  "生成时间": "2026-10-18T00:35:27",
+  "为什么需要这一件": "此前所有结论都来自**一次确定性推演**。而顶托、过流系数、土层厚度、不透水率、前期含水率大多没有本地标定。本件给这些参数一个合理区间，看输出有多宽——**一个数不是结论，是一个分布的一个样本**。",
+  "设计": {
+    "采样": "Latin Hypercube，N=24（另加 1 次基准）",
+    "成功次数": 24,
+    "参数个数": 5,
+    "参数区间": {
+      "drainage_invert_m": {
+        "下限": 0.01,
+        "上限": 0.1,
+        "依据": "p41 敏感性；管网台账缺失，取地面下 1–10 cm 等效起排"
+      },
+      "drainage_coeff_m_s": {
+        "下限": 0.0006,
+        "上限": 0.0024,
+        "依据": "基准 1.2e-3 的 0.5–2 倍"
+      },
+      "soil_capacity_mm": {
+        "下限": 30.0,
+        "上限": 300.0,
+        "依据": "p37 区间下段；600 mm 属极端，取 300 为上限"
+      },
+      "impervious_frac": {
+        "下限": 0.291,
+        "上限": 0.6,
+        "依据": "p35 实测 0.291 至密集建成区 0.6"
+      },
+      "soil_theta0": {
+        "下限": 0.1,
+        "上限": 0.4,
+        "依据": "p41 实测该参数几乎不影响峰值，区间宽以示无关"
+      }
+    },
+    "事件": "2021 烟花（实测面雨量，与主链同源）",
+    "红级阈值_m": 0.5
+  },
+  "输出分布": {
+    "峰值水深_m": {
+      "P10": 0.3915,
+      "P50": 0.4484,
+      "P90": 0.5876,
+      "均值": 0.4749,
+      "变异系数": 0.1691
+    },
+    "红格面积_ha": {
+      "P10": 0.0,
+      "P50": 0.0,
+      "P90": 1.438,
+      "均值": 0.4792,
+      "变异系数": 2.3248
+    },
+    "排水占比Q": {
+      "P10": 0.4665,
+      "P50": 0.6239,
+      "P90": 0.7409,
+      "均值": 0.6266,
+      "变异系数": 0.1824
+    }
+  },
+  "基准落位": {
+    "基准峰值_m": 0.4928,
+    "在集合中的分位_pct": 66.7,
+    "解读": "基准落在集合的 67% 分位；接近中位，属典型取值。"
+  },
+  "参数敏感性": {
+    "drainage_invert_m": {
+      "vs_峰值": 0.344,
+      "vs_红格": 0.383,
+      "依据": "p41 敏感性；管网台账缺失，取地面下 1–10 cm 等效起排"
+    },
+    "drainage_coeff_m_s": {
+      "vs_峰值": -0.863,
+      "vs_红格": -0.539,
+      "依据": "基准 1.2e-3 的 0.5–2 倍"
+    },
+    "soil_capacity_mm": {
+      "vs_峰值": -0.111,
+      "vs_红格": -0.038,
+      "依据": "p37 区间下段；600 mm 属极端，取 300 为上限"
+    },
+    "impervious_frac": {
+      "vs_峰值": 0.088,
+      "vs_红格": -0.058,
+      "依据": "p35 实测 0.291 至密集建成区 0.6"
+    },
+    "soil_theta0": {
+      "vs_峰值": 0.31,
+      "vs_红格": 0.286,
+      "依据": "p41 实测该参数几乎不影响峰值，区间宽以示无关"
+    }
+  },
+  "敏感度排序": [
+    "drainage_coeff_m_s",
+    "drainage_invert_m",
+    "soil_theta0",
+    "soil_capacity_mm",
+    "impervious_frac"
+  ],
+  "逐次结果": [
+    {
+      "run": "基准（现状参数）",
+      "params": {
+        "drainage_invert_m": 0.05,
+        "drainage_coeff_m_s": 0.0012,
+        "soil_capacity_mm": 30.0,
+        "impervious_frac": 0.75,
+        "soil_theta0": 0.45
+      },
+      "峰值_m": 0.4928,
+      "红格_ha": 0.0,
+      "Q": 0.8538,
+      "守恒残差": 2.52e-10
+    },
+    {
+      "run": 0,
+      "params": {
+        "drainage_invert_m": 0.047385,
+        "drainage_coeff_m_s": 0.000608,
+        "soil_capacity_mm": 187.334958,
+        "impervious_frac": 0.489894,
+        "soil_theta0": 0.387803
+      },
+      "峰值_m": 0.6694,
+      "红格_ha": 4.888,
+      "Q": 0.6367,
+      "守恒残差": 6.04e-10
+    },
+    {
+      "run": 1,
+      "params": {
+        "drainage_invert_m": 0.089009,
+        "drainage_coeff_m_s": 0.000852,
+        "soil_capacity_mm": 263.318046,
+        "impervious_frac": 0.417244,
+        "soil_theta0": 0.297545
+      },
+      "峰值_m": 0.5835,
+      "红格_ha": 1.438,
+      "Q": 0.4478,
+      "守恒残差": 5.92e-10
+    },
+    {
+      "run": 2,
+      "params": {
+        "drainage_invert_m": 0.059673,
+        "drainage_coeff_m_s": 0.001338,
+        "soil_capacity_mm": 42.720363,
+        "impervious_frac": 0.380025,
+        "soil_theta0": 0.177217
+      },
+      "峰值_m": 0.4827,
+      "红格_ha": 0.0,
+      "Q": 0.7873,
+      "守恒残差": 9.52e-10
+    },
+    {
+      "run": 3,
+      "params": {
+        "drainage_invert_m": 0.085509,
+        "drainage_coeff_m_s": 0.001388,
+        "soil_capacity_mm": 83.86612,
+        "impervious_frac": 0.3593,
+        "soil_theta0": 0.351011
+      },
+      "峰值_m": 0.5117,
+      "红格_ha": 0.288,
+      "Q": 0.7291,
+      "守恒残差": 3.35e-10
+    },
+    {
+      "run": 4,
+      "params": {
+        "drainage_invert_m": 0.024003,
+        "drainage_coeff_m_s": 0.001256,
+        "soil_capacity_mm": 139.230216,
+        "impervious_frac": 0.597364,
+        "soil_theta0": 0.153474
+      },
+      "峰值_m": 0.4506,
+      "红格_ha": 0.0,
+      "Q": 0.7061,
+      "守恒残差": 8.56e-12
+    },
+    {
+      "run": 5,
+      "params": {
+        "drainage_invert_m": 0.077602,
+        "drainage_coeff_m_s": 0.001178,
+        "soil_capacity_mm": 95.303123,
+        "impervious_frac": 0.341001,
+        "soil_theta0": 0.310785
+      },
+      "峰值_m": 0.5375,
+      "红格_ha": 0.575,
+      "Q": 0.6979,
+      "守恒残差": 1.29e-09
+    },
+    {
+      "run": 6,
+      "params": {
+        "drainage_invert_m": 0.028221,
+        "drainage_coeff_m_s": 0.001535,
+        "soil_capacity_mm": 292.304304,
+        "impervious_frac": 0.352737,
+        "soil_theta0": 0.228715
+      },
+      "峰值_m": 0.3854,
+      "红格_ha": 0.0,
+      "Q": 0.3817,
+      "守恒残差": 1.93e-09
+    },
+    {
+      "run": 7,
+      "params": {
+        "drainage_invert_m": 0.050757,
+        "drainage_coeff_m_s": 0.000819,
+        "soil_capacity_mm": 127.956115,
+        "impervious_frac": 0.531635,
+        "soil_theta0": 0.34492
+      },
+      "峰值_m": 0.5894,
+      "红格_ha": 1.438,
+      "Q": 0.7149,
+      "守恒残差": 1.09e-09
+    },
+    {
+      "run": 8,
+      "params": {
+        "drainage_invert_m": 0.034999,
+        "drainage_coeff_m_s": 0.001075,
+        "soil_capacity_mm": 235.124019,
+        "impervious_frac": 0.457682,
+        "soil_theta0": 0.373704
+      },
+      "峰值_m": 0.4971,
+      "红格_ha": 0.0,
+      "Q": 0.5773,
+      "守恒残差": 1.59e-09
+    },
+    {
+      "run": 9,
+      "params": {
+        "drainage_invert_m": 0.053972,
+        "drainage_coeff_m_s": 0.002119,
+        "soil_capacity_mm": 274.745831,
+        "impervious_frac": 0.519452,
+        "soil_theta0": 0.386333
+      },
+      "峰值_m": 0.4075,
+      "红格_ha": 0.0,
+      "Q": 0.5784,
+      "守恒残差": 2.05e-09
+    },
+    {
+      "run": 10,
+      "params": {
+        "drainage_invert_m": 0.01328,
+        "drainage_coeff_m_s": 0.001649,
+        "soil_capacity_mm": 38.904742,
+        "impervious_frac": 0.321176,
+        "soil_theta0": 0.314062
+      },
+      "峰值_m": 0.4012,
+      "红格_ha": 0.0,
+      "Q": 0.8245,
+      "守恒残差": 1.3e-09
+    },
+    {
+      "run": 11,
+      "params": {
+        "drainage_invert_m": 0.03632,
+        "drainage_coeff_m_s": 0.002241,
+        "soil_capacity_mm": 213.159799,
+        "impervious_frac": 0.547633,
+        "soil_theta0": 0.263727
+      },
+      "峰值_m": 0.3859,
+      "红格_ha": 0.0,
+      "Q": 0.6241,
+      "守恒残差": 6.16e-10
+    },
+    {
+      "run": 12,
+      "params": {
+        "drainage_invert_m": 0.040009,
+        "drainage_coeff_m_s": 0.001935,
+        "soil_capacity_mm": 113.190854,
+        "impervious_frac": 0.503316,
+        "soil_theta0": 0.260021
+      },
+      "峰值_m": 0.4098,
+      "红格_ha": 0.0,
+      "Q": 0.7294,
+      "守恒残差": 8.17e-10
+    },
+    {
+      "run": 13,
+      "params": {
+        "drainage_invert_m": 0.069176,
+        "drainage_coeff_m_s": 0.002308,
+        "soil_capacity_mm": 74.950936,
+        "impervious_frac": 0.305878,
+        "soil_theta0": 0.12465
+      },
+      "峰值_m": 0.4139,
+      "红格_ha": 0.0,
+      "Q": 0.7057,
+      "守恒残差": 1.4e-09
+    },
+    {
+      "run": 14,
+      "params": {
+        "drainage_invert_m": 0.084318,
+        "drainage_coeff_m_s": 0.001789,
+        "soil_capacity_mm": 229.523607,
+        "impervious_frac": 0.397043,
+        "soil_theta0": 0.129365
+      },
+      "峰值_m": 0.4253,
+      "红格_ha": 0.0,
+      "Q": 0.4182,
+      "守恒残差": 5.99e-10
+    },
+    {
+      "run": 15,
+      "params": {
+        "drainage_invert_m": 0.096786,
+        "drainage_coeff_m_s": 0.001841,
+        "soil_capacity_mm": 284.462388,
+        "impervious_frac": 0.574167,
+        "soil_theta0": 0.221583
+      },
+      "峰值_m": 0.4462,
+      "红格_ha": 0.0,
+      "Q": 0.51,
+      "守恒残差": 1.47e-09
+    },
+    {
+      "run": 16,
+      "params": {
+        "drainage_invert_m": 0.015198,
+        "drainage_coeff_m_s": 0.000978,
+        "soil_capacity_mm": 254.916811,
+        "impervious_frac": 0.550542,
+        "soil_theta0": 0.326116
+      },
+      "峰值_m": 0.4892,
+      "红格_ha": 0.0,
+      "Q": 0.593,
+      "守恒残差": 1.4e-09
+    },
+    {
+      "run": 17,
+      "params": {
+        "drainage_invert_m": 0.031637,
+        "drainage_coeff_m_s": 0.000679,
+        "soil_capacity_mm": 189.41396,
+        "impervious_frac": 0.465389,
+        "soil_theta0": 0.100595
+      },
+      "峰值_m": 0.562,
+      "红格_ha": 0.575,
+      "Q": 0.526,
+      "守恒残差": 3.58e-09
+    },
+    {
+      "run": 18,
+      "params": {
+        "drainage_invert_m": 0.062942,
+        "drainage_coeff_m_s": 0.001692,
+        "soil_capacity_mm": 108.685455,
+        "impervious_frac": 0.471626,
+        "soil_theta0": 0.192661
+      },
+      "峰值_m": 0.4432,
+      "红格_ha": 0.0,
+      "Q": 0.6999,
+      "守恒残差": 9.34e-10
+    },
+    {
+      "run": 19,
+      "params": {
+        "drainage_invert_m": 0.055584,
+        "drainage_coeff_m_s": 0.00238,
+        "soil_capacity_mm": 162.880395,
+        "impervious_frac": 0.421828,
+        "soil_theta0": 0.238437
+      },
+      "峰值_m": 0.4,
+      "红格_ha": 0.0,
+      "Q": 0.6144,
+      "守恒残差": 1.99e-09
+    },
+    {
+      "run": 20,
+      "params": {
+        "drainage_invert_m": 0.017628,
+        "drainage_coeff_m_s": 0.001954,
+        "soil_capacity_mm": 170.027127,
+        "impervious_frac": 0.384208,
+        "soil_theta0": 0.171776
+      },
+      "峰值_m": 0.3878,
+      "红格_ha": 0.0,
+      "Q": 0.5714,
+      "守恒残差": 2.09e-09
+    },
+    {
+      "run": 21,
+      "params": {
+        "drainage_invert_m": 0.092947,
+        "drainage_coeff_m_s": 0.000948,
+        "soil_capacity_mm": 148.045892,
+        "impervious_frac": 0.435146,
+        "soil_theta0": 0.277499
+      },
+      "峰值_m": 0.6092,
+      "红格_ha": 2.3,
+      "Q": 0.6236,
+      "守恒残差": 5.95e-09
+    },
+    {
+      "run": 22,
+      "params": {
+        "drainage_invert_m": 0.072862,
+        "drainage_coeff_m_s": 0.001484,
+        "soil_capacity_mm": 57.53386,
+        "impervious_frac": 0.291484,
+        "soil_theta0": 0.211658
+      },
+      "峰值_m": 0.4804,
+      "红格_ha": 0.0,
+      "Q": 0.7458,
+      "守恒残差": 2.33e-09
+    },
+    {
+      "run": 23,
+      "params": {
+        "drainage_invert_m": 0.074403,
+        "drainage_coeff_m_s": 0.002067,
+        "soil_capacity_mm": 208.9316,
+        "impervious_frac": 0.583104,
+        "soil_theta0": 0.149685
+      },
+      "峰值_m": 0.4294,
+      "红格_ha": 0.0,
+      "Q": 0.596,
+      "守恒残差": 5.59e-09
+    }
+  ],
+  "结论": [
+    "**峰值水深**：P10 0.3915 / P50 0.4484 / P90 0.5876 m，变异系数 0.1691。",
+    "**红格面积**：P10 0.0 / P50 0.0 / P90 1.438 ha。红格面积的相对离散远大于峰值水深——**面积类指标比深度类更不稳**。",
+    "**主控参数**（按与峰值的秩相关绝对值排序）：drainage_coeff_m_s（ρ=-0.86）；drainage_invert_m（ρ=+0.34）；soil_theta0（ρ=+0.31）。",
+    "**基准落位**：67% 分位。接近中位，单次推演可代表典型情形。",
+    "**对产品的处置**：凡引用峰值或红格，都应同时给出该集合的 P10–P90；只报单值的结论应标为『基准参数下的一个样本』。"
+  ],
+  "边界": [
+    "参数区间是**文献量级与单场反推**，不是本地标定的后验分布；故输出分布是『认知不确定性』的粗估，不是频率意义上的概率。",
+    "未含降雨驱动的集合：降雨固定为实测，故本件只反映参数不确定性。",
+    "N=24 只够看量级与排序，不足以分解交互作用（未做 Sobol 分解）。",
+    "秩相关只捕捉单调关系；本模型对多数参数近似单调，故可用，但不等于因果。",
+    "基准的 Q 定义为「排水量/降雨量」，与 p33 的功能损失 Q 不同名不同义。"
+  ]
+}
