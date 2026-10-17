@@ -32,12 +32,12 @@
 | numpy | 2.4.4 | 图守恒律求解器全部数值计算 |
 | scipy | 1.17.1 | GPD 极值分布拟合（`stats.genextreme`） |
 | rasterio | 1.5.2 | GLO-30 DEM 读取与重采样 |
-| pytest | 9.1.1 | 121 条回归测试 |
-| mcp | 可选 | MCP 只读服务（7 个工具） |
+| pytest | 9.1.1 | **130 条**回归测试 |
+| mcp | 可选 | MCP 只读服务（**8 个工具**，G16–G20 五项门槛全 PASS） |
 
 **无 pandas 依赖**（本机装有但代码未引用）。**零环境变量、零 API key** —— 唯一的外部网络调用是 Open-Meteo archive-api 免 key 接口，且带本地缓存。
 
-纯 CPU，无GPU 依赖。单次全链约 50 s。
+纯 CPU，无 GPU 依赖。单次全链 **约 45 s**（`--skip-matrix` 同量级；默认含四档情景矩阵时更久，随机器负载波动）。
 
 ---
 
@@ -45,7 +45,7 @@
 
 ```
 demo/
-├── typhoeus/                # 主包，9354 行
+├── typhoeus/                # 主包，**62 个模块 / 15,324 行**
 │   ├── kernel.py     (707)  # 图守恒律求解器 + Green-Ampt 入渗 + Ghil-Sellers 能量平衡
 │   ├── multievent.py (815)  # 18 场历史气旋批量标定
 │   ├── cli.py        (576)  # 命令行入口 + KernelParams 单一构造源
@@ -114,7 +114,7 @@ pip install rasterio --only-binary=:all:
 ## 运行
 
 ```bash
-python -m typhoeus.cli run          # 跑全链，导出七份输出物（约 50 s）
+python -m typhoeus.cli run          # 跑全链，导出 52 件产物（约 45 s 起）
 python -m typhoeus.cli check        # 只跑门槛
 python -m typhoeus.cli report       # 打印体检摘要
 python -m typhoeus.cli multievent   # 18 场历史气旋批量标定（约 280 s）
@@ -130,7 +130,7 @@ python -m typhoeus.cli multievent --catalog "2021:IN-FA,2014:FUNG-WONG"
 ### 测试
 
 ```bash
-python -m pytest typhoeus/tests.py -q          # 121 条，约 4 s
+python -m pytest typhoeus/tests.py -q          # 130 条，约 4 s
 python tools/mcp_selftest.py                   # MCP 通过率 + 故障注入 10 项
 python tools/infil_diag.py                     # 入渗机制 A/B 诊断
 python tools/gpd_sample_size.py                # GPD 样本量合成实验
@@ -215,6 +215,14 @@ python -m typhoeus.cli run
 | `08_flood_cards.json` / `citizen.html` | 涝点转译卡 28 张 + 公众页 |
 | `dashboard.html` | 内部看板 |
 | `config.json` / `manifest.json` | 配置与来源指纹 |
+
+
+> **产物总数 52 件**：`out/` 下 `p0`–`p44` 共 44 件、`01`–`08` 共 8 件。
+> 下表按用途分组；**逐件索引见文末「仓库导览」第二节**。
+>
+> 其中 `p33`–`p44` 为方法论诊断件（跨事件矩阵、四色面积、参数敏感性、
+> 情景四轴等），**不属于 `run` 自动生成的岗位交付物**，
+> 由 `tools/` 下脚本单独产生，用途是支撑结论与界定边界。
 
 ### 产品件（岗位可用，随 `run` 自动生成）
 
@@ -342,7 +350,55 @@ python -m typhoeus.cli decide --json             # 机器可读
 
 ---
 
-## 文档
+## 仓库导览
+
+总共 **52 件产物**（`out/` 44 件 `p*` + 8 件 `0*`）、**35 篇方法文档**、**7 条 ADR**。
+下面按"想找什么"索引，不必逐件翻。
+
+### 一、提交材料（先看这里）
+
+| 文件 | 内容 |
+|---|---|
+| [`submission/00_提交材料对照索引.md`](submission/00_提交材料对照索引.md) | 五项材料 ↔ 仓内文档对照；赛事四条硬门槛落点 |
+| [`submission/01_一页正文.md`](submission/01_一页正文.md) | **主体材料**：问题、方法五步链、跨事件证据、市场、边界 |
+| [`submission/02_视频脚本.md`](submission/02_视频脚本.md) | 演示视频 2 分 40 秒分镜 + 录制清单 |
+
+### 二、想找什么 → 看哪件
+
+| 你想知道的 | 看这件 |
+|---|---|
+| 产品定位与三强调（扩展性/伦理/开放性） | [`docs/positioning.md`](docs/positioning.md) · [`docs/方案.md`](docs/方案.md) |
+| **跨事件证据（18 场/36 年）** | `out/p33_跨事件决策矩阵.json` · `out/p34_逐场四色面积.json` |
+| 给定雨量出预案 | `python -m typhoeus.cli scenario <mm>` · `out/p6_情景矩阵.json` |
+| 规划岗的一页决策卡 | `out/p32_规划决策卡.html` |
+| 值不值得修、要多少雨才淹 | `out/p21-p22_反问题.json` · `out/p17_归因分解.json` |
+| 信息到行动差多少小时 | `out/p23_决策可行域.json` · `out/p40_服务恢复时间分解.json` |
+| **哪条轴最该投资** | `out/p44_四轴杠杆对比.json` · [`docs/scenario-axes.md`](docs/scenario-axes.md) |
+| 遥感验证打得过基线吗 | `out/p8_遥感淹没范围验证.html` · `out/p9_遥感验证指标.json` |
+| 模型在哪些点不可信 | `out/p25_序数技能检验.json` · `out/p4_偏差诊断与残差校正.html` |
+| 换城市行不行 | `out/p38_多城市地形迁移.json` · [`docs/generalization-strategy.md`](docs/generalization-strategy.md) |
+| 气候叙事该怎么讲 | [`docs/climate-enso-framing.md`](docs/climate-enso-framing.md) · `out/p39_ENSO条件化.json` |
+| 数据从哪来、哪些拿不到 | [`docs/official-data-sources.md`](docs/official-data-sources.md) · [`docs/open-data-inventory.md`](docs/open-data-inventory.md) |
+
+### 三、方法文档（`docs/`，按主题）
+
+| 主题 | 文档 |
+|---|---|
+| **定位与产品** | `positioning.md`、`product-definition.md`、`product-spec.md`、`product-system.md`、`target-architecture-ai-product.md`、`方案.md` |
+| **证据与验证** | `cross-event-matrix.md`、`era5-multievent.md`、`muifa-deep-dive.md`、`ordinal-skill.md`、`attribution-assessment.md`、`official-timeline.md`、`lifeline-transport-design.md`、`decision-card.md`、`decision-coupling.md` |
+| **参数与敏感性** | `scenario-axes.md`、`generalization-strategy.md`、`generalization-assessment.md`、`strengthen-prediction-planning.md`、`counterfactual-unseasonal.md` |
+| **数据** | `official-data-sources.md`、`open-data-inventory.md`、`corpus-assessment.md` |
+| **气候与极端** | `climate-enso-framing.md`、`convective-extreme-assessment.md` |
+| **技术与探索** | `jepa-upgrade-plan.md`、`tadpole-review.md`、`graph-topology-assessment.md`、`water-system-synthesis.md`、`creative-analytics.md`、`downscaling-consistency-model.md`、`sagin-emergency-comm.md`、`breakthrough-assessment.md`、`sponge-city-fit.md` |
+| **赛事规则** | `ai4climate2026_rules.md` |
+
+### 四、ADR（`docs/adr/`，7 条架构决策）
+
+`0001` 目标是个人杠杆 · `0002` 卡片 vs 工作表拆分 · `0003` 分级用官方阈值 ·
+`0004` 评估在区县级 · `0005` 交通结论限于分级与排序 · `0006` 风险单元锚定台账分段 ·
+`0007` 单元读数按三源并列表
+
+### 五、内部评估（仓库根目录）
 
 | 文件 | 内容 |
 |---|---|
@@ -357,5 +413,21 @@ python -m typhoeus.cli decide --json             # 机器可读
 | `COMPOUND_RISK_PLAN.md` | 复合风险方案 |
 | `WORLD_MODEL_HJEPA.md` | H-JEPA 世界模型方案 |
 | `DOC_GAP_ANALYSIS.md` | 文档缺口分析 |
-| `UPGRADE_v3.1.md` | v3.1 升级记录 |
-| `version.py` | **版本与全部口径修正的权威记录**，改动前先读它 |
+| `UPGRADE_v3.1.md` · `V4修订对照表.md` | 版本升级记录 |
+
+### 六、权威记录
+
+| 文件 | 内容 |
+|---|---|
+| `typhoeus/version.py` | **版本与全部口径修正的权威记录**，改动前先读它 |
+| `out/manifest.json` | 双指纹与输出清单 |
+| `NOTICE.md` | 第三方数据署名与许可 |
+
+### 七、复核命令
+
+```bash
+python -m typhoeus.cli check     # 27 条门槛：15 PASS / 5 FAIL / 7 BLOCKED
+python -m typhoeus.cli run       # 全链，52 件产物，约 45 s
+python -m pytest typhoeus/tests.py -q   # 130 条回归测试
+python -c "from typhoeus import agent_gates as AG; print(AG.run_all())"  # G16–G20
+```
