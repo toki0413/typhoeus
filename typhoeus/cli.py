@@ -685,6 +685,13 @@ def main(argv=None) -> int:
                             str(Path(args.outdir) / "p9_遥感验证指标.json")]
             except Exception as e:                  # noqa: BLE001
                 print(f"[WARN] 遥感验证件未生成：{e}", file=sys.stderr)
+            # SAR 水面连通域（p14）：把常水体与疑似新增积水分开。缺影像则跳过。
+            try:
+                from . import sar_topo as STOPO
+                if STOPO.build(args.outdir, verbose=False) is not None:
+                    written += [str(Path(args.outdir) / "p14_SAR水面连通域.json")]
+            except Exception as e:                  # noqa: BLE001
+                print(f"[WARN] SAR 连通域未生成：{e}", file=sys.stderr)
             # 生命线断供预判（p13）：把水深时序映射到生命线失效阈值。
             # 注意：这一步要重跑一次内核取时序，约 +6 s；失败不阻断主链。
             try:
