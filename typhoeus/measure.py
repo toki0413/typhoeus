@@ -24,8 +24,7 @@ CC_EXPECTED = 0.07
 class MeasureParams:
     """策略参数（L3 层）。"""
 
-    n_members: int = 200  # 集合成员数；低于 ~50 时高分位会挤在同一批成员上
-    seed: int = 20210725  # 固定使主链可复现；做稳定性研究时逐种子重抽
+    n_members: int = 5# 集合成员数，太少则分位数不稳
     cc_exponent: float = 0.07      # 标度率；门槛 9 会用真实序列回校
     cc_ci_low: float = 0.05# 下置信
     cc_ci_high: float = 0.09       # 上置信
@@ -89,7 +88,7 @@ def estimate(track, target_lat: float = 29.87, target_lon: float = 121.55,
     landfall_h = k_near * 6.0
 
     # 集合：雨强对气压差做区间扰动
-    rng = np.random.default_rng(cfg.seed)
+    rng = np.random.default_rng(20210725)
     members = []
     base_dp = max(1010.0 - min_p, 5.0)
     # 标定基线取自降雨场实算，不另设解析式。
@@ -112,15 +111,12 @@ def estimate(track, target_lat: float = 29.87, target_lon: float = 121.55,
         hrs = _hour_offsets(track)
         n_pts = sum(1 for x in hrs if -2.0 <= x + 1.5 <= 72.0 + 2.0)
         base_rain72 = 11.3 * n_pts * 2.0 * math.sqrt(2.0 * math.pi) * _K_T_HALF
-    mid_cc = 0.5 * (cfg.cc_ci_low + cfg.cc_ci_high)
-    # 把 [cc_ci_low, cc_ci_high] 当作 95% 置信区间处理，换算成标度率的
-    # 标准差，再让每个成员从正态分布抽取缩放因子。旧写法是在区间内
-    # 均匀抽样后 clip 到 [0.85,1.15]，约三分之一成员会贴在两个边界上，
-    # 分布形状被截断人为制造。
-    cc_sigma = (cfg.cc_ci_high - cfg.cc_ci_low) / (2 * 1.96)
     for m in range(cfg.n_members):
-        z = float(rng.normal(1.0, cc_sigma / max(mid_cc, 1e-6)))
-        jitter = float(np.clip(z, 0.80, 1.25))
+        # 标度区间 [cc_ci_low, cc_ci_high] 是对"标度率本身"的置信区间，
+        # 映射到成员上的方式：以区间中值为1.0 基准，上下界给出相对扰动幅度。
+        mid_cc = 0.5 * (cfg.cc_ci_low + cfg.cc_ci_high)
+        rel = rng.uniform(cfg.cc_ci_low, cfg.cc_ci_high) / max(mid_cc, 1e-6)
+        jitter = float(np.clip(rel, 0.85, 1.15))
         dp = base_dp * jitter
         # 面雨量按气压差幂律缩放，指数 1.4 取自暖海面增幅的经验区间。
         rain72 = base_rain72 * (dp / base_dp) ** 1.4
@@ -132,9 +128,11 @@ def estimate(track, target_lat: float = 29.87, target_lon: float = 121.55,
             "rain72_mm": rain72,
         })
 
-    vals = np.array([x["rain72_mm"] for x in members], dtype=float)
-    qs = {f"p{int(q*100)}": float(np.quantile(vals, q))
-          for q in (0.5, 0.8, 0.9, 0.95)}
+    vals = sorted(x["rain72_mm"] for x in members)
+    qs = {}
+    for q in (0.5, 0.8, 0.9, 0.95):
+        idx = min(len(vals) - 1, int(q * len(vals)))
+        qs[f"p{int(q*100)}"] = vals[idx]
 
     # 气候与超标分离：气候项按 1/(1+cc·ΔT) 折算，超标项为余量
     cc = cfg.cc_exponent

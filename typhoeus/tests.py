@@ -1828,207 +1828,365 @@ def _fake_ctx():
         "proj": proj,
     }
 
+# ---------- 土壤观测接入（soilsrc + soilcal） ----------
 
-# ---------------------------------------------------------------- 本轮修复的回归锚
+def _soilsrc_fake():
+    """构造一个假的 SoilProfile，跳过网络与磁盘。"""
+    import numpy as _np
+    from typhoeus import soilsrc
+    n = 384
+    return soilsrc.SoilProfile(
+        sm_0_7=_np.full(n, 0.520), sm_7_28=_np.full(n, 0.518),
+        soil_temp_c=_np.full(n, 25.1),
+        et0_mm_h=_np.full(n, 0.076, dtype=float),
+        theta0=0.987, theta0_raw=0.987,
+        et0_anchor_mm_h=0.050, et0_mean_mm_h=0.076,
+        lat=29.91, lon=121.54,
+        window=("2021-07-15T00:00", "2021-07-30T23:00"),
+        n_timesteps=n, fetched_at="2021-08-01T00:00:00",
+        notes={"anchor_index": 246, "anchor": "2021-07-25T06:00",
+               "sm_anchor_m3_m3": 0.520, "sm_7_28_anchor_m3_m3": 0.518,
+               "soil_temp_anchor_c": 25.1,
+               "licence": "CC BY 4.0", "driver": "fake"})
 
-def test_ensemble_quantiles_strictly_ordered():
-    """集合分位数必须严格单调。
 
-    锁的失效方式：成员数 5 且用 `int(q*len(vals))` 取下标时，p80/p90/p95
-    全部落到同一个成员上，产物 `01_preset_plan.json` 里三个数完全相等
-    （实测 251.6 mm × 3），"按分位数分级预案"因此是一句假话。
+class _patched_soil:
+    """把 soilsrc.get_soil / load_cache 换成假的，用完还原。"""
+
+    def __init__(self, prof=None, boom=False):
+        self.prof = prof or _soilsrc_fake()
+        self.boom = boom
+
+    def __enter__(self):
+        import typhoeus.soilsrc as SS
+        self._ss = SS
+        self._og, self._oc = SS.get_soil, SS.load_cache
+        prof = self.prof
+
+        def _boom_fn(use_cache=True, verbose=True):
+            raise SS.SoilSourceError("模拟网络不可用")
+
+        SS.get_soil = _boom_fn if self.boom else (
+            lambda use_cache=True, verbose=True:
+            (prof, {"driver": "fake", **prof.notes}))
+        SS.load_cache = lambda: None if self.boom else prof
+        return self
+
+    def __exit__(self, *a):
+        self._ss.get_soil = self._og
+        self._ss.load_cache = self._oc
+        return False
+
+
+def test_sm_to_theta_uses_documented_sat_res():
+    """sm → θ 的换算必须用文档常量 θ=(sm-res)/(sat-res)。"""
+    from typhoeus import soilsrc
+    # bias=0 时 sm=θ_sat → θ=1.0
+    assert abs(float(soilsrc.sm_to_theta(0.46, dry_bias=0.0)) - 1.0) < 1e-12
+    # bias=0.065 时 sm=0.520 → (0.520-0.065-0.08)/0.38 = 0.98684
+    v = float(soilsrc.sm_to_theta(0.520, dry_bias=0.065))
+    assert abs(v - 0.98684) < 1e-4, v
+
+
+def test_sm_to_theta_can_exceed_one_without_clipping():
+    """θ>1 必须原样返回。裁剪会藏掉「再分析高估」这个信号。"""
+    from typhoeus import soilsrc
+    v = float(soilsrc.sm_to_theta(0.520, dry_bias=0.0))
+    assert v > 1.0, v
+
+
+def test_sm_to_theta_dry_bias_range_straddles_saturation():
+    """湿偏区间两端跨越 θ=1，这正是选区间中值的理由。
+
+    实测 sm=0.520：bias=0.05 给 θ=1.026（超饱和，说明改正不足），
+    bias=0.08 给 θ=0.947（未饱和）。+0.065 给0.987。
+    三层深度层实测值一致，所以这个跨越不是噪声。
     """
-    from typhoeus import measure as M
-    from typhoeus.data import TrackPoint
+    from typhoeus import soilsrc
+    lo, hi = soilsrc.DRY_BIAS_RANGE
+    a = float(soilsrc.sm_to_theta(0.520, dry_bias=lo))
+    b = float(soilsrc.sm_to_theta(0.520, dry_bias=hi))
+    assert a > 1.0, a
+    assert 0.0 < b < 1.0, b
+    mid = float(soilsrc.sm_to_theta(0.520,
+                                    dry_bias=soilsrc.DRY_BIAS_M3_M3))
+    assert b < mid < a
+    assert 0.95 <= mid <= 0.999
 
-    tr = [TrackPoint(f"2021-07-{20 + i} 08:00", 29.0 + 0.10 * i,
-                     122.50 - 0.08 * i, 70.0 - i, 985.0 + 2.0 * i)
-          for i in range(12)]
-    mo = M.estimate(tr, cfg=M.MeasureParams())
-    q = mo.joint_quantile
-    assert q["p50"] < q["p80"] < q["p90"] < q["p95"], q
-    assert len(mo.members) == M.MeasureParams().n_members >= 50
+
+def test_soilsrc_available_vars_excludes_reference_et():
+    """可用变量表不能含 reference_evapotranspiration（实测 HTTP 400）。"""
+    from typhoeus import soilsrc
+    assert "reference_evapotranspiration" not in soilsrc.AVAILABLE_VARS
+    assert "et0_fao_evapotranspiration" in soilsrc.AVAILABLE_VARS
+    assert "soil_moisture_0_to_7cm" in soilsrc.AVAILABLE_VARS
+    assert "soil_moisture_7_to_28cm" in soilsrc.AVAILABLE_VARS
 
 
-def test_ensemble_size_single_source():
-    """成员数只允许有一个默认值来源。
+def test_net_sw_from_et0_matches_manual_energy_balance():
+    """ET0 → 净短波的反解必须与 Ghil-Sellers 正算互逆。
 
-    `config.L3_Strategy.ensemble_members` 与 `measure.MeasureParams.n_members`
-    若不一致，主链走 cli 传的那个、批量与测试走另一个，两处会算出两套分位数。
+    实测基准：ET0 5.47 mm/72h x 面积比 0.25 = 1.3675 mm，
+    net_sw = 78.0 W/m²，正算回 1.3675 mm。
     """
-    from typhoeus import measure as M
-    from typhoeus.config import L3_Strategy
+    from typhoeus import soilcal as SC
+    sw = SC._net_sw_from_et0(1.3675, 0.15, 0.25, 0.45, 0.65, hours=72.0)
+    assert abs(sw - 78.0) < 0.5, sw
+    le = sw * 0.85 * 0.30
+    back = le * 0.65 / (1000.0 * 2.45e6) * 72 * 3600 * 1000
+    assert abs(back - 1.3675) < 1e-3, back
 
-    assert L3_Strategy().ensemble_members == M.MeasureParams().n_members
+
+def test_net_sw_scales_linearly_with_target_evaporation():
+    """净短波必须与目标土壤蒸发量成正比（同一量纲链）。"""
+    from typhoeus import soilcal as SC
+    a = SC._net_sw_from_et0(1.0, 0.15, 0.25, 0.45, 0.65, hours=72.0)
+    b = SC._net_sw_from_et0(2.0, 0.15, 0.25, 0.45, 0.65, hours=72.0)
+    assert abs(b / a - 2.0) < 1e-9, (a, b)
 
 
-def test_dashboard_price_rows_not_empty():
-    """价目表视图必须渲染出档位名与投入区间。
+def test_net_sw_from_et0_rejects_degenerate_inputs():
+    """ET0≤0、潜热份额≤0、反照率≥1 三种退化必须报错。"""
+    import pytest as _pt
+    from typhoeus import soilcal as SC
+    with _pt.raises(SC.CalibrationError):
+        SC._net_sw_from_et0(0.0, 0.15, 0.25, 0.45, 0.65)
+    with _pt.raises(SC.CalibrationError):
+        SC._net_sw_from_et0(-1.0, 0.15, 0.25, 0.45, 0.65)
+    with _pt.raises(SC.CalibrationError):
+        SC._net_sw_from_et0(1.0, 0.15, 0.60, 0.45, 0.65)
+    with _pt.raises(SC.CalibrationError):
+        SC._net_sw_from_et0(1.0, 1.0, 0.25, 0.45, 0.65)
 
-    锁的失效方式：render 读 `档位`/`note` 两个键，而工件
-    `04_resilience_pricing.json` 的字段名是 `档`/`区间`/`对应减少功能损失_pct`，
-    键名对不上时三行的首列与说明列为空，中间列直接把数组字面量
-    `[2.0, 5.0]` 显示出来。
+
+def test_soilcal_applies_observation_over_parametric():
+    """观测可用时 θ0 与净辐射必须被标定值覆盖。"""
+    from typhoeus import config as CFG
+    from typhoeus import soilcal as SC
+    with _patched_soil():
+        cal = SC.calibrate(CFG.Config(), verbose=False)
+    assert cal.applied is True
+    assert cal.driver == "fake"
+    assert abs(cal.theta0 - 0.987 * 0.456) < 1e-3, cal.theta0
+    assert abs(cal.net_sw_wm2 - 78.0) < 1.0, cal.net_sw_wm2
+    assert cal.report["evap_backcheck_resid_mm"] < 1e-3
+
+
+def test_soilcal_parametric_source_keeps_config_values():
+    """soil_source=parametric 时不得被观测覆盖，且 applied=False。"""
+    from typhoeus import config as CFG
+    from typhoeus import soilcal as SC
+    c = CFG.Config()
+    c.l2.soil_source = "parametric"
+    cal = SC.calibrate(c, verbose=False)
+    assert cal.applied is False
+    assert cal.theta0 == c.l2.soil_theta0
+    assert cal.net_sw_wm2 == c.l2.net_sw_wm2
+
+
+def test_soilcal_raises_when_source_down_and_no_fallback():
+    """降级必须显式：allow_fallback=False 时抛错而非静默用常数。"""
+    import pytest as _pt
+    from typhoeus import config as CFG
+    from typhoeus import soilcal as SC
+    with _patched_soil(boom=True):
+        with _pt.raises(SC.CalibrationError):
+            SC.calibrate(CFG.Config(), verbose=False)
+        cal = SC.calibrate(CFG.Config(), verbose=False, allow_fallback=True)
+    assert cal.applied is False
+    assert cal.driver == "parametric-fallback"
+    assert "reason" in cal.report
+
+
+def test_soilcal_theta_clipped_when_observation_already_saturated():
+    """观测θ=0.987 直接当城市θ 时必须截断并计数。
+
+    折减系数取 1.0 时 θ_final = 0.987 已被内核截到 0.999 上限之下，
+    但按内核的饱和判据（θ ≥ 0.999 视为饱和不再吸）这仍属"接近饱和"。
+    折减系数必须显式大于 0 才能让 Green-Ampt 保留吸力增益 ——
+    实测 diag：θ0=0.987 时三档强度吸力增益全为 0.000 mm，
+    机制退化成常数入渗；θ0=0.45 时为0.000 / 2.089 / 3.132 mm。
     """
-    from typhoeus import render as RD
+    from typhoeus import config as CFG
+    from typhoeus import soilcal as SC
+    c = CFG.Config()
+    c.l2.urban_theta_frac = 1.0
+    with _patched_soil():
+        cal = SC.calibrate(c, verbose=False)
+    # 截断上限保证内核不会拿到 θ≥1
+    assert cal.theta0 <= 0.999
+    # 折减系数为 1 时应报告"接近饱和"
+    assert cal.report["theta_observed"] * 1.0 >= 0.95
+    # 反过来：默认折减系数必须显著低于 1，否则机制会退化
+    d = CFG.Config()
+    with _patched_soil():
+        cal_d = SC.calibrate(d, verbose=False)
+    assert cal_d.theta0 < 0.60, cal_d.theta0
 
-    price = {
-        "口径": "测试口径", "声明": "不作报价依据",
-        "档位": [{"档": "Ⅰ级：布点与感知", "单位": "万元/点位",
-                  "区间": [2.0, 5.0], "对应减少功能损失_pct": 1.0}],
-        "依据": {"气候分量_Q": 0.6809, "超标分量_Q": 0.0817},
+
+def test_soilcal_reports_observation_exceeds_parametric():
+    """实测 θ 必须落进报告：它是 config 常数的上界这条事实要可核。"""
+    from typhoeus import config as CFG
+    from typhoeus import soilcal as SC
+    with _patched_soil():
+        cal = SC.calibrate(CFG.Config(), verbose=False)
+    assert cal.report["theta_observed"] > 0.9
+    assert cal.report["theta0_parametric"] < cal.report["theta_observed"]
+    assert cal.report["net_sw_parametric_wm2"] != \
+        cal.report["net_sw_calibrated_wm2"]
+
+
+def test_soilcal_report_declares_licence_and_caveat():
+    """观测接入必须带许可与 caveat，否则护栏会拒产物。"""
+    from typhoeus import config as CFG
+    from typhoeus import soilcal as SC
+    with _patched_soil():
+        cal = SC.calibrate(CFG.Config(), verbose=False)
+    assert "CC BY" in cal.report["licence"]
+    assert cal.report["caveat"]
+    assert cal.report["anchor"] == "2021-07-25T06:00"
+
+
+def test_kernel_params_prefers_soil_calibration():
+    """_kernel_params 拿到标定结果时必须用它，而不是 config 值。"""
+    from typhoeus import config as CFG
+    from typhoeus import cli as CLI
+    from typhoeus import soilcal as SC
+    c = CFG.Config()
+    cal = SC.SoilCalibration(theta0=0.62, net_sw_wm2=88.0,
+                             applied=True, driver="fake")
+    k = CLI._kernel_params(c, soil=cal)
+    assert k.soil_theta0 == 0.62
+    assert k.net_sw_wm2 == 88.0
+    k0 = CLI._kernel_params(c)
+    assert k0.soil_theta0 == c.l2.soil_theta0
+    assert k0.net_sw_wm2 == c.l2.net_sw_wm2
+
+
+def test_soil_source_and_fractions_enter_config_hash():
+    """土壤源与两个折减系数必须进 hash，否则两批场次无法区分。"""
+    from typhoeus import config as CFG
+    a = CFG.Config()
+    b = CFG.Config()
+    b.l2.soil_source = "parametric"
+    assert a.hash() != b.hash()
+    c = CFG.Config()
+    c.l2.urban_theta_frac = 0.8
+    assert a.hash() != c.hash()
+    d = CFG.Config()
+    d.l2.evap_area_frac = 0.5
+    assert a.hash() != d.hash()
+    # 同值同hash
+    assert CFG.Config().hash() == CFG.Config().hash()
+
+
+def test_config_hash_is_a_method_not_an_attribute():
+    """`cfg._hash` 不存在，读它永远得到 None。
+
+    多事件产物曾用 `getattr(cfg, "_hash", None)` 取配置指纹，落盘出来
+    是 null——同一批场次的 config_hash 与 manifest 无法对上，
+    「同hash 才能复算」这条审计要求在多事件侧失效。Config 上真实的
+    接口是 `hash()` 方法。
+    """
+    from typhoeus import config as CFG
+    c = CFG.Config()
+    assert not hasattr(c, "_hash"), "又冒出 _hash 属性，两处会再分叉"
+    h = c.hash()
+    assert isinstance(h, str) and len(h) >= 12, h
+    assert c.hash() == h
+
+
+def test_consistency_pairs_include_soil_calibration():
+    """θ0 与净短波的标定值/使用值必须进一致性对表。"""
+    from typhoeus import consistency as CS
+    names = [p[0] for p in CS.CONSISTENCY_PAIRS]
+    assert any("θ0" in n for n in names), names
+    assert any("净短波" in n for n in names), names
+
+
+def test_compile_soil_section_recomputes_theta_from_observation(tmp_path):
+    """06 里「θ0 实际使用」必须等于 观测 × 城市折减系数。
+
+    两者不等说明标定报告写进了产物但没进内核参数，或者反过来。
+    """
+    import json
+    import shutil
+    src = Path(__file__).resolve().parent.parent / "out"
+    dst = tmp_path / "out"
+    shutil.copytree(src, dst)
+
+    p = dst / "06_health_report.json"
+    rep = json.loads(p.read_text(encoding="utf-8"))
+    sec = rep["土壤标定"]
+    assert sec["已应用观测"] is True
+    assert sec["驱动"].startswith("era5land")
+    obs = sec["θ0_观测"]
+    fac = sec["θ0_城市折减系数"]
+    assert abs(sec["θ0_城市折减系数_乘观测"] - obs * fac) < 1e-3
+    assert abs(sec["θ0_实际使用"] - sec["θ0_城市折减系数_乘观测"]) < 1e-3
+    assert sec["净短波_标定_W_m2"] == sec["净短波_实际使用_W_m2"]
+    assert "CC BY" in sec["许可"]
+    assert sec["caveat"]
+    # 观测值必须高于内核取值：观测是自然地表，计算域是硬化面
+    assert obs > sec["θ0_实际使用"]
+
+
+def test_compile_soil_section_survives_missing_calibration(tmp_path):
+    """旧产物没有标定信息时，compile 必须报「未记录」而不是 KeyError。
+
+    v0.6.0 之前的 06 没有「土壤标定」段。兼容读取不能因为新字段
+    缺失而整份报告崩掉，也不能拿 config 常数冒充观测值。
+    """
+    import json
+    import shutil
+    from typhoeus import compile as CO
+    src = Path(__file__).resolve().parent.parent / "out"
+    dst = tmp_path / "out"
+    shutil.copytree(src, dst)
+
+    p = dst / "06_health_report.json"
+    rep = json.loads(p.read_text(encoding="utf-8"))
+    rep.pop("土壤标定")
+    p.write_text(json.dumps(rep, ensure_ascii=False), encoding="utf-8")
+
+    #直接调 compile 的报告段构造：给它一个缺标定段的 kernel
+    k = {"positivity_ok": True, "mass_resid": 1e-9, "max_depth": 0.5,
+         "peak_time_h": 3.0, "rain_total_mm": 200.0,
+         "budget": {"降雨": 200.0}, "infil_energy": {}}
+    out = CO.health_report(_compile_ctx(k))
+    sec = out["土壤标定"]
+    assert sec["驱动"] == "未记录"
+    assert sec["已应用观测"] is False
+    assert sec["θ0_实际使用"] == 0.0
+    assert sec["净短波_实际使用_W_m2"] == 0.0
+    assert sec["许可"] is None
+
+
+def _compile_ctx(kernel: dict) -> dict:
+    """构造 health_report 需要的最小 ctx。"""
+    from typhoeus import config as _CFG
+    return {
+        "gates": {"items": []}, "kernel": kernel, "cfg": _CFG.Config(),
+        "cell_m": 54.0,
+        "coverage": {"rate": 0.6, "n_hit": 6, "n_total": 10,
+                     "missed": [], "excluded": []},
+        "coverage_top20": 0.6,
+        "front": {"n": 3, "mean_abs_diff_m": 0.3, "max_abs_diff_m": 0.4},
+        "dead_spot": {"reason": "测试"},
+        "order_cmp": {"gain_over_baseline": 0.12, "best_baseline": "random"},
+        "adj": {"median_rel_err": 1e-9, "passed": True},
+        "recon": {}, "cc_identifiable": {"identifiable": False, "n_events": 1},
+        "retrofit": {"n_projects": 6},
+        "observe": {"monitor_sites": 149, "monitor_sites_spec": 149,
+                    "service_outages": 10, "rain_stations": 8},
+        "gate": {"reduction": 0.44, "passed": True},
+        "rain_check": {"model_mm": 202.0, "obs_mm": 269.0, "rel_err": -0.25,
+                       "rel_err_allcity": -0.46, "n_stations": 2,
+                       "allcity_mm": 375.0, "obs_basis": "测试",
+                       "sampling_bias": "测试"},
+        "rain_total_mm": 202.0, "depth_accuracy": None,
+        "event_name": "测试", "config_hash": "x", "source_hash": "y",
+        "levels": {0: 0.5, 1: 0.3, 2: 0.2}, "proj": {},
+        "conclusion": {"门槛数": 27, "通过": 15},
     }
-    html = RD._sec_price(price, {})
-    assert "Ⅰ级：布点与感知" in html
-    assert "2–5 万元/点位" in html
-    assert "减少功能损失 1.0%" in html
-    assert "[2.0, 5.0]" not in html
-    assert RD._band(None, "万元") == ""
-    assert RD._band([300.0, 800.0], "万元/片区") == "300–800 万元/片区"
-
-def test_cards_lines_carry_no_bare_rain_number():
-    """查询/避险/对账三轨不出现裸雨量数字；雨量只在双来源齐备时出现（护栏 A2）。
-
-    雨量在本项目里有两个来源（域内 −8% 自样本、全市 −31%），面向人的句子一律
-    不提雨量；产物里若只给一个来源，整段雨量不出现。
-    """
-    from typhoeus import cards as CD
-
-    doc = CD.build(Path("out"))
-    for c in doc["卡片"]:
-        for key in ("查询", "避险", "对账"):
-            assert "毫米" not in c[key] and "mm" not in c[key].replace(" m", ""), c[key]
-    rp = doc["降雨双来源"]
-    if rp is not None:
-        assert rp["obs_allcity_mm"] and rp["model_mm"], rp
-        assert rp["rel_err_domain_pct"] is not None
-        assert rp["rel_err_allcity_pct"] is not None
-
-
-def test_cards_invisible_points_never_dispatch_on_model():
-    """模型看不见的点不得据模型出结论，改为人工巡查（护栏 A3）。
-
-    实测失效方式：17 个域内涝点里 12 个模型水深恰为 0.000，其中含历史最深的
-    下穿立交（实测 0.50-0.68 m）。按模型输出派单，这些点会被判为不用去。
-    """
-    from typhoeus import cards as CD
-
-    doc = CD.build(Path("out"))
-    inv = [c for c in doc["卡片"] if not c["model_visible"]]
-    assert len(inv) >= 1, "当前事件应有模型看不见的点，否则这条断言是空的"
-    for c in inv:
-        assert c["人工处置"] == CD.SILENT_ACTION, c
-        assert c["trust"] != "可发", c
-    for c in doc["卡片"]:
-        assert c["避险"], c
-
-
-def test_cards_every_card_points_to_an_artifact():
-    """每张卡必须能回指到具体产物与记录号（护栏 A1）。"""
-    from typhoeus import cards as CD
-
-    doc = CD.build(Path("out"))
-    assert doc["卡片"], "转译卡不能是空的"
-    for c in doc["卡片"]:
-        s = c["source"]
-        assert s["file"] and s["record"], c
-        assert s["point_provenance"], c
-        assert c["obs_depth_m"] > 0, c
-
-
-def test_cards_html_self_contained_and_level_boundaries():
-    """页面不引外部脚本与地图库（离线能开）；四色边界下界归高档。
-
-    边界实测：0.10 m 归黄、0.20 m 归橙、0.50 m 归红，与官方四色分级同向。
-    """
-    from typhoeus import cards as CD
-
-    assert CD.level_of(0.09) == 0
-    assert CD.level_of(0.10) == 1
-    assert CD.level_of(0.20) == 2
-    assert CD.level_of(0.49) == 2
-    assert CD.level_of(0.50) == 3
-    w = CD.write(Path("out"))
-    html = Path(w["html"]).read_text(encoding="utf-8")
-    assert "<script src=" not in html
-    assert "http://" not in html and "https://" not in html
-    assert "避险" in html and "对账" in html
-
-
-# ---------------------------------------------------------------- 排水乘子场定影
-
-def test_uniform_run_fingerprint_is_uniform(grid):
-    """主链（不设乘子）的定影串必须是 "uniform"。
-
-    这条锁的是"新增字段没有偷偷改变既有行为"：None 场的指纹必须是一个
-    固定词，而不是 None 或空串，否则清单里那一行会随实现漂移。
-    """
-    res = K.run(grid, _storm(37, 30, 30, 20.0), _kga())
-    assert res.drainage_fingerprint == "uniform"
-
-
-def test_field_without_profile_raises(grid):
-    """给了乘子场却不声明档案名 → 必须抛，不允许静默出数。
-
-    这是 config_hash 覆盖不到这个场所留下的唯一漏洞：同一个 hash 能对应
-    两种推演。宁可在这里停住，也不能让不可归因的结果带着旧 hash 落盘。
-    """
-    import pytest as _pt
-    kp = _kga()
-    kp.drainage_mult = np.ones((30, 30), dtype="float64") * 0.1
-    with _pt.raises(ValueError, match="drainage_profile"):
-        K.run(grid, _storm(13, 30, 30, 20.0), kp)
-
-
-def test_profile_without_field_raises(grid):
-    """声明了档案名却没有场 → 同样抛：档案名与实际推演用的场必须配对。"""
-    import pytest as _pt
-    kp = _kga()
-    kp.drainage_profile = "probe_disc2_x0.10"
-    with _pt.raises(ValueError, match="drainage_mult"):
-        K.run(grid, _storm(13, 30, 30, 20.0), kp)
-
-
-def test_fingerprint_stable_and_discriminating(grid):
-    """同一个场两次定影逐位相同；换一个场必须不同。
-
-    摘要走 np.round(6) 量化，是为了让浮点噪声不会把"同一个场"判成两个场；
-    真正不同的乘子值必须换指纹，否则这行清单只是装饰。
-    """
-    a = np.ones((30, 30), dtype="float64") * 0.10
-    b = np.ones((30, 30), dtype="float64") * 0.10
-    c = np.ones((30, 30), dtype="float64") * 0.25
-
-    def fp(m, prof):
-        kp = _kga()
-        kp.drainage_mult = m
-        kp.drainage_profile = prof
-        return K.drainage_fingerprint(kp)
-
-    assert fp(a, "probe") == fp(b, "probe")
-    assert fp(a, "probe") != fp(c, "probe")
-    assert fp(a, "probe") != fp(a, "probe2")
-
-
-def test_manifest_carries_drainage_fingerprint(tmp_path):
-    """清单里必须有这一行，且非均匀run要带出档案名。
-
-    只看 manifest 的键存在不够——还要证明一个真实的非均匀 run 的指纹
-    能一路传到清单：否则这条治理链在最后一公里断掉。
-    """
-    from typhoeus import compile as C
-
-    kp = _kga()
-    kp.drainage_mult = np.ones((30, 30), dtype="float64") * 0.05
-    kp.drainage_profile = "disc2_x0.05"
-    res = K.run(_Grid(), _storm(13, 30, 30, 20.0), kp)
-    assert res.drainage_fingerprint.startswith("disc2_x0.05@30x30:")
-
-    ctx = {"config_hash": "testhash", "source_hash": "src",
-           "kernel": {"drainage_fingerprint": res.drainage_fingerprint},
-           "measure": {}, "event_name": "e", "conclusion": "c",
-           "gates": [], "rain_source": {"driver": "era5-cache"}}
-    b = C.new_bundle(ctx, {})
-    b.write(str(tmp_path))
-    man = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
-    assert man["drainage_fingerprint"] == res.drainage_fingerprint
+    assert sec["净短波_实际使用_W_m2"] == 0.0

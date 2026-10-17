@@ -161,15 +161,13 @@ def _bilinear_to_grid(node_lats: np.ndarray, node_lons: np.ndarray,
 
 def fetch_era5(grid: Grid, start: str = EVENT_START, end: str = EVENT_END,
                margin_deg: float = 0.15,
-               nx: int = 6, ny: int = 4,
-               anchor_iso: str | None = None) -> ReanalysisField:
+               nx: int = 6, ny: int = 4) -> ReanalysisField:
     """拉取 ERA5 再分析降水，双线性插值到计算域。
 
     参数 `nx`/`ny` 是请求的节点数（外扩后均匀布点）。实测 24 点可用，
     36 点与 45 点均 400，保守取 6×4=24。
 
-    返回的降雨场时间轴对齐到内核：t=0 对应 `anchor_iso`（缺省为
-    模块常量 `ANCHOR_ISO`，即 2021 烟花锚点；换事件必须显式传入）。
+    返回的降雨场时间轴对齐到内核：t=0 对应 `ANCHOR_ISO`。
     """
     bb_lon = (float(grid.lon.min()), float(grid.lon.max()))
     bb_lat = (float(grid.lat.min()), float(grid.lat.max()))
@@ -195,7 +193,7 @@ def fetch_era5(grid: Grid, start: str = EVENT_START, end: str = EVENT_END,
 
     # 时间对齐：ERA5 给的是本地钟（Asia/Shanghai）逐时累计量，
     # 内核要的是 t=0 起每步 dt_s 的平均雨强。
-    anchor = dt.datetime.fromisoformat(anchor_iso or ANCHOR_ISO)
+    anchor = dt.datetime.fromisoformat(ANCHOR_ISO)
     t_first = dt.datetime.fromisoformat(times[0])
     # 找 anchor 落在哪个小时区间
     hour_idx = int((anchor - t_first).total_seconds() // 3600)
@@ -230,7 +228,7 @@ def fetch_era5(grid: Grid, start: str = EVENT_START, end: str = EVENT_END,
             "n_nodes": len(nodes),
             "n_extrapolated": n_extrap,
             "grid_shape": list(grid.shape),
-            "anchor": anchor_iso or ANCHOR_ISO,
+            "anchor": ANCHOR_ISO,
             "step_per_hour": step_per_hour,
             "hour_offset": hour_idx,
             "licence": "CC BY 4.0（数据），需署名 Open-Meteo / ECMWF ERA5",
@@ -388,34 +386,26 @@ def load_cache(name: str = "era5") -> ReanalysisField | None:
 
 def get_rainfall(grid: Grid, stations: list[dict] | None = None,
                  use_cache: bool = True, calibrate: bool = True,
-                 verbose: bool = True,
-                 cache_name: str = "era5",
-                 event_window: tuple[str, str] | None = None,
-                 anchor_iso: str | None = None) -> tuple[np.ndarray, dict]:
+                 verbose: bool = True) -> tuple[np.ndarray, dict]:
     """取降雨驱动场。优先缓存，其次 ERA5 实时拉取，都失败则降级参数化场。
 
     返回 `(rain_mm_h, 来源报告)`。报告里的 `driver` 字段标明实际用了
     哪一条，调用方必须把它写进输出物，不许只报数字。
-
-    `cache_name` / `event_window` / `anchor_iso` 为事件参数化入口：
-    默认值与历史行为逐位相同（缓存键 "era5"、2021 烟花窗与锚点）；
-    换事件时显式传入，不影响默认路径。
     """
     log = (lambda *a: print(*a, flush=True)) if verbose else (lambda *a: None)
 
     if use_cache:
-        cached = load_cache(cache_name)
+        cached = load_cache()
         if cached is not None:
             log(f"     降雨源 ERA5 缓存命中  面雨量 {cached.grid_accum_mm:.1f} mm")
             return _finalize(cached, grid, stations, calibrate, "era5-cache")
 
     try:
         log("[L0] 拉取 ERA5 再分析降水（免 key） ...")
-        start, end = event_window if event_window else (EVENT_START, EVENT_END)
-        fld = fetch_era5(grid, start=start, end=end, anchor_iso=anchor_iso)
+        fld = fetch_era5(grid)
         log(f"     {fld.n_timesteps} 步  {len(fld.node_lats)} 节点  "
             f"插值后面雨量 {fld.grid_accum_mm:.1f} mm")
-        save_cache(fld, cache_name)
+        save_cache(fld)
         return _finalize(fld, grid, stations, calibrate, "era5")
     except RainSourceError as e:
         log(f"[!] ERA5 不可用：{e}")

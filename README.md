@@ -2,7 +2,7 @@
 
 城市内涝情景推演与验收工具。把一次台风过程解成四个可核对的动作：**预置方案 → 抢修排序 → 事件对账 → 韧性定价**，每个数字都带口径、可复算、可追责。
 
-内核 v0.6.0-demo / 输出物格式 v3.6.1 / `config_hash` `92cd76c2ea3f`
+内核 v0.6.1-demo / 输出物格式 v3.7.0 / `config_hash` `e464fea5962b`
 
 ---
 
@@ -32,12 +32,12 @@
 | numpy | 2.4.4 | 图守恒律求解器全部数值计算 |
 | scipy | 1.17.1 | GPD 极值分布拟合（`stats.genextreme`） |
 | rasterio | 1.5.2 | GLO-30 DEM 读取与重采样 |
-| pytest | 9.1.1 | **130 条**回归测试 |
-| mcp | 可选 | MCP 只读服务（**8 个工具**，G16–G20 五项门槛全 PASS） |
+| pytest | 9.1.1 | 118 条回归测试 |
+| mcp | 可选 | MCP 只读服务（7 个工具） |
 
-**无 pandas 依赖**（本机装有但代码未引用）。**零环境变量、零 API key** —— 唯一的外部网络调用是 Open-Meteo archive-api 免 key 接口，且带本地缓存。
+**无 pandas 依赖**（本机装有但代码未引用）。**零环境变量、零 API key** —— 外部网络调用只有 Open-Meteo archive-api 免 key 接口（降雨 + 土壤状态两条），且都带本地缓存。
 
-纯 CPU，无 GPU 依赖。单次全链 **约 45 s**（`--skip-matrix` 同量级；默认含四档情景矩阵时更久，随机器负载波动）。
+纯 CPU，无GPU 依赖。单次全链约 50 s。
 
 ---
 
@@ -45,31 +45,33 @@
 
 ```
 demo/
-├── typhoeus/                # 主包，**62 个模块 / 15,324 行**
-│   ├── kernel.py     (707)  # 图守恒律求解器 + Green-Ampt 入渗 + Ghil-Sellers 能量平衡
-│   ├── multievent.py (815)  # 18 场历史气旋批量标定
-│   ├── cli.py        (576)  # 命令行入口 + KernelParams 单一构造源
-│   ├── rainsrc.py    (507)  # 降雨源（ERA5 / 参数化合成场）
-│   ├── observe.py    (448)  # 涝点台账、监测点、覆盖率与深度精度
-│   ├── render.py     (436)  # 报告编译
-│   ├── gates.py      (378)  # 27 条门槛实现
-│   ├── compile.py    (377)  # 七份输出物编译
-│   ├── agent_gates.py(357)  # G16–G24 Agent 侧门槛
-│   ├── planner.py    (298)  # 次模贪心恢复排序
-│   ├── mcp_server.py (297)  # MCP 只读服务
-│   ├── data.py       (297)  # DEM 与台风路径加载
-│   ├── guardrails.py (288)  # R1–R4 硬拒绝规则
-│   ├── serving.py    (262)  # 缓存与调用预算
-│   ├── projection.py (254)  # 承灾体水深→功能损失
-│   ├── config.py     (199)  # 四层参数 + config_hash
-│   ├── calib_gates.py(192)  # G25–G27 多事件门槛
-│   ├── calib_sheet.py(189)  # 第七份产物「多事件标定单」
-│   ├── reconcile.py  (173)  # Q 分解（主链与批量共用一份公式）
-│   ├── measure.py    (167)  # 面雨量与联合分位数集合估计
-│   ├── consistency.py(158)  # G21 跨产物一致性
-│   ├── version.py    ( 88)  # 版本单一来源
+├── typhoeus/                # 主包，10387 行
+│   ├── tests.py      (2193)  # 137 条测试
+│   ├── multievent.py ( 815)  # 18 场历史气旋批量标定
+│   ├── kernel.py     ( 707)  # 图守恒律求解器 + Green-Ampt 入渗 + Ghil-Sellers 能量平衡
+│   ├── cli.py        ( 622)  # 命令行入口 + KernelParams 单一构造源
+│   ├── soilcal.py    ( 202)  # 观测 → 内渗参数的两次口径转换
+│   ├── rainsrc.py    ( 507)  # 降雨源（ERA5 / 参数化合成场）
+│   ├── soilsrc.py    ( 253)  # 土壤源（ERA5-Land 土壤湿度 + ET0，免key）
+│   ├── observe.py    ( 448)  # 涝点台账、监测点、覆盖率与深度精度
+│   ├── render.py     ( 436)  # 报告编译
+│   ├── gates.py      ( 378)  # 27 条门槛实现
+│   ├── compile.py    ( 377)  # 七份输出物编译
+│   ├── agent_gates.py( 357)  # G16–G24 Agent 侧门槛
+│   ├── planner.py    ( 298)  # 次模贪心恢复排序
+│   ├── mcp_server.py ( 297)  # MCP 只读服务
+│   ├── data.py       ( 297)  # DEM 与台风路径加载
+│   ├── guardrails.py ( 288)  # R1–R4 硬拒绝规则
+│   ├── serving.py    ( 262)  # 缓存与调用预算
+│   ├── projection.py ( 254)  # 承灾体水深→功能损失
+│   ├── config.py     ( 211)  # 四层参数 + config_hash
+│   ├── calib_gates.py( 192)  # G25–G27 多事件门槛
+│   ├── calib_sheet.py( 189)  # 第七份产物「多事件标定单」
+│   ├── reconcile.py  ( 173)  # Q 分解（主链与批量共用一份公式）
+│   ├── measure.py    ( 167)  # 面雨量与联合分位数集合估计
+│   ├── consistency.py(168)  # G21 跨产物一致性（12 对）
+│   ├── version.py    (143)  # 版本单一来源
 │   ├── finiteness.py ( 61)  # 非有限值防线
-│   └── tests.py      (1887) # 121 条测试
 ├── tools/                   # 诊断与自测脚本
 │   ├── infil_diag.py        # 入渗机制 A/B 诊断
 │   ├── gpd_sample_size.py   # GPD 样本量需求合成实验
@@ -114,7 +116,7 @@ pip install rasterio --only-binary=:all:
 ## 运行
 
 ```bash
-python -m typhoeus.cli run          # 跑全链，导出 52 件产物（约 45 s 起）
+python -m typhoeus.cli run          # 跑全链，导出七份输出物（约 50 s）
 python -m typhoeus.cli check        # 只跑门槛
 python -m typhoeus.cli report       # 打印体检摘要
 python -m typhoeus.cli multievent   # 18 场历史气旋批量标定（约 280 s）
@@ -130,7 +132,7 @@ python -m typhoeus.cli multievent --catalog "2021:IN-FA,2014:FUNG-WONG"
 ### 测试
 
 ```bash
-python -m pytest typhoeus/tests.py -q          # 130 条，约 4 s
+python -m pytest typhoeus/tests.py -q          # 118 条，约 12 s
 python tools/mcp_selftest.py                   # MCP 通过率 + 故障注入 10 项
 python tools/infil_diag.py                     # 入渗机制 A/B 诊断
 python tools/gpd_sample_size.py                # GPD 样本量合成实验
@@ -149,6 +151,33 @@ https://archive-api.open-meteo.com/v1/archive
 ```
 
 首次运行会拉取并缓存到 `data/seed/rain_reanalysis_era5.npz`（48 MB），之后 `rain_use_cache=True` 直接命中缓存。缓存缺失或接口不可用时降级到台风路径参数化合成场，并在产物中显式标注驱动来源 —— 该口径只可用于场次间相对比较，**不可用于任何绝对量级结论**。
+
+### 土壤源：ERA5-Land 土壤湿度与 ET0
+
+同一个免key接口还提供土壤状态与参考蒸散，用于给入渗机制的两个标定常数提供观测锚点：
+
+```bash
+# 逐变量探测可用性（reference_evapotranspiration 实测 HTTP 400，不可用）
+python -m typhoeus.soilsrc --probe
+
+# 拉取并缓存到 data/seed/soil_state_era5land.npz（5 KB）
+python -m typhoeus.soilsrc
+
+# 查看标定链：观测 θ → 城市 θ，ET0 → 净短波
+python -m typhoeus.soilcal
+```
+
+实测结论（2021 烟花，anchor `2021-07-25T06:00`）：
+
+| 量 | 实测 | 内核原值 | 校准后 |
+|---|---|---|---|
+| 表层土壤相对饱和度 θ | **0.987**（三层互证0.987/0.987/0.982） | 0.45（定性判断） | 0.45× 城市折减 0.456 |
+| 72h ET0 累计 | 5.47 mm | — | — |
+| 净短波辐射 | 由 ET0 反解 78.0 W/m² | 40.0（定性判断） | 77.98 |
+
+θ 观测是自然地表的值，计算域是城市硬化面，中间那层折减系数无观测，显式参数化在 `L2_site.urban_theta_frac`。直接取观测值会让 Green-Ampt 退化成常数入渗 —— 实测三档强度下吸力增益全为 0.000 mm，而θ0=0.45 时为 0.000 / 2.089 / 3.132 mm。
+
+主链影响：入渗 4.83 → 5.49 mm，土壤蒸发 0.70 → 1.37 mm，峰值水深 0.4928 → 0.4930 m，守恒残差 5.56e-09。入渗这一项在主链上已无杠杆 —— θ0 改到 0.987 会把入渗压到 0.80 mm，而峰值水深只动 0.4256 → 0.4256 m。
 
 配置通过 `out/config.json` 管理，四层结构：
 
@@ -201,8 +230,6 @@ python -m typhoeus.cli run
 
 ## 输出物
 
-### 计算件（内部）
-
 | 文件 | 内容 |
 |---|---|
 | `01_preset_plan.json` | 预置方案单 |
@@ -212,108 +239,7 @@ python -m typhoeus.cli run
 | `05_health_metrics.json` | 体检指标包 |
 | `06_health_report.json` | 标准体检报告（含入渗与能量段） |
 | `07_multievent_calibration.json` | 多事件标定单 |
-| `08_flood_cards.json` / `citizen.html` | 涝点转译卡 28 张 + 公众页 |
-| `dashboard.html` | 内部看板 |
 | `config.json` / `manifest.json` | 配置与来源指纹 |
-
-
-> **产物总数 52 件**：`out/` 下 `p0`–`p44` 共 44 件、`01`–`08` 共 8 件。
-> 下表按用途分组；**逐件索引见文末「仓库导览」第二节**。
->
-> 其中 `p33`–`p44` 为方法论诊断件（跨事件矩阵、四色面积、参数敏感性、
-> 情景四轴等），**不属于 `run` 自动生成的岗位交付物**，
-> 由 `tools/` 下脚本单独产生，用途是支撑结论与界定边界。
-
-### 产品件（岗位可用，随 `run` 自动生成）
-
-| 文件 | 给谁 | 内容 |
-|---|---|---|
-| `p1_情景阈值表_值班室.html` | 防汛值班室 | 四档情景的**值守等级 / 巡查频次 / 人员装备** + 优先点位排班清单 + **逐时雨情与越阈时刻** |
-| `p2_情景损失单_规划岗.html` | 规划岗 | 损失四项分解 + 四色面积 + 恢复次序 + **极端值口径情景矩阵** + **多源面雨量交叉验证** |
-| `p3_方案比选件_规划岗.html` | 规划岗 | 三档投入—收益对照 + 推荐次序 + 可立即执行动作 + 与基线比较基准 |
-| `p4_偏差诊断与残差校正.html` | 技术审查方 | 17 点系统偏差诊断 + **两道可检验判据**（模型是否有信息 / 校正是否有效） |
-| `p5_偏差校正表.json` | 系统集成方 | 偏差诊断的机器可读版 |
-| `p6_情景矩阵.json` | 系统集成方 | 四档情景的空间峰值、分位数、四色面积、超阈格点数 |
-| `p7_逐时雨情.json` | 系统集成方 | 逐时面雨强剖面、累计曲线、四档越阈时刻 |
-| `p8_遥感淹没范围验证.html` | 技术审查方 | 留出集 IoU 与 Otsu 基线对比（7 次运行全部优于基线）+ 本机推理复现 + 宁波推理的 BLOCKED 声明 |
-| `p9_遥感验证指标.json` | 系统集成方 | 遥感验证的机器可读版（逐次运行指标、判据三态、权重指纹） |
-| `p0_情景—规划机_产品件.json` | 系统集成方 | 产品件底座：情景、场景、执行入口、技术参数与边界 |
-| `p10_宁波SAR水面.json` | 技术审查方 | 宁波本地 SAR 水面推理（AWS Sentinel-1B）的数据与统计 |
-| `p11_面积型验证.json` | 技术审查方 | 模型淹没 vs SAR 水面的 IoU / 精确率 / 召回率（宽严两口径） |
-| `p12_JEPA代理验收.json` | 技术审查方 | 路线 A（整场潜空间，FAIL）与 A'（幅度时间线，PASS）的判据与逐情景读数 |
-| `p13_生命线断供预判.json` | 防汛值班室 | 10 条真实断供通报的逐条三态 + 17 涝点的模型/观测越阈对照 |
-| `p14_SAR水面连通域.json` | 规划岗 | 常水体 vs 疑似新增积水的拓扑分解（337 / 4.34 公顷） |
-| `p15_语料候选事实.json` | 技术审查方 | 公开报道抽取的「地点+深度」候选事实（须人工核对） |
-| `p16_信息时滞.json` | 规划岗 | 披露滞后（日级区间）+ 报道时滞（分钟级）+ 模型净增益 |
-| `p17_归因分解.json` | 规划岗 | 雨致涝 vs 排水不足致涝的四型分型 |
-| `p18_预警信息增益.json` | 防汛值班室 | 以 SAR 水面为真值的提前量分布与增益曲线 |
-
-**扩展分析（不在主链，按需单独跑，共约 5 分钟）：**
-
-```bash
-python -m typhoeus.corpus --batch     # p15 语料抽取（需联网）
-python -m typhoeus.infolag            # p16 信息时滞（需联网）
-python -m typhoeus.decisions          # p19/p20 代价排序 + 决策稳定性（4 次内核）
-python -m typhoeus.inverse            # p21/p22 排水与降雨反解（约 50 次内核）
-python -m typhoeus.attribution        # p17 归因分解（3 次内核）
-```
-
-**一次运行共 27 个文件，同批落盘、同一 `config_hash`。**
-
-### 情景档匹配（交互查询）
-
-```bash
-python -m typhoeus.cli scenario 338.8            # 给定面雨量 → 响应等级与动作
-python -m typhoeus.cli scenario --percentile 0.95
-python -m typhoeus.cli scenario --json           # 用当前事件面雨量，输出 JSON
-```
-
-### 单一决策入口（三条腿咬合）
-
-```bash
-python -m typhoeus.cli decide                    # 信息—行动空白 → 可执行动作清单
-python -m typhoeus.cli decide --gap 4            # 假定空白压到 4 小时会怎样
-python -m typhoeus.cli decide --json             # 机器可读
-```
-
-**核心数字（依据 p24 官方时间线）**：
-
-| 时刻 | 相对首事件 |
-|---|---|
-| 官方 Ⅰ 级响应 | **−27.0 h** |
-| **模型首次越阈** | **−1.5 h** |
-| 道路封道 | +10.0 h |
-| 强排作业 | +16.0 h |
-
-⇒ **官方比模型早 25.5 h（预警层面官方赢）；模型比封道早 11.5 h、比强排早 17.5 h（处置层面模型赢）。**
-
-按空白 11.5 h 判定：
-
-| 动作 | 所需提前 | 结论 |
-|---|---|---|
-| 电梯停梯 | 1 h | ✅ 余量 10.5 h |
-| 道路封道 | 2 h | ✅ 余量 9.5 h |
-| 泵车/移动泵调度 | 6 h | ✅ 余量 5.5 h |
-| **人员转移** | 12 h | ❌ **缺口 0.5 h** |
-
-**信息已经够支撑三类动作；离人员转移只差半小时。**
-
-这是三条腿**唯一真正的交互点**：任一条腿的时间量变化，可执行清单随之变化。
-详见 [docs/official-timeline.md](docs/official-timeline.md) 与 [docs/decision-coupling.md](docs/decision-coupling.md)。
-
-### 分阶段耗时（`run` 结束自动打印）
-
-| 段 | 默认 | `--skip-matrix` |
-|---|---|---|
-| 数据接入（DEM + 台风路径 + 降雨取数/缓存） | ~6.1 s | ~6.1 s |
-| 内核求解（μ_t 测度 + 图守恒律） | ~6.2 s | ~6.1 s |
-| 情景矩阵（p80/p90/p95 三档内核；p50 复用主链水深） | ~20.5 s | ~0.4 s |
-| 门槛体检（27 条） | <0.1 s | <0.1 s |
-| 测度与规划等 | ~1.9 s | ~1.9 s |
-| 产品与诊断层（p0–p9 共 12 个文件） | ~3.9 s | ~3.9 s |
-| **全链合计** | **~35 s** | **~15 s** |
-
-`--skip-matrix` 省 3 次内核求解，代价是 `p6` 与 `p2` 的极端值节不完整——只用于快速回归，交付前须跑默认模式。内核单次求解约 6.2 s 全部花在逐时循环内（profile 无旁支开销），提速须改数值路径，会动复算指纹，故不做。
 
 ---
 
@@ -321,84 +247,16 @@ python -m typhoeus.cli decide --json             # 机器可读
 
 以下不是待修的 bug，是当前口径的边界：
 
-- 🆕 **面积型验证 FAIL（IoU 0.0847）**。用 AWS 公共桶取到的 Sentinel-1B（2021-07-25 IW GRD）
-  做本地对照：模型淹没面积占比 **18.98%** vs SAR 水面 **2.35%**，**水面铺宽约 8 倍**，
-  IoU 0.0847（判据 ≥0.5）。但**召回率 0.708**——模型覆盖了大部分真实水面，是**超集**。
-  这与下面的点位诊断是同一物理事实的两面：**模型的水是摊薄的，不是集中的**。
-  完整对照见 `out/p11_面积型验证.json` 与 `out/p8_遥感淹没范围验证.html` 第四节。
-  ⚠️ 该件的 VH 通道用 `VV − 6.752 dB` 代理（真实 VH 因 AWS 限速未下完），补后须重跑；
-  SAR 水面含常年河网，严格做法需旱季基线影像做差。
-- 🆕 **生命线断供预判 FAIL（可核对样本仅 1 条）**。`out/p13_生命线断供预判.json`：
-  10 条真实断供通报中，**8 条在计算域外**（海曙/镇海/奉化）、1 条为聚合口径，
-  **可逐点核对的只有 1 条**（江北长岛花园电梯停梯），且该点模型峰值 **0.0002 m**
-  （阈值 0.10 m），判 FAIL。域内 17 个涝点中，模型只越阈 **1 个**，观测越阈 **16 个**。
-  **这个 FAIL 说明了架构上的事：生命线逻辑本身是通的**（FP002 在 07-25 15:20
-  越 15 cm 阈值，观测 0.64 m 来自 07-27，提前量近两天），
-  **但它忠实地传播了点位水深的零**。因此交通/电力/医疗各层不能建在点位水深不可用的模型上。
-- **涝点水深命中率 0%**（MAE 0.36 m）。17 个域内涝点中 12 个模型水深恰好为 0.000——内核在这些格点上没有积水。Green-Ampt 机制下入渗总量 0.0 mm（占面雨量 0.0%），调参动不了。根因是管网能力（5 处下立交观测全为 0.50 m，模型在顶托 0.05 m 下排不出水）与地形分辨率（GLO-30 30 m DSM 无法表达下穿凹陷）。
+- **涝点水深命中率 0%**（MAE 0.36 m）。17 个域内涝点中 12 个模型水深恰好为 0.000——内核在这些格点上没有积水。入渗仅占总雨量 1.9%，调参动不了。根因是管网能力（5 处下立交观测全为 0.50 m，模型在顶托 0.05 m 下排不出水）与地形分辨率（GLO-30 30 m DSM 无法表达下穿凹陷）。
 - **降雨总量偏差 −31%**（259.1 mm vs 官方全市 375 mm）。ERA5 再分析能约束过程总量，不能约束对流尺度极值。
-  注：该项已用 **CHIRPS-2.0 独立源交叉验证**——三个独立来源在计算域上给出 202.5 / 234.3 / 259.1 mm
-  的一致区间，与官方全市口径的差异**来自区域范围**（全市含北部余姚暴雨中心 475 mm），
-  而非模型误差。见 `out/p2_情景损失单_规划岗.html` 第三节。
 - **重现期关系不可标定**。超阈值点仅 7 个，GPD 的 MLE 给 ξ=5.93；合成实验证明 n=7 时 ξ 落回 ±0.5 的概率仅 16%，需 n≥30。经验频率法已提供但**不外推**。
 - **气候标度 CC 用的是先验值**（7%/°C），非标定结果。16 场事件全在 1990–2025 同一气候态内，信号淹没在事件间差异里。
 - **149 个内涝监测点坐标是 `provenance=synthetic` 占位**，实测水深非公开。
 - **Agent 化收益无实测支撑**。G24 因无 LLM API key 整条 BLOCKED，当前所有「Agent 提效」的表述都是推断。
-- **CMFD / CMPAS 未接入**：读取器已交付（`typhoeus/cmfd.py`、`typhoeus/cmpas.py`，自测 PASS），
-  但 TPDC 与 CMA 的免登录下载只对 <1 GiB 数据集开放（TPDC 前端源码判据），
-  两份目标数据为 1049.8 GiB / 45.2 GiB，须账号登录取 FTP 凭据。见 `docs/product-spec.md` §7.1。
 
 ---
 
-## 仓库导览
-
-总共 **52 件产物**（`out/` 44 件 `p*` + 8 件 `0*`）、**35 篇方法文档**、**7 条 ADR**。
-下面按"想找什么"索引，不必逐件翻。
-
-### 一、提交材料（先看这里）
-
-| 文件 | 内容 |
-|---|---|
-| [`submission/00_提交材料对照索引.md`](submission/00_提交材料对照索引.md) | 五项材料 ↔ 仓内文档对照；赛事四条硬门槛落点 |
-| [`submission/01_一页正文.md`](submission/01_一页正文.md) | **主体材料**：问题、方法五步链、跨事件证据、市场、边界 |
-| [`submission/02_视频脚本.md`](submission/02_视频脚本.md) | 演示视频 2 分 40 秒分镜 + 录制清单 |
-
-### 二、想找什么 → 看哪件
-
-| 你想知道的 | 看这件 |
-|---|---|
-| 产品定位与三强调（扩展性/伦理/开放性） | [`docs/positioning.md`](docs/positioning.md) · [`docs/方案.md`](docs/方案.md) |
-| **跨事件证据（18 场/36 年）** | `out/p33_跨事件决策矩阵.json` · `out/p34_逐场四色面积.json` |
-| 给定雨量出预案 | `python -m typhoeus.cli scenario <mm>` · `out/p6_情景矩阵.json` |
-| 规划岗的一页决策卡 | `out/p32_规划决策卡.html` |
-| 值不值得修、要多少雨才淹 | `out/p21-p22_反问题.json` · `out/p17_归因分解.json` |
-| 信息到行动差多少小时 | `out/p23_决策可行域.json` · `out/p40_服务恢复时间分解.json` |
-| **哪条轴最该投资** | `out/p44_四轴杠杆对比.json` · [`docs/scenario-axes.md`](docs/scenario-axes.md) |
-| 遥感验证打得过基线吗 | `out/p8_遥感淹没范围验证.html` · `out/p9_遥感验证指标.json` |
-| 模型在哪些点不可信 | `out/p25_序数技能检验.json` · `out/p4_偏差诊断与残差校正.html` |
-| 换城市行不行 | `out/p38_多城市地形迁移.json` · [`docs/generalization-strategy.md`](docs/generalization-strategy.md) |
-| 气候叙事该怎么讲 | [`docs/climate-enso-framing.md`](docs/climate-enso-framing.md) · `out/p39_ENSO条件化.json` |
-| 数据从哪来、哪些拿不到 | [`docs/official-data-sources.md`](docs/official-data-sources.md) · [`docs/open-data-inventory.md`](docs/open-data-inventory.md) |
-
-### 三、方法文档（`docs/`，按主题）
-
-| 主题 | 文档 |
-|---|---|
-| **定位与产品** | `positioning.md`、`product-definition.md`、`product-spec.md`、`product-system.md`、`target-architecture-ai-product.md`、`方案.md` |
-| **证据与验证** | `cross-event-matrix.md`、`era5-multievent.md`、`muifa-deep-dive.md`、`ordinal-skill.md`、`attribution-assessment.md`、`official-timeline.md`、`lifeline-transport-design.md`、`decision-card.md`、`decision-coupling.md` |
-| **参数与敏感性** | `scenario-axes.md`、`generalization-strategy.md`、`generalization-assessment.md`、`strengthen-prediction-planning.md`、`counterfactual-unseasonal.md` |
-| **数据** | `official-data-sources.md`、`open-data-inventory.md`、`corpus-assessment.md` |
-| **气候与极端** | `climate-enso-framing.md`、`convective-extreme-assessment.md` |
-| **技术与探索** | `jepa-upgrade-plan.md`、`tadpole-review.md`、`graph-topology-assessment.md`、`water-system-synthesis.md`、`creative-analytics.md`、`downscaling-consistency-model.md`、`sagin-emergency-comm.md`、`breakthrough-assessment.md`、`sponge-city-fit.md` |
-| **赛事规则** | `ai4climate2026_rules.md` |
-
-### 四、ADR（`docs/adr/`，7 条架构决策）
-
-`0001` 目标是个人杠杆 · `0002` 卡片 vs 工作表拆分 · `0003` 分级用官方阈值 ·
-`0004` 评估在区县级 · `0005` 交通结论限于分级与排序 · `0006` 风险单元锚定台账分段 ·
-`0007` 单元读数按三源并列表
-
-### 五、内部评估（仓库根目录）
+## 文档
 
 | 文件 | 内容 |
 |---|---|
@@ -413,21 +271,5 @@ python -m typhoeus.cli decide --json             # 机器可读
 | `COMPOUND_RISK_PLAN.md` | 复合风险方案 |
 | `WORLD_MODEL_HJEPA.md` | H-JEPA 世界模型方案 |
 | `DOC_GAP_ANALYSIS.md` | 文档缺口分析 |
-| `UPGRADE_v3.1.md` · `V4修订对照表.md` | 版本升级记录 |
-
-### 六、权威记录
-
-| 文件 | 内容 |
-|---|---|
-| `typhoeus/version.py` | **版本与全部口径修正的权威记录**，改动前先读它 |
-| `out/manifest.json` | 双指纹与输出清单 |
-| `NOTICE.md` | 第三方数据署名与许可 |
-
-### 七、复核命令
-
-```bash
-python -m typhoeus.cli check     # 27 条门槛：15 PASS / 5 FAIL / 7 BLOCKED
-python -m typhoeus.cli run       # 全链，52 件产物，约 45 s
-python -m pytest typhoeus/tests.py -q   # 130 条回归测试
-python -c "from typhoeus import agent_gates as AG; print(AG.run_all())"  # G16–G20
-```
+| `UPGRADE_v3.1.md` | v3.1 升级记录 |
+| `version.py` | **版本与全部口径修正的权威记录**，改动前先读它 |

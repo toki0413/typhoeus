@@ -2,18 +2,18 @@
   "名称": "事件对账单",
   "事件": "2021 年第6 号台风「烟花」（In-Fa）· 宁波鄞东南片区",
   "Q分解": {
-    "Q_total": 0.7272,
-    "Q_climate": 0.6809,
-    "Q_excess": 0.1079,
+    "Q_total": 0.7248,
+    "Q_climate": 0.6786,
+    "Q_excess": 0.0814,
     "Q_engineering": 0.011,
-    "Q_residual": -0.0726,
+    "Q_residual": -0.0462,
     "closed": true,
-    "resid_share_pct": 10.0,
+    "resid_share_pct": 6.4,
     "note": "",
     "cc_mid_pct_per_K": 7.0,
     "climate_ratio": 0.9597,
-    "exceed_frac_p90_over_p50": 0.2374,
-    "Q可干预": 0.1189
+    "exceed_frac_p90_over_p50": 0.1798,
+    "Q可干预": 0.0924
   },
   "闭合性": "四项相加等于事件总量",
   "实测校验": {
@@ -260,5 +260,5 @@
       }
     ]
   },
-  "schema_version": "3.6.1"
+  "schema_version": "3.7.0"
 }

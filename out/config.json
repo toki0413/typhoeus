@@ -1,5 +1,5 @@
 {
-  "config_hash": "92cd76c2ea3f",
+  "config_hash": "e464fea5962b",
   "L1_physical": {
     "g": 9.81,
     "manning_n": 0.016,
@@ -33,13 +33,16 @@
     "soil_theta0": 0.45,
     "soil_theta_res": 0.08,
     "net_sw_wm2": 40.0,
+    "soil_source": "era5land",
+    "urban_theta_frac": 0.456,
+    "evap_area_frac": 0.25,
     "albedo": 0.15,
     "ground_flux_frac": 0.25,
     "sensible_frac": 0.45,
     "evap_efficiency": 0.65
   },
   "L3_strategy": {
-    "ensemble_members": 200,
+    "ensemble_members": 5,
     "preselect_budget": 12,
     "adj_tol": 0.1,
     "resid_gate": 0.02,

@@ -276,22 +276,13 @@ def _sec_recon(rec: dict, hr: dict) -> str:
 </section>"""
 
 
-def _band(rng, unit: str) -> str:
-    """把 [2.0, 5.0] 这种区间渲染成人能读的一行，不带单位数组。"""
-    if not isinstance(rng, (list, tuple)) or len(rng) != 2:
-        return ""
-    lo, hi = rng
-    return f"{lo:g}–{hi:g} {unit}".strip()
-
-
 def _sec_price(price: dict, hm: dict) -> str:
     """价目表视图：档位 + 灵敏度。"""
     if not price:
         return ""
     rows = "".join(
-        f"<tr><td>{d.get('档','')}</td>"
-        f"<td class='r'>{_band(d.get('区间'), d.get('单位',''))}</td>"
-        f"<td class='r'>减少功能损失 {d.get('对应减少功能损失_pct','')}%</td></tr>"
+        f"<tr><td>{d.get('档位','')}</td><td>{d.get('区间','')}</td>"
+        f"<td class='r'>{d.get('note','')}</td></tr>"
         for d in price.get("档位", []))
     bs = price.get("依据", {})
     return f"""

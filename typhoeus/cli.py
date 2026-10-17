@@ -29,18 +29,27 @@ from . import data as D
 from . import observe as OB
 from . import render as RND
 from . import rainsrc as RS
+from . import soilcal as SC
 
 EVENT_NAME = "2021 年第6 号台风「烟花」（In-Fa）· 宁波鄞东南片区"
 
 
-def _kernel_params(cfg: CFG.Config) -> K.KernelParams:
+def _kernel_params(cfg: CFG.Config,
+                   soil: "SC.SoilCalibration | None" = None) -> K.KernelParams:
     """由 config 构造内核参数。**主链与多事件批量必须走这一个函数。**
 
     两处各写一遍 KernelParams(...) 时，改了 config 忘改其中一处，
     面上是一次完整复算，实际两批场次用了不同的入渗机制，
-    强度—损失标度关系里就混进了机制差异。这与R3 拒答的
+    强度—损失标度关系里就混进了机制差异。这与R3拒答的
     「同一驱动两个口径」是同一类错误。
+
+    `soil` 非None 时用 `soilcal` 的观测标定值覆盖 `soil_theta0` 与
+    `net_sw_wm2`。**先标定再构造**，不再在两处各自覆盖 —— 那会让
+    标定值与config 值在同一个 KernelParams 里混源，事后无法从参数
+    反推是哪条路径写的。
     """
+    theta0 = soil.theta0 if soil else cfg.l2.soil_theta0
+    net_sw = soil.net_sw_wm2 if soil else cfg.l2.net_sw_wm2
     return K.KernelParams(
         dt_s=cfg.l4.dt_s, max_t_h=cfg.l4.max_t_h,
         manning_n=cfg.l1.manning_n, min_depth_m=cfg.l4.min_depth_m,
@@ -53,9 +62,9 @@ def _kernel_params(cfg: CFG.Config) -> K.KernelParams:
         soil_psi_m=cfg.l2.soil_psi_m,
         soil_capacity_mm=cfg.l2.soil_capacity_mm,
         impervious_frac=cfg.l2.impervious_frac,
-        soil_theta0=cfg.l2.soil_theta0,
+        soil_theta0=theta0,
         soil_theta_res=cfg.l2.soil_theta_res,
-        net_sw_wm2=cfg.l2.net_sw_wm2,
+        net_sw_wm2=net_sw,
         albedo=cfg.l2.albedo,
         ground_flux_frac=cfg.l2.ground_flux_frac,
         sensible_frac=cfg.l2.sensible_frac,
@@ -63,31 +72,28 @@ def _kernel_params(cfg: CFG.Config) -> K.KernelParams:
 
 
 def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
-              outdir: str | None = None, skip_matrix: bool = False) -> dict:
-    """一次完整计算，产出六份输出物所需的全部上下文。
-
-    `skip_matrix=True` 时只算基准档（复用主链水深），跳过 p80/p90/p95 三档
-    内核求解——省约 20 s，代价是 p6 与 p2 的极端值节不完整。
-    """
+              outdir: str | None = None) -> dict:
+    """一次完整计算，产出六份输出物所需的全部上下文。"""
     cfg = cfg or CFG.Config()
     t0 = time.perf_counter()
     log = (lambda *a: print(*a, flush=True)) if verbose else (lambda *a: None)
-    # 分阶段计时：内核之外的开销（取数、门槛、渲染、产品层）必须单独记账，
-    # 否则"全链 27 s"这个数无法定位瓶颈，也无法对外主张任何单段指标。
-    timing: dict[str, float] = {}
-
-    def _mark(key: str, t_start: float) -> None:
-        timing[key] = round(time.perf_counter() - t_start, 2)
 
     # ---- L0 数据接入 ----
-    _t = time.perf_counter()
     log("[L0] 读取 DEM 与台风路径 ...")
     inputs = D.load_all(cfg.l2.bbox, cfg.l4.resample)
     log(f"     网格 {inputs.grid.shape}  cell={inputs.grid.cell_m:.0f} m  "
         f"路径点 {len(inputs.track)}")
 
+    # ---- 土壤标定（观测覆盖 θ0 与净辐射） ----
+    log("[T_θ] 土壤状态与蒸散标定 ...")
+    try:
+        soil = SC.calibrate(cfg, verbose=verbose)
+    except SC.CalibrationError as e:
+        raise SystemExit(f"土壤标定失败：{e}")
+    soil_rep = soil.report
+
     # ---- 内核参数（μ_t 与 T_θ 共用，保证面雨量口径同源） ----
-    kcfg = _kernel_params(cfg)
+    kcfg = _kernel_params(cfg, soil=soil)
 
     # ---- T_θ 降雨场（μ_t 拿它定面雨量基线，故先算） ----
     if cfg.l2.rain_source == "era5":
@@ -119,10 +125,8 @@ def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
     rain72_actual = float(rain.mean(axis=(1, 2)).sum() * kcfg.dt_s / 3600.0)
     log(f"     降雨场 {rain.shape}  峰值 {rain.max():.1f} mm/h"
         f"  面雨量 {rain72_actual:.1f} mm")
-    _mark("数据接入_s", _t)          # L0 读盘 + 降雨取数/缓存
 
     # ---- μ_t 台风测度 ----
-    _t = time.perf_counter()
     log("[μ_t] 台风测度估计与集合生成 ...")
     mo = M.estimate(inputs.track,
                     target_lat=float(np.mean(inputs.grid.lat)),
@@ -136,33 +140,6 @@ def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
 
     log("[T_θ] 图守恒律推进 ...")
     res = K.run(inputs.grid, rain, kcfg)
-    _mark("内核求解_s", _t)          # μ_t 测度 + 图守恒律推进
-
-    # ---- 情景矩阵（极端值口径）：基准档复用刚算完的 res.depth，不重算 ----
-    # 四档里 p50 与主链基准场同源（缩放 ×1.00），重跑一次纯属浪费且可能引入
-    # 非确定性；其余三档必须独立求解（降雨强度不同）。
-    _t = time.perf_counter()
-    matrix_rows: list[dict] = []
-    try:
-        from . import scenario_matrix as SMX
-        base_mm_ = 259.1
-        _pp = Path(outdir or "out") / "01_preset_plan.json"
-        if _pp.exists():
-            base_mm_ = float(json.loads(_pp.read_text(encoding="utf-8"))
-                             ["输入层校验"]["model_mm"])
-        matrix_rows.append(SMX.rows_from_depth(res.depth, SMX.SCENARIOS[0][1], 1.0))
-        if skip_matrix:
-            log("     --skip-matrix：跳过 p80/p90/p95 三档求解")
-        for _name, _mm in ([] if skip_matrix else SMX.SCENARIOS[1:]):
-            _scale = _mm / base_mm_ if base_mm_ else 1.0
-            _t_k = time.perf_counter()
-            _r = K.run(inputs.grid, np.asarray(rain, dtype=float) * _scale, kcfg)
-            matrix_rows.append(SMX.rows_from_depth(
-                _r.depth, _mm, _scale, elapsed=time.perf_counter() - _t_k,
-                source="内核求解", name=_name))
-        _mark("情景矩阵_s", _t)
-    except Exception as e:                          # noqa: BLE001
-        log(f"[!] 情景矩阵未算：{e}")
     log(f"     峰值水深 {res.max_depth:.3f} m  出现于 {res.peak_time_h:.1f} h")
     log(f"     守恒残差 {res.mass_resid:.3e}  正性 {res.positivity_ok}")
     log(f"     水量收支 {  {k: round(float(v), 2) for k, v in res.budget_mm().items()} }")
@@ -300,9 +277,11 @@ def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
             # "改入渗能不能抬涝点水深"这个问题有没有意义。
             "infil_mm": float(res.budget_mm()["下渗"]),
             "rain_total_mm": float(res.rain_cum[-1]),
-            # 排水空间乘子场的定影。config_hash 覆盖不到这个场，所以它要
-            # 单独进清单：没有这一行，非均匀排水的run会顶着旧 hash 出数。
-            "drainage_fingerprint": res.drainage_fingerprint,
+            # 观测标定：θ0 与净辐射的来源链。只在 applied=True 时
+            # 有意义；降级路径 applied=False，参数来自 config 常数。
+            "soil_calibration": soil_rep,
+            "theta0_used": float(kcfg.soil_theta0),
+            "net_sw_used_wm2": float(kcfg.net_sw_wm2),
         },
         "cell_m": inputs.grid.cell_m,
         "measure": mo.as_dict(),
@@ -376,6 +355,20 @@ def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
                        calibrated=cal_applied)
     ctx["rain_check"] = rc
     ctx["rain_total_mm"] = rc["model_mm"]
+    # 门槛 14 的note 要报"入渗占总雨量的比例"，判断改入渗能不能抬涝点
+    # 水深。它从顶层 ctx 读 infil_mm，而该值此前只落在 kernel 段里，
+    # 于是这条判据恒读到 0.0，输出"入渗总量仅 0.0 mm"——一个被键位
+    # 漂移造出来的假数字。顶层与 kernel 段两处都写，且下面断言二者
+    # 一致：同一份ctx 里两个同名字段不同值是最难查的一类缺陷。
+    ctx["infil_mm"] = float(res.budget_mm()["下渗"])
+    # 顶层与 kernel 段两处都写了入渗量，值必须逐位相同。同一份 ctx
+    # 里同名字段不同值是最难查的一类缺陷，所以在写入点断言而不是
+    # 留到门槛输出里才发现。
+    _inf_top = float(ctx["infil_mm"])
+    _inf_kern = float(ctx["kernel"]["infil_mm"])
+    if abs(_inf_top - _inf_kern) > 1e-12:
+        raise RuntimeError(
+            f"入渗量两处不一致：顶层 {_inf_top} kernel {_inf_kern}")
     # 降雨源报告随输出物一起落盘。三态 driver 必须可查：era5-cache /
     # parametric-fallback / parametric。看不出驱动来源的降雨数字不可引用。
     ctx["rain_source"] = rain_rep
@@ -393,18 +386,8 @@ def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
         "data_dir": str(OB.SEED_DIR),
     }
     ctx["prj_params"] = prj_params.to_dict()
-    # 门槛体检单独计时；主链其余部分（测度 + 投影 + 规划 + 对账）由差值可得。
-    _t_gate = time.perf_counter()
-    ctx["gates"] = G.check_all(ctx)
-    timing["门槛体检_s"] = round(time.perf_counter() - _t_gate, 2)
     ctx["elapsed_s"] = time.perf_counter() - t0
-    timing["主链合计_s"] = round(ctx["elapsed_s"], 2)
-    timing["测度与规划等_s"] = round(
-        ctx["elapsed_s"] - timing.get("数据接入_s", 0.0)
-        - timing.get("内核求解_s", 0.0) - timing.get("情景矩阵_s", 0.0)
-        - timing["门槛体检_s"], 2)
-    ctx["timing"] = timing
-    ctx["matrix_rows"] = matrix_rows
+    ctx["gates"] = G.check_all(ctx)
     # 结论依赖门槛统计，必须在 gates 之后算
     ctx["conclusion"] = _conclusion(ctx)
     return ctx
@@ -449,7 +432,7 @@ def _conclusion(ctx) -> str:
             f"D 单调性通过。{rain_txt}")
 
 
-def _attach_agent_gates(ctx, outdir: str, write_back: bool = True) -> list[str]:
+def _attach_agent_gates(ctx, outdir: str) -> list[str]:
     """写盘后测 Agent 门槛与跨产物一致性，回填体检包并重写一次。
 
     两组门槛都量的是**落盘产物**的行为，产物在 `check_all` 返回之后
@@ -470,8 +453,6 @@ def _attach_agent_gates(ctx, outdir: str, write_back: bool = True) -> list[str]:
     ctx["gates"] = list(ctx["gates"]) + [g21] + cg + sv + ag
     ctx["conclusion"] = _conclusion(ctx)
     ctx["measure"]["conclusion"] = ctx["conclusion"]
-    if not write_back:
-        return []                    # check/report 只读数，不改交付产物
     hm = C.health_metrics(ctx)
     p = Path(outdir) / "05_health_metrics.json"
     with open(p, "w", encoding="utf-8",) as f:
@@ -484,8 +465,7 @@ def _attach_agent_gates(ctx, outdir: str, write_back: bool = True) -> list[str]:
     for x in sv:
         print(f"[后置] 门槛{x['id']} {x['content']}  {x['value']}  "
               f"{x['status']}")
-    print(f"[Agent] G16–G20 {n_pass}/{len(ag)} 通过"
-          + ("，已回填体检包" if write_back else "（只读，未改写产物）"))
+    print(f"[Agent] G16–G20 {n_pass}/{len(ag)} 通过，已回填体检包")
     for x in ag:
         print(f"{'✅' if x['status'] == 'PASS' else '❌'} "
               f"门槛{x['id']} {x['content']}  {x['value']}  "
@@ -512,14 +492,24 @@ def _run_multievent(cfg: CFG.Config, outdir: str, catalog: str | None) -> int:
     print("[L0] 读取 DEM 与台风路径 ...")
     inputs = _D.load_all(cfg.l2.bbox, cfg.l4.resample)
     print(f"     网格 {inputs.grid.shape}  cell={inputs.grid.cell_m:.0f} m")
-    kcfg = _kernel_params(cfg)
+    print("[T_θ] 土壤状态与蒸散标定 ...")
+    try:
+        soil = SC.calibrate(cfg, verbose=True)
+    except SC.CalibrationError as e:
+        raise SystemExit(f"土壤标定失败：{e}")
+    kcfg = _kernel_params(cfg, soil=soil)
     prj_params = PRJ.ProjectionParams(
         road_capacity={r: dict(v) for r, v in cfg.l3.road_capacity.items()},
         road_mix=dict(cfg.l3.road_mix))
     print(f"\n=== 多事件批量（{len(cat or ME.EVENT_CATALOG)} 场）===")
     rep = ME.run_all(inputs.grid, kcfg, prj_params, catalog=cat, cfg=cfg)
     rep["elapsed_s"] = round(_t.perf_counter() - t0, 1)
-    rep["config_hash"] = getattr(cfg, "_hash", None)
+    rep["config_hash"] = cfg.hash()
+    # 标定链落盘：18 场跑的是标定后的 θ0 与净辐射，不落这条链，
+    # 事后无法从产物反推这批场次用的是观测值还是 config 常数。
+    rep["soil_calibration"] = soil.report
+    rep["theta0_used"] = float(kcfg.soil_theta0)
+    rep["net_sw_used_wm2"] = float(kcfg.net_sw_wm2)
 
     Path(outdir).mkdir(parents=True, exist_ok=True)
     p = Path(outdir) / "multievent_calibration.json"
@@ -550,41 +540,21 @@ def _run_multievent(cfg: CFG.Config, outdir: str, catalog: str | None) -> int:
 
 
 def main(argv=None) -> int:
-    # Windows 控制台默认 GBK，报告里的 ° − ℃ 等字符会抛 UnicodeEncodeError
-    # 并把整条命令打断。输出是给人读的，遇到编码不了的字符按替换处理。
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(prog="typhoeus")
     sub = ap.add_subparsers(dest="cmd")
 
     p_run = sub.add_parser("run", help="跑全链并导出六份输出物")
     p_run.add_argument("--outdir", default="out")
     p_run.add_argument("--config", default=None)
-    p_run.add_argument("--skip-matrix", action="store_true",
-                       help="跳过情景矩阵（省 3 次内核求解，约 20 s）；"
-                            "p6 与 p2 的极端值节将缺省")
 
     sub.add_parser("check", help="只跑门槛")
     sub.add_parser("report", help="打印体检摘要")
-
-    p_sc = sub.add_parser("scenario", help="情景档匹配：给定面雨量，给出响应等级与动作")
-    p_sc.add_argument("mm", nargs="?", type=float, default=None, help="72 h 面雨量（mm）")
-    p_sc.add_argument("--percentile", type=float, default=None,
-                      help="直接指定分位：0.5 / 0.8 / 0.9 / 0.95")
-    p_sc.add_argument("--json", action="store_true", help="输出 JSON")
 
     p_me = sub.add_parser(
         "multievent", help="跑 18 场历史气旋批量标定（多事件序列）")
     p_me.add_argument("--outdir", default="out")
     p_me.add_argument("--catalog", default=None,
                       help="事件目录 '年:名,年:名,...'，默认用 EVENT_CATALOG")
-
-    # 单一决策入口：不是又输出一份报告，而是直接回答"现在能做什么"
-    p_dc = sub.add_parser(
-        "decide", help="单一决策入口：信息—行动空白 → 可执行/不可执行动作清单")
-    p_dc.add_argument("--gap", type=float, default=None,
-                      help="假定把「信息→行动」空白压到多少小时（默认取实测 11.5 h）")
-    p_dc.add_argument("--json", action="store_true")
 
     args = ap.parse_args(argv)
     cmd = args.cmd or "run"
@@ -597,23 +567,7 @@ def main(argv=None) -> int:
     if cmd == "multievent":
         return _run_multievent(cfg, args.outdir, args.catalog)
 
-    # 情景档匹配是轻量查询：不需要跑内核，直接读分位档与事件面雨量。
-    if cmd == "scenario":
-        from . import scenario as SCN
-        argv2 = [str(args.mm)] if args.mm is not None else []
-        if args.percentile is not None:
-            argv2 += ["--percentile", str(args.percentile)]
-        if args.json:
-            argv2 += ["--json"]
-        return SCN.main(argv2)
-
-    # 单一决策入口：轻量，不跑内核，只做时间预算与动作可行性判定。
-    if cmd == "decide":
-        from . import decision as DEC
-        return DEC.main(["--json"] if args.json else [], gap=args.gap)
-
-    ctx = run_chain(cfg, outdir=getattr(args, "outdir", None),
-                    skip_matrix=bool(getattr(args, "skip_matrix", False)))
+    ctx = run_chain(cfg, outdir=getattr(args, "outdir", None))
 
     # 写盘必须在打印之前：G16–G20 量的是服务层对落盘产物的行为，
     # 产物没写出来时测的是空目录。写完再测、再回填体检包，然后一次性
@@ -634,16 +588,6 @@ def main(argv=None) -> int:
         except Exception as e:                      # 渲染失败不阻断交付
             print(f"[WARN] 渲染层未生成页面：{e}", file=sys.stderr)
 
-        # 转译层：同一批落盘产物编译成涝点卡（查询/避险/对账三轨）与一页
-        # 离线可点的页面。只读产物，不重跑内核。
-        try:
-            from . import cards as CD
-            cw = CD.write(args.outdir)
-            written += [cw["json"], cw["html"]]
-            print(f"[转译] 涝点卡片 {cw['n']} 张 → {cw['html']}")
-        except Exception as e:                      # noqa: BLE001
-            print(f"[WARN] 转译层未生成：{e}", file=sys.stderr)
-
         # 第七份产物：多事件标定单。从批量标定结果编译，缺产物时
         # 仍写一份带「未运行」状态的壳——让交付方看到这条能力存在
         # 且尚未启用，比文件缺失更容易理解。
@@ -653,90 +597,6 @@ def main(argv=None) -> int:
             json.dump(CSH.multievent_sheet(args.outdir), f,
                       ensure_ascii=False, indent=2)
         written.append(str(_p))
-
-        # 产品本体：情景—规划机三件套（值班室阈值表 / 规划岗损失单 / 方案比选件）。
-        # 只读刚落盘的产物与台账，不重跑内核，因此不改 hash。渲染失败不阻断交付。
-        try:
-            from . import products as PROD
-            _t_prod = time.perf_counter()
-            # 情景矩阵：主链已算好四档行（p50 复用主链水深），此处只负责落盘。
-            try:
-                from . import scenario_matrix as SMX
-                _rows = ctx.get("matrix_rows") or None
-                if _rows:
-                    from . import config as _CFG
-                    _cfg = _CFG.Config()
-                    _pp = Path(args.outdir) / "01_preset_plan.json"
-                    _base = 259.1
-                    if _pp.exists():
-                        _base = float(json.loads(_pp.read_text(encoding="utf-8"))
-                                      ["输入层校验"]["model_mm"])
-                    _payload = SMX.assemble(_rows, _base, "era5-cache")
-                    (Path(args.outdir) / "p6_情景矩阵.json").write_text(
-                        json.dumps(_payload, ensure_ascii=False, indent=2),
-                        encoding="utf-8")
-                else:
-                    SMX.compute(args.outdir, verbose=False)
-            except Exception as e:                  # noqa: BLE001
-                print(f"[WARN] 情景矩阵未生成：{e}", file=sys.stderr)
-            try:
-                from . import rain_timeline as RTL
-                RTL.compute(args.outdir, verbose=False)
-            except Exception as e:                  # noqa: BLE001
-                print(f"[WARN] 逐时雨情未生成：{e}", file=sys.stderr)
-            pw = PROD.write(args.outdir, verbose=False)
-            written += pw
-            # 偏差诊断件（p4/p5）：只读逐点对照，不重跑内核。
-            try:
-                from . import bias as BIA
-                written += BIA.write(args.outdir, verbose=False)
-            except Exception as e:                  # noqa: BLE001
-                print(f"[WARN] 偏差诊断未生成：{e}", file=sys.stderr)
-            # 遥感淹没范围验证件（p8/p9）：读留出集指标 + 本机推理复现。
-            try:
-                from . import sar_verify as SVER
-                SVER.build(args.outdir, verbose=False)
-                written += [str(Path(args.outdir) / "p8_遥感淹没范围验证.html"),
-                            str(Path(args.outdir) / "p9_遥感验证指标.json")]
-            except Exception as e:                  # noqa: BLE001
-                print(f"[WARN] 遥感验证件未生成：{e}", file=sys.stderr)
-            # SAR 水面连通域（p14）：把常水体与疑似新增积水分开。缺影像则跳过。
-            try:
-                from . import sar_topo as STOPO
-                if STOPO.build(args.outdir, verbose=False) is not None:
-                    written += [str(Path(args.outdir) / "p14_SAR水面连通域.json")]
-            except Exception as e:                  # noqa: BLE001
-                print(f"[WARN] SAR 连通域未生成：{e}", file=sys.stderr)
-            # 预警信息增益曲线（p18）：需真实 SAR 水面作真值，缺则跳过。
-            try:
-                from . import earlywarning as EW
-                if EW.build(args.outdir, verbose=False) is not None:
-                    written += [str(Path(args.outdir) / "p18_预警信息增益.json")]
-            except Exception as e:                  # noqa: BLE001
-                print(f"[WARN] 预警增益曲线未生成：{e}", file=sys.stderr)
-            # 生命线断供预判（p13）：把水深时序映射到生命线失效阈值。
-            # 注意：这一步要重跑一次内核取时序，约 +6 s；失败不阻断主链。
-            try:
-                from . import lifeline as LIFE
-                LIFE.run(args.outdir, verbose=False)
-                written += [str(Path(args.outdir) / "p13_生命线断供预判.json")]
-            except Exception as e:                  # noqa: BLE001
-                print(f"[WARN] 生命线断供预判未生成：{e}", file=sys.stderr)
-            written += [str(Path(args.outdir) / "p6_情景矩阵.json"),
-                        str(Path(args.outdir) / "p7_逐时雨情.json")]
-            # 分阶段计时：产品与诊断层是内核之外的开销，须单独记账。
-            ctx.setdefault("timing", {})[
-                "产品与诊断层_s"] = round(time.perf_counter() - _t_prod, 2)
-            print(f"[产品] 情景—规划机三件套 + 偏差诊断 + 情景矩阵 + 逐时雨情 → "
-                  f"{len(pw) + 2 + 2} 个文件")
-        except Exception as e:                      # noqa: BLE001
-            print(f"[WARN] 产品件未生成：{e}", file=sys.stderr)
-
-    if cmd in ("check", "report"):
-        # 服务层与 Agent 门槛量的是落盘产物之后的行为，只能在产物就位后测。
-        # 不补这一段，check/report 会按 15 条报数而 run 按 27 条报数，
-        # 同一套系统给出两个体检结论。
-        _attach_agent_gates(ctx, "out", write_back=False)
 
     if cmd in ("check", "report", "run"):
         print("\n" + "=" * 68)
@@ -756,14 +616,6 @@ def main(argv=None) -> int:
         print("\n输出物：")
         for w in written:
             print(f"  {w}")
-        tm = ctx.get("timing") or {}
-        if tm:
-            print("\n分阶段耗时：")
-            for k, v in tm.items():
-                print(f"  {k:<18} {v:>7.2f} s")
-            print(f"  {'全链合计':<18} "
-                  f"{sum(v for k, v in tm.items() if k.endswith('_s') and k != '主链合计_s'):>7.2f} s"
-                  f"（各段之和）")
     return 0
 
 

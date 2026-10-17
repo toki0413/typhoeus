@@ -52,18 +52,6 @@ class KernelParams:
     # Demo 用0.05 m 作为等效起排阈值，具体值由管网台账标定。
     drainage_invert_m: float = 0.05
     drainage_coeff_m_s: float = 1.2e-3
-    # 排水能力的**空间乘子场**（可选）。None = 全域均匀，与既有行为逐位一致。
-    # 真实管网的输水能力沿街道强异质：主干管与支管差一个量级，
-    # 下穿立交往往只靠一根支管。用统一标量会把低洼点"抽干"，
-    # 使模型在这些点始终无积水（p13/p17 的"模型无水型"）。
-    #
-    # 这个场**不进 config_hash**（hash 只覆盖 Config 的四层参数），但它改变
-    # 推演结果，因此必须由 `drainage_fingerprint()` 单独定影并随产物落盘：
-    # 否则同一个 config_hash 能对应两种推演，"同 hash 才能复算"这条主张就漏了。
-    # 配了场却没写档案名（`drainage_profile` 仍为 "uniform"）时 `run()` 直接抛，
-    # 不允许静默产出不可归因的结果。
-    drainage_mult: object = None
-    drainage_profile: str = "uniform"
     # 入渗机制。green_ampt 用土壤饱和度驱动，legacy 用地表水深驱动。
     # 两者都进 config_hash —— 机制选择本身就是模型身份的一部分。
     infiltration_mode: str = "green_ampt"
@@ -137,9 +125,6 @@ class RunResult:
     soil_final_m3: float = 0.0     # 根区土壤水期末储量，m³
     soil_init_m3: float = 0.0      # 根区土壤水期初储量，m³
     ksat_total_m3: float = 0.0     # 以 Ksat 纯量级下渗的水量，m³
-    # 排水空间乘子场的定影串。"uniform" = 未启用乘子。
-    # 与 config_hash 并列构成一次推演的完整身份：config_hash 覆盖不到这个场。
-    drainage_fingerprint: str = "uniform"
     energy: dict = field(default_factory=dict)
 
     @property
@@ -308,25 +293,6 @@ def rainfall_field(track, grid, cfg: KernelParams) -> np.ndarray:
     return acc.astype(np.float32)
 
 
-def drainage_fingerprint(cfg: KernelParams) -> str:
-    """排水空间乘子场的定影串。
-
-    `config_hash` 只覆盖 Config 的四层参数，覆盖不到这个场；而它会改变推演
-    结果。所以凡启用非均匀排水的run，产物必须同时带这个串，否则"同一
-    config_hash 才能复算"这条主张在这里是漏的。
-
-    均匀（未启用乘子）返回 "uniform"，与既有行为逐位一致。
-    """
-    import hashlib
-
-    if cfg.drainage_mult is None:
-        return "uniform"
-    a = np.asarray(cfg.drainage_mult, dtype=np.float64)
-    digest = hashlib.sha256(
-        np.round(a, 6).tobytes() + str(a.shape).encode()).hexdigest()[:10]
-    return f"{cfg.drainage_profile}@{a.shape[0]}x{a.shape[1]}:{digest}"
-
-
 def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunResult:
     """图守恒律推进。
 
@@ -351,20 +317,6 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
             f"infiltration_mode={cfg.infiltration_mode!r} 未知，"
             f"合法值：'green_ampt' / 'legacy'")
 
-    # 排水乘子与档案名必须配对。乘子改变推演结果却不进 config_hash，
-    # 所以没声明档案名的非均匀run一律拒绝——宁可停在这里，也不让一个
-    # 无法归因的结果带着旧 config_hash 进入交付物。
-    prof = (cfg.drainage_profile or "uniform").strip()
-    if cfg.drainage_mult is not None and prof == "uniform":
-        raise ValueError(
-            "drainage_mult 已给定但 drainage_profile 仍为 'uniform'："
-            "非均匀排水必须声明档案名（如 disc_r2_x0.10），"
-            "否则同一 config_hash 会对应两种推演结果。")
-    if cfg.drainage_mult is None and prof != "uniform":
-        raise ValueError(
-            f"drainage_profile={prof!r} 但 drainage_mult 为 None："
-            "档案名与实际推演用的场不一致，拒绝出数。")
-
     # 洼地填充：内部填平并给ε 排水梯度，边界不动地形。
     # 边界出流由 _rim_outflow 显式计算，不靠"把边缘压低"制造出口。
     z = _fill_depressions(elev)
@@ -384,11 +336,7 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
     # 存在的"土壤储水 6889 m³"，读起来像真的有土层。
     if cfg.infiltration_mode == "green_ampt":
         cap = cfg.soil_capacity_mm / 1000.0 * (1.0 - cfg.impervious_frac)
-        # impervious_frac 允许是**空间场**（如从 OSM 建筑足迹推出），也可为标量。
-        # 用 broadcast_to 而非 np.full：标量时两者逐位一致，数组时按格点生效；
-        # np.full 遇到数组会直接抛 ValueError（实测）。
-        soil = np.broadcast_to(cap * cfg.soil_theta0, (ny, nx)).astype(
-            np.float64).copy()
+        soil = np.full((ny, nx), cap * cfg.soil_theta0, dtype=np.float64)
         soil_init = float(soil.sum()) * area
         # Green-Ampt 的 F 是累积下渗量。同样逐格独立，量纲 m。
         f_cum = np.zeros((ny, nx), dtype=np.float64)
@@ -452,9 +400,7 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
             # Green-Ampt：f = Ksat·(1 + ψ·Δθ/F)，F 是累积下渗量。
             # Δθ 用当前剩余吸力 Δθ = (S_cap - S)/S_cap，
             # 不是初始的 θ_s - θ_0 常数——后者算不出饱和衰减。
-            # np.maximum 而非 max：cap 可能是空间场（OSM 不透水率），
-            # 内建 max 对数组会抛 "truth value of an array is ambiguous"。
-            theta = np.clip(soil / np.maximum(cap, 1e-12), 0.0, 1.0)
+            theta = np.clip(soil / max(cap, 1e-12), 0.0, 1.0)
             d_theta = np.clip(1.0 - theta, 0.0, 1.0)
             # F 的下限不能取 0：F→0 时 f 发散，单步就把土层吸干。
             # 用一个时间尺度上的哨兵值 F_eps = Ksat·dt_h，
@@ -519,11 +465,7 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         # 7.4 m 的积水，那是均匀排水假设的产物，不是内涝。
         # 顶托高程需由甲方管网台账标定，Demo 取 0.05 m。
         over = np.clip(h - cfg.drainage_invert_m, 0.0, None)
-        # 排水能力可乘一个空间异质乘子（None 时与旧行为逐位一致）
-        coeff_eff = cfg.drainage_coeff_m_s
-        if cfg.drainage_mult is not None:
-            coeff_eff = cfg.drainage_coeff_m_s * np.asarray(cfg.drainage_mult)
-        q_drain = coeff_eff * np.sqrt(cfg.drainage_invert_m + over) \
+        q_drain = cfg.drainage_coeff_m_s * np.sqrt(cfg.drainage_invert_m + over) \
             * over ** cfg.flux_exponent
         drain = np.minimum(over, q_drain * dt_s)
         h -= drain
@@ -700,7 +642,6 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         soil_final_m3=float(soil.sum()) * area,
         soil_init_m3=soil_init,
         ksat_total_m3=total_ksat,
-        drainage_fingerprint=drainage_fingerprint(cfg),
         energy=energy,
     )
 
