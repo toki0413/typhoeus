@@ -148,18 +148,38 @@ def preset_plan(ctx) -> dict:
     m = ctx["measure"]
     ps = ctx["preselect"]
     rc = ctx.get("rain_check") or {}
+    # ---- 口径统一（2026-10-18）----
+    # 四档的**唯一权威定义**在 `typhoeus.scenario.SCENARIOS`（亦是 p6 的那一套，
+    # 即对实测面雨量的放大档 258.4/313.2/338.8/354.1）。
+    # 此前本函数另用 `joint_quantile_mm["p90"]` 作触发阈值（251.6），
+    # 那是 **μ_t 测度序列的经验分位**，且 p80=p90=p95=251.6 已退化
+    # （尾部被最大值钳住），**不能支撑四档**。
+    # 后果：同一场 IN-FA 的 259.1 mm，`scenario` 判「p50/常态/0 处」，
+    # 而本单判「过 251.6 → 布 12 处」，两个产物给出相反建议。
+    # 现统一为：触发阈值 = SCENARIOS[0][1]（p50 = 既有事件基线），
+    # μ_t 分位保留但降级为诊断量，并显式标注它不是运营四档。
+    from .scenario import SCENARIOS as _SCENARIOS
+
+    threshold_mm = _SCENARIOS[0][1]
     out = {
         "名称": "预置方案单",
         "适用场景": "汛前预置布点与巡查排班",
         "台风测度": m["joint_quantile_mm"],
+        "台风测度_口径": (
+            "μ_t 测度序列的经验分位，**不是**运营四档 p50–p95。"
+            "该序列尾部被最大值钳住（p80=p90=p95=251.6），四档不可分，"
+            "故仅作诊断，不作为分级依据。运营四档见 `scenario.SCENARIOS`"
+            "（258.4/313.2/338.8/354.1）。"
+        ),
         "建议布点数": ps["n_points"],
         "覆盖率": round(ps["coverage"], 3),
         "布点坐标像元": ps["coords"][:12],
         "触发阈值": {
-            "面雨量_72h_mm": m["joint_quantile_mm"].get("p90", 0.0),
+            "面雨量_72h_mm": threshold_mm,
+            "口径": "运营四档 p50（与 scenario.SCENARIOS 同源）",
             "最大风速_ms": m["peak_wind_ms"],
         },
-        "处置": "按分位数分级预案，p90 分位以上启动全域布点",
+        "处置": "按运营四档分级预案，p50 以上启动布点",
         "schema_version": SCHEMA_VERSION,
     }
     # 触发阈值是读者会直接拿去用的数字，必须同时给两件事：这个分位
