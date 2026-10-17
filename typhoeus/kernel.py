@@ -52,6 +52,18 @@ class KernelParams:
     # Demo 用0.05 m 作为等效起排阈值，具体值由管网台账标定。
     drainage_invert_m: float = 0.05
     drainage_coeff_m_s: float = 1.2e-3
+    # 排水能力的**空间乘子场**（可选）。None = 全域均匀，与既有行为逐位一致。
+    # 真实管网输水能力沿街道强异质：主干管与支管差一个量级，
+    # 下穿立交往往只靠一根支管。用统一标量会把低洼点"抽干"，
+    # 使模型在这些点始终无积水（p13/p17 的"模型无水型"）。
+    #
+    # 该场**不进 config_hash**（它是 KernelParams 上的场，不是 Config 四层参数），
+    # 但改变推演结果，故由 `drainage_fingerprint()` 单独定影并随产物落盘。
+    # 配了场却没声明档案名（`drainage_profile` 仍为 "uniform"）时 `run()` 直接抛。
+    # 注：本字段与其内核支持曾在一次工作树覆盖中整体丢失，
+    # 因 dataclass 允许动态设属性，赋值不报错但内核不读，形成**静默空操作**。
+    drainage_mult: object = None
+    drainage_profile: str = "uniform"
     # 入渗机制。green_ampt 用土壤饱和度驱动，legacy 用地表水深驱动。
     # 两者都进 config_hash —— 机制选择本身就是模型身份的一部分。
     infiltration_mode: str = "green_ampt"
@@ -126,6 +138,9 @@ class RunResult:
     soil_init_m3: float = 0.0      # 根区土壤水期初储量，m³
     ksat_total_m3: float = 0.0     # 以 Ksat 纯量级下渗的水量，m³
     energy: dict = field(default_factory=dict)
+    # 排水空间乘子场的定影串。"uniform" = 未启用乘子。
+    # 与 config_hash 并列构成一次推演的完整身份：config_hash 覆盖不到这个场。
+    drainage_fingerprint: str = "uniform"
 
     @property
     def max_depth(self) -> float:
@@ -291,6 +306,27 @@ def rainfall_field(track, grid, cfg: KernelParams) -> np.ndarray:
         acc += w[:, None, None] * q[None, :, :]
 
     return acc.astype(np.float32)
+
+
+def drainage_fingerprint(cfg: KernelParams) -> str:
+    """排水空间乘子场的定影串。
+
+    `config_hash` 只覆盖 Config 的四层参数，覆盖不到这个场；而它会改变推演
+    结果。所以凡启用非均匀排水的 run，产物必须同时带这个串，否则"同一
+    config_hash 才能复算"这条主张在这里是漏的。
+
+    均匀（未启用乘子）返回 "uniform"，与既有行为逐位一致。
+    """
+    import hashlib
+
+    m = getattr(cfg, "drainage_mult", None)
+    if m is None:
+        return "uniform"
+    a = np.asarray(m, dtype=np.float64)
+    digest = hashlib.sha256(
+        np.round(a, 6).tobytes() + str(a.shape).encode()).hexdigest()[:10]
+    prof = getattr(cfg, "drainage_profile", "uniform") or "uniform"
+    return f"{prof}@{a.shape[0]}x{a.shape[1]}:{digest}"
 
 
 def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunResult:
@@ -465,7 +501,17 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         # 7.4 m 的积水，那是均匀排水假设的产物，不是内涝。
         # 顶托高程需由甲方管网台账标定，Demo 取 0.05 m。
         over = np.clip(h - cfg.drainage_invert_m, 0.0, None)
-        q_drain = cfg.drainage_coeff_m_s * np.sqrt(cfg.drainage_invert_m + over) \
+        # 排水能力可乘一个**空间异质乘子场**（`drainage_mult`）。
+        # None 时与原行为逐位一致；非 None 时按格点生效。
+        # 该场不进 config_hash（它是 KernelParams 上的场，不是 Config 四层参数），
+        # 故由 `drainage_fingerprint()` 单独定影并随产物落盘。
+        # 注：本支持曾在一次工作树覆盖中丢失，导致 `drainage_mult` 变成
+        # **静默空操作**（dataclass 允许设任意属性，赋值不报错但内核不读），
+        # 使 p31 的结论（FP006 ×0.10 → 0.467 m）无法复现。此处恢复。
+        coeff_eff = cfg.drainage_coeff_m_s
+        if getattr(cfg, "drainage_mult", None) is not None:
+            coeff_eff = cfg.drainage_coeff_m_s * np.asarray(cfg.drainage_mult)
+        q_drain = coeff_eff * np.sqrt(cfg.drainage_invert_m + over) \
             * over ** cfg.flux_exponent
         drain = np.minimum(over, q_drain * dt_s)
         h -= drain
@@ -643,6 +689,7 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         soil_init_m3=soil_init,
         ksat_total_m3=total_ksat,
         energy=energy,
+        drainage_fingerprint=drainage_fingerprint(cfg),
     )
 
 
