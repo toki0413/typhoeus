@@ -222,3 +222,23 @@ Open-Meteo（降雨）、AWS（Copernicus DEM / Sentinel-1）、OSM（建筑）�
 **所以不注册不损失任何已有能力，只是不再往缺口里投时间。**
 
 **后续只剩提交材料。**
+
+
+---
+
+## 附：社区站点探测（2026-10-18）
+
+用户问及的两个站点，实测结论：
+
+| 站点 | 判定 | 实测依据 |
+|---|---|---|
+| `www.dapiya.cn` | ❌ **无可用数据集** | 存档是 JTWC/ATCF 最佳路径 `.dat`（路径+强度，非雨量），且直接 GET 返回 **HTTP 567**；云图与模式图是 **PNG 渲染图**；`model-api.dapiya.cn` 只返回 `Hello World` |
+| `www.smca.fun` | ❌ **不是数据提供方** | 所有路径返回同一 5 965 B HTML 壳（纯前端 SPA）；`/api`、`/api/v1` 均 404；JS bundle 里的 131 个 URL 全指向第三方（Digital Typhoon / `data.cma.cn` / `www.nmc.cn`） |
+| `agora.ex.nii.ac.jp/digital-typhoon` | 🟡 **可达免注册，但不对症** | 首页与「Typhoon 202106 (IN-FA)」页均 200；有最佳路径（1951–）与云图存档（1978–），**无降水场、无 QPE** |
+
+**对四轴缺口一个都不补**（排水 ×2.81/×5.46、集中度 ×1.64/×1.12、总量 ×1.19、土壤 ×1.01/×1.14）。
+
+> 唯一有潜在价值的是 Digital Typhoon 的**云图→降水**路线（红外云顶温度与降水有经验关系），
+> 但它需要标定，而标定又要雷达或雨量站——绕回拿不到的那两样。
+>
+> 详见 `site-dataset-assessment.md`。
