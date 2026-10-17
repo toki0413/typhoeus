@@ -42,6 +42,12 @@ def match(mm: float) -> dict:
     lvl, action, crew, sites = ACTIONS[level]
     return {
         "面雨量_72h_mm": round(float(mm), 1),
+        # 阈值只对一种口径成立。不声明口径，用户拿任何别的数字填都会错档：
+        # 同一场 IN-FA，主链站插 259.1 mm、ERA5 五点均值 189.9 mm、
+        # p33 参数化 202.5 mm。差 22–27%，足以把"三级响应"判成"常态"。
+        # 详见 docs/rainfall-basis-gap.md。
+        "口径": ("面雨量分位仅对『148 站插值 + 标定』口径成立（烟花单场集合）；"
+                 "ERA5 网格点、单点值、p33 参数化值**不可直接套用**。"),
         "情景档": level,
         "响应等级": lvl,
         "动作要求": action,
@@ -93,6 +99,9 @@ def main(argv: list[str] | None = None) -> int:
     if r["低于最低档"]:
         print("注：低于 p50 档，按最低档（常态）执行。")
     print("分位参照          : " + " · ".join(f"{k} {v:.1f} mm" for k, v in SCENARIOS))
+    # 口径声明必须在最后一行仍然可见：用户如果拿 ERA5 网格值或单点值来填，
+    # 结论会系统性偏低（实测 190 mm 判「常态/0 处布点」，而实际需三级响应）。
+    print(f"口径              : {r['口径']}")
     return 0
 
 
