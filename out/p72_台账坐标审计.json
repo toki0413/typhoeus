@@ -1,0 +1,551 @@
+{
+  "名称": "台账坐标审计（DEM 地形一致性）",
+  "生成时间": "2026-10-18T20:52:34",
+  "判据": {
+    "高程异常": "|本格 − 5×5 中位数| ≥ 2 m",
+    "局部凸起": "8 邻域全部低于本格 > 2 m"
+  },
+  "汇总": {
+    "总点数": 28,
+    "域内": 17,
+    "可疑": 5
+  },
+  "可疑点位": [
+    {
+      "point_id": "FP004",
+      "name": "盛莫路1278弄立交",
+      "structure_type": "下穿立交",
+      "in_domain": true,
+      "cell": [
+        137,
+        97
+      ],
+      "elev_m": 5.3,
+      "neigh_median_m": 3.28,
+      "anomaly_m": 2.02,
+      "lower_neighbours": 5,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP014",
+      "name": "东柳社区793弄17号",
+      "structure_type": "低洼小区",
+      "in_domain": true,
+      "cell": [
+        115,
+        50
+      ],
+      "elev_m": 7.54,
+      "neigh_median_m": 5.35,
+      "anomaly_m": 2.19,
+      "lower_neighbours": 5,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP017",
+      "name": "苗圃路",
+      "structure_type": "低洼路段",
+      "in_domain": true,
+      "cell": [
+        104,
+        11
+      ],
+      "elev_m": 11.78,
+      "neigh_median_m": 9.63,
+      "anomaly_m": 2.15,
+      "lower_neighbours": 3,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP018",
+      "name": "古中小区",
+      "structure_type": "低洼小区",
+      "in_domain": true,
+      "cell": [
+        86,
+        65
+      ],
+      "elev_m": 7.4,
+      "neigh_median_m": 10.14,
+      "anomaly_m": -2.74,
+      "lower_neighbours": 0,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP021",
+      "name": "新芝小区95弄13号",
+      "structure_type": "低洼小区",
+      "in_domain": true,
+      "cell": [
+        90,
+        7
+      ],
+      "elev_m": 17.16,
+      "neigh_median_m": 9.18,
+      "anomaly_m": 7.98,
+      "lower_neighbours": 8,
+      "flags": [
+        "高程异常",
+        "局部凸起"
+      ]
+    }
+  ],
+  "全部点位": [
+    {
+      "point_id": "FP001",
+      "name": "鄞州大道(雅源南路)",
+      "structure_type": "下穿立交",
+      "in_domain": false,
+      "cell": [
+        143,
+        120
+      ],
+      "elev_m": 3.39,
+      "neigh_median_m": 4.8,
+      "anomaly_m": -1.4,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP002",
+      "name": "海曙新芝路",
+      "structure_type": "低洼路段",
+      "in_domain": true,
+      "cell": [
+        86,
+        11
+      ],
+      "elev_m": 0.0,
+      "neigh_median_m": 0.0,
+      "anomaly_m": 0.0,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP003",
+      "name": "甬江大桥东江东北路下立交",
+      "structure_type": "下穿立交",
+      "in_domain": true,
+      "cell": [
+        92,
+        16
+      ],
+      "elev_m": 5.38,
+      "neigh_median_m": 5.18,
+      "anomaly_m": 0.2,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP004",
+      "name": "盛莫路1278弄立交",
+      "structure_type": "下穿立交",
+      "in_domain": true,
+      "cell": [
+        137,
+        97
+      ],
+      "elev_m": 5.3,
+      "neigh_median_m": 3.28,
+      "anomaly_m": 2.02,
+      "lower_neighbours": 5,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP005",
+      "name": "人民南路立交",
+      "structure_type": "下穿立交",
+      "in_domain": true,
+      "cell": [
+        113,
+        3
+      ],
+      "elev_m": 6.6,
+      "neigh_median_m": 7.46,
+      "anomaly_m": -0.86,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP006",
+      "name": "建兴路下立交",
+      "structure_type": "下穿立交",
+      "in_domain": true,
+      "cell": [
+        117,
+        41
+      ],
+      "elev_m": 3.91,
+      "neigh_median_m": 5.77,
+      "anomaly_m": -1.86,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP007",
+      "name": "段三线绕城高速立交",
+      "structure_type": "下穿立交",
+      "in_domain": false,
+      "cell": [
+        143,
+        147
+      ],
+      "elev_m": 4.75,
+      "neigh_median_m": 5.01,
+      "anomaly_m": -0.27,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP008",
+      "name": "百宁街下立交",
+      "structure_type": "下穿立交",
+      "in_domain": true,
+      "cell": [
+        120,
+        29
+      ],
+      "elev_m": 6.17,
+      "neigh_median_m": 7.28,
+      "anomaly_m": -1.12,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP009",
+      "name": "紫城路西侧桥洞",
+      "structure_type": "桥洞",
+      "in_domain": false,
+      "cell": [
+        86,
+        0
+      ],
+      "elev_m": 5.11,
+      "neigh_median_m": 8.57,
+      "anomaly_m": -3.46,
+      "lower_neighbours": 0,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP010",
+      "name": "鄞县大道立交",
+      "structure_type": "下穿立交",
+      "in_domain": false,
+      "cell": [
+        143,
+        59
+      ],
+      "elev_m": 5.21,
+      "neigh_median_m": 4.57,
+      "anomaly_m": 0.63,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP011",
+      "name": "宋诏桥路立交",
+      "structure_type": "下穿立交",
+      "in_domain": true,
+      "cell": [
+        77,
+        2
+      ],
+      "elev_m": 6.56,
+      "neigh_median_m": 4.58,
+      "anomaly_m": 1.98,
+      "lower_neighbours": 5,
+      "flags": []
+    },
+    {
+      "point_id": "FP012",
+      "name": "洞桥明苑南门",
+      "structure_type": "低洼路段",
+      "in_domain": false,
+      "cell": [
+        143,
+        0
+      ],
+      "elev_m": 3.08,
+      "neigh_median_m": 5.16,
+      "anomaly_m": -2.08,
+      "lower_neighbours": 0,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP013",
+      "name": "西湾路",
+      "structure_type": "低洼路段",
+      "in_domain": false,
+      "cell": [
+        72,
+        0
+      ],
+      "elev_m": 0.0,
+      "neigh_median_m": 0.0,
+      "anomaly_m": 0.0,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP014",
+      "name": "东柳社区793弄17号",
+      "structure_type": "低洼小区",
+      "in_domain": true,
+      "cell": [
+        115,
+        50
+      ],
+      "elev_m": 7.54,
+      "neigh_median_m": 5.35,
+      "anomaly_m": 2.19,
+      "lower_neighbours": 5,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP015",
+      "name": "中塘路87弄",
+      "structure_type": "低洼小区",
+      "in_domain": true,
+      "cell": [
+        104,
+        57
+      ],
+      "elev_m": 6.76,
+      "neigh_median_m": 7.96,
+      "anomaly_m": -1.2,
+      "lower_neighbours": 1,
+      "flags": []
+    },
+    {
+      "point_id": "FP016",
+      "name": "中华路",
+      "structure_type": "低洼路段",
+      "in_domain": true,
+      "cell": [
+        126,
+        108
+      ],
+      "elev_m": 1.99,
+      "neigh_median_m": 1.97,
+      "anomaly_m": 0.02,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP017",
+      "name": "苗圃路",
+      "structure_type": "低洼路段",
+      "in_domain": true,
+      "cell": [
+        104,
+        11
+      ],
+      "elev_m": 11.78,
+      "neigh_median_m": 9.63,
+      "anomaly_m": 2.15,
+      "lower_neighbours": 3,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP018",
+      "name": "古中小区",
+      "structure_type": "低洼小区",
+      "in_domain": true,
+      "cell": [
+        86,
+        65
+      ],
+      "elev_m": 7.4,
+      "neigh_median_m": 10.14,
+      "anomaly_m": -2.74,
+      "lower_neighbours": 0,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP019",
+      "name": "文昌街76号",
+      "structure_type": "低洼路段",
+      "in_domain": false,
+      "cell": [
+        66,
+        0
+      ],
+      "elev_m": 5.68,
+      "neigh_median_m": 5.68,
+      "anomaly_m": 0.0,
+      "lower_neighbours": 1,
+      "flags": []
+    },
+    {
+      "point_id": "FP020",
+      "name": "体育场路30弄12号",
+      "structure_type": "低洼小区",
+      "in_domain": true,
+      "cell": [
+        79,
+        36
+      ],
+      "elev_m": 4.66,
+      "neigh_median_m": 4.81,
+      "anomaly_m": -0.14,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP021",
+      "name": "新芝小区95弄13号",
+      "structure_type": "低洼小区",
+      "in_domain": true,
+      "cell": [
+        90,
+        7
+      ],
+      "elev_m": 17.16,
+      "neigh_median_m": 9.18,
+      "anomaly_m": 7.98,
+      "lower_neighbours": 8,
+      "flags": [
+        "高程异常",
+        "局部凸起"
+      ]
+    },
+    {
+      "point_id": "FP022",
+      "name": "清河路",
+      "structure_type": "低洼路段",
+      "in_domain": true,
+      "cell": [
+        61,
+        20
+      ],
+      "elev_m": 0.0,
+      "neigh_median_m": 0.0,
+      "anomaly_m": 0.0,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP023",
+      "name": "裘市老街",
+      "structure_type": "低洼路段",
+      "in_domain": false,
+      "cell": [
+        86,
+        0
+      ],
+      "elev_m": 5.11,
+      "neigh_median_m": 8.57,
+      "anomaly_m": -3.46,
+      "lower_neighbours": 0,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP024",
+      "name": "张家新村",
+      "structure_type": "低洼小区",
+      "in_domain": true,
+      "cell": [
+        97,
+        52
+      ],
+      "elev_m": 7.06,
+      "neigh_median_m": 8.87,
+      "anomaly_m": -1.81,
+      "lower_neighbours": 1,
+      "flags": []
+    },
+    {
+      "point_id": "FP025",
+      "name": "红梅小区",
+      "structure_type": "低洼小区",
+      "in_domain": true,
+      "cell": [
+        92,
+        74
+      ],
+      "elev_m": 4.54,
+      "neigh_median_m": 5.18,
+      "anomaly_m": -0.64,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP026",
+      "name": "五乡西路",
+      "structure_type": "低洼路段",
+      "in_domain": false,
+      "cell": [
+        143,
+        176
+      ],
+      "elev_m": 5.55,
+      "neigh_median_m": 2.98,
+      "anomaly_m": 2.56,
+      "lower_neighbours": 3,
+      "flags": [
+        "高程异常"
+      ]
+    },
+    {
+      "point_id": "FP027",
+      "name": "象山起春路",
+      "structure_type": "低洼路段",
+      "in_domain": false,
+      "cell": [
+        143,
+        269
+      ],
+      "elev_m": 2.43,
+      "neigh_median_m": 2.45,
+      "anomaly_m": -0.01,
+      "lower_neighbours": 0,
+      "flags": []
+    },
+    {
+      "point_id": "FP028",
+      "name": "象山体育场路",
+      "structure_type": "低洼路段",
+      "in_domain": false,
+      "cell": [
+        143,
+        269
+      ],
+      "elev_m": 2.43,
+      "neigh_median_m": 2.45,
+      "anomaly_m": -0.01,
+      "lower_neighbours": 0,
+      "flags": []
+    }
+  ],
+  "结论": [
+    "域内 17 个点中，5 个地形可疑：FP004(+2.0 m)、FP014(+2.2 m)、FP017(+2.1 m)、FP018(-2.7 m)、FP021(+8.0 m)。",
+    "「局部凸起」优先复核坐标——水不可能停在比周围高 2 m 以上的格子上。"
+  ],
+  "边界": [
+    "判据只看 DEM，不判断台账水深是否正确。",
+    "30 m DSM 含建筑高度（已压平？本域为压平版），仍可能残留构筑物。",
+    "域外点不参与判定（模型未覆盖，无格点可比）。"
+  ]
+}
