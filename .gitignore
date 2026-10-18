@@ -43,3 +43,5 @@ default/
 pytmp/
 pytest_base/
 tmp/
+
+.venv/
