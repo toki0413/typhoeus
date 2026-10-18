@@ -340,4 +340,5 @@ python -m typhoeus.cli run --outdir out_sinks --sinks
 | DSH 插件包 | `dsh-plugin/` |
 | 一键验收 | `verify.ps1`（解压包根目录） |
 | 值班台 | `start_web.ps1`（或 `typhoeus-web`）→ http://127.0.0.1:8765 |
+| 论文（方法与实验） | `docs/paper/typhoeus-paper.md` |
 | 泛化与实验记录 | `docs/analysis/GENERALIZATION.md`、`SINK_LAYER.md`、`TIME_AXIS.md` |
