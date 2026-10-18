@@ -75,7 +75,7 @@ def _with_sinks(kp, grid, bbox):
     """按结构类型给域内涝点设下穿凹陷与泵（参数取反演结果）。"""
     from . import observe as _OB
     # 坑深(m) / 泵乘子，来自 6 参数反演（out/inverse_fit_hit）
-    PARAMS = {"下穿立交": (2.44, 0.03), "低洼小区": (1.09, 0.20),
+    PARAMS = {"下穿立交": (2.44, 0.03), "低洼小区": (1.50, 0.35),
               "低洼路段": (0.49, 0.28)}
     ny, nx = grid.shape
     mask = np.zeros((ny, nx), dtype=bool)
