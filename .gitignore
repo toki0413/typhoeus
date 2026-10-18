@@ -52,3 +52,7 @@ dist/
 build/
 *.egg-info/
 
+
+# 实验层产物（--sinks）
+out_sinks/
+

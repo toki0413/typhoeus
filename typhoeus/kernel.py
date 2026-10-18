@@ -64,6 +64,13 @@ class KernelParams:
     # 因 dataclass 允许动态设属性，赋值不报错但内核不读，形成**静默空操作**。
     drainage_mult: object = None
     drainage_profile: str = "uniform"
+    # ---- 下穿立交的凹陷与泵（实验层，默认关）----
+    # sink_mask 为 True 的格点：不参与洼地填平，按 sink_carve_m 下挖，
+    # 排水乘子取 sink_pump_mult。默认 None 时与既有行为逐位一致。
+    sink_mask: object = None
+    sink_carve_m: object = None
+    sink_pump_mult: float = 0.2
+    sink_profile: str = "none"
     # ---- 汇流集中（D8 路由）----
     # 每步把一部分地表水沿**最陡下降方向**移到下游格。0 = 关闭，逐位不变。
     #
@@ -447,7 +454,17 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
 
     # 洼地填充：内部填平并给ε 排水梯度，边界不动地形。
     # 边界出流由 _rim_outflow 显式计算，不靠"把边缘压低"制造出口。
-    z = _fill_depressions(elev)
+    # 下穿凹陷：先把点挖下去，填洼时把坑底还原（保留凹陷），
+    # 否则 Priority-Flood 会把下穿段抹平，模型永远算不出积水。
+    _sink = getattr(cfg, "sink_mask", None)
+    elev_eff = np.asarray(elev, dtype=np.float64)
+    if _sink is not None:
+        _carve = getattr(cfg, "sink_carve_m", None)
+        if _carve is not None:
+            elev_eff = elev_eff - np.where(np.asarray(_sink), np.asarray(_carve), 0.0)
+    z = _fill_depressions(elev_eff)
+    if _sink is not None:
+        z = np.where(np.asarray(_sink), elev_eff, z)
     # 汇流集中的 D8 下游索引：与时间无关，整场只算一次。
     # 默认 concentration_rate=0 时不使用，故不影响既有结果。
     if getattr(cfg, 'concentration_rate', 0.0) > 0.0:
@@ -617,6 +634,9 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         coeff_eff = cfg.drainage_coeff_m_s
         if getattr(cfg, "drainage_mult", None) is not None:
             coeff_eff = cfg.drainage_coeff_m_s * np.asarray(cfg.drainage_mult)
+        if getattr(cfg, "sink_mask", None) is not None:
+            coeff_eff = coeff_eff * np.where(
+                np.asarray(cfg.sink_mask), float(cfg.sink_pump_mult), 1.0)
         q_drain = coeff_eff * np.sqrt(_inv + over) \
             * over ** cfg.flux_exponent
         drain = np.minimum(over, q_drain * dt_s)
@@ -820,7 +840,9 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
         soil_init_m3=soil_init,
         ksat_total_m3=total_ksat,
         energy=energy,
-        drainage_fingerprint=drainage_fingerprint(cfg),
+        drainage_fingerprint=(drainage_fingerprint(cfg)
+                              + ("" if getattr(cfg, "sink_profile", "none") == "none"
+                                 else f"|sink:{cfg.sink_profile}")),
     )
 
 

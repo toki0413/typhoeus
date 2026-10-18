@@ -71,8 +71,30 @@ def _kernel_params(cfg: CFG.Config,
         evap_efficiency=cfg.l2.evap_efficiency)
 
 
+def _with_sinks(kp, grid, bbox):
+    """把台账里的域内涝点标成下穿凹陷 + 泵（实验层，不改变默认行为）。"""
+    from . import observe as _OB
+    ny, nx = grid.shape
+    mask = np.zeros((ny, nx), dtype=bool)
+    carve = np.zeros((ny, nx), dtype=np.float64)
+    pts = [q for q in _OB.load_flood_points()
+           if bbox["lon_min"] <= q.lon <= bbox["lon_max"]
+           and bbox["lat_min"] <= q.lat <= bbox["lat_max"]
+           and not q.is_synthetic]
+    for q in pts:
+        i = int(np.argmin(np.abs(grid.lat - q.lat)))
+        j = int(np.argmin(np.abs(grid.lon - q.lon)))
+        mask[i, j] = True
+        carve[i, j] = 1.2
+    kp.sink_mask = mask
+    kp.sink_carve_m = carve
+    kp.sink_pump_mult = 0.2
+    kp.sink_profile = f"underpass_v1:{len(pts)}pts"
+    return kp
+
+
 def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
-              outdir: str | None = None) -> dict:
+              outdir: str | None = None, sinks: bool = False) -> dict:
     """一次完整计算，产出六份输出物所需的全部上下文。"""
     cfg = cfg or CFG.Config()
     t0 = time.perf_counter()
@@ -94,6 +116,9 @@ def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
 
     # ---- 内核参数（μ_t 与 T_θ 共用，保证面雨量口径同源） ----
     kcfg = _kernel_params(cfg, soil=soil)
+    if sinks:
+        kcfg = _with_sinks(kcfg, inputs.grid, cfg.l2.bbox)
+        log(f"[sinks] 下穿凹陷实验层已启用：{kcfg.sink_profile}")
 
     # ---- T_θ 降雨场（μ_t 拿它定面雨量基线，故先算） ----
     if cfg.l2.rain_source == "era5":
@@ -572,6 +597,8 @@ def main(argv=None) -> int:
     p_run = sub.add_parser("run", help="跑全链并导出六份输出物")
     p_run.add_argument("--outdir", default="out")
     p_run.add_argument("--config", default=None)
+    p_run.add_argument("--sinks", action="store_true",
+                       help="启用下穿凹陷与泵（实验层，默认关）")
 
     sub.add_parser("check", help="只跑门槛")
     sub.add_parser("report", help="打印体检摘要")
@@ -659,7 +686,8 @@ def main(argv=None) -> int:
         from . import decision as DC
         return DC.main(["--gap", str(args.gap)] if args.gap is not None else [])
 
-    ctx = run_chain(cfg, outdir=getattr(args, "outdir", None))
+    ctx = run_chain(cfg, outdir=getattr(args, "outdir", None),
+                    sinks=getattr(args, "sinks", False))
 
     # 写盘必须在打印之前：G16–G20 量的是服务层对落盘产物的行为，
     # 产物没写出来时测的是空目录。写完再测、再回填体检包，然后一次性
