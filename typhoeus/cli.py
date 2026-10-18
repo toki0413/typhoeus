@@ -72,11 +72,15 @@ def _kernel_params(cfg: CFG.Config,
 
 
 def _with_sinks(kp, grid, bbox):
-    """把台账里的域内涝点标成下穿凹陷 + 泵（实验层，不改变默认行为）。"""
+    """按结构类型给域内涝点设下穿凹陷与泵（参数取反演结果）。"""
     from . import observe as _OB
+    # 坑深(m) / 泵乘子，来自 6 参数反演（out/inverse_fit_hit）
+    PARAMS = {"下穿立交": (2.44, 0.03), "低洼小区": (1.09, 0.20),
+              "低洼路段": (0.49, 0.28)}
     ny, nx = grid.shape
     mask = np.zeros((ny, nx), dtype=bool)
     carve = np.zeros((ny, nx), dtype=np.float64)
+    pump = np.ones((ny, nx), dtype=np.float64)
     pts = [q for q in _OB.load_flood_points()
            if bbox["lon_min"] <= q.lon <= bbox["lon_max"]
            and bbox["lat_min"] <= q.lat <= bbox["lat_max"]
@@ -84,12 +88,14 @@ def _with_sinks(kp, grid, bbox):
     for q in pts:
         i = int(np.argmin(np.abs(grid.lat - q.lat)))
         j = int(np.argmin(np.abs(grid.lon - q.lon)))
+        d, m = PARAMS.get(q.structure_type, (1.0, 0.20))
         mask[i, j] = True
-        carve[i, j] = 1.2
+        carve[i, j] = d
+        pump[i, j] = m
     kp.sink_mask = mask
     kp.sink_carve_m = carve
-    kp.sink_pump_mult = 0.2
-    kp.sink_profile = f"underpass_v1:{len(pts)}pts"
+    kp.sink_pump_mult = pump
+    kp.sink_profile = f"underpass_v2:{len(pts)}pts"
     return kp
 
 
@@ -696,17 +702,7 @@ def main(argv=None) -> int:
     if cmd == "run":
         bundle = C.new_bundle(ctx, C.compile_all(ctx))
         written = bundle.write(args.outdir)
-        written += _attach_agent_gates(ctx, args.outdir)
         cfg.save(str(Path(args.outdir) / "config.json"))
-
-        # 人读渲染：同源读回刚写出的 JSON，不重跑内核。
-        # 渲染层自己算一遍的话，页面上的数与manifest 的 hash 对不上，
-        # 审计链断在这里。
-        try:
-            html = RND.render_dashboard(args.outdir, ctx.get("grid"))
-            written.append(html)
-        except Exception as e:                      # 渲染失败不阻断交付
-            print(f"[WARN] 渲染层未生成页面：{e}", file=sys.stderr)
 
         # 第七份产物：多事件标定单。从批量标定结果编译，缺产物时
         # 仍写一份带「未运行」状态的壳——让交付方看到这条能力存在
@@ -720,11 +716,23 @@ def main(argv=None) -> int:
 
         # 第八份产物：涝点转译卡。此前只有手动 `cards.write` 会产出它，
         # 于是它既不在 manifest 的 outputs 里、也没有指纹——而它是唯一
-        # 面向公众的产物（P0-4）。依赖 03（逐点对照）与 05（门槛实测），
-        # 故必须排在上面的回填之后。
+        # 面向公众的产物（P0-4）。依赖 03（逐点对照）与 05（门槛实测）。
         from . import cards as CRD
         _w8 = CRD.write(args.outdir)
         written += [_w8["json"], _w8["html"]]
+
+        # Agent 门槛（G16–G20）要逐个调用八个工具，其中两个读 07/08。
+        # 因此必须先写 07/08 再测——否则干净目录下会报产物缺失。
+        written += _attach_agent_gates(ctx, args.outdir)
+
+        # 人读渲染：同源读回刚写出的 JSON，不重跑内核。
+        # 渲染层自己算一遍的话，页面上的数与manifest 的 hash 对不上，
+        # 审计链断在这里。渲染放在门槛之后，页面上的门槛统计才是最终值。
+        try:
+            html = RND.render_dashboard(args.outdir, ctx.get("grid"))
+            written.append(html)
+        except Exception as e:                      # 渲染失败不阻断交付
+            print(f"[WARN] 渲染层未生成页面：{e}", file=sys.stderr)
 
         # 07/08 写完后补登记并补指纹；manifest 是"可复算"的落点，
         # 少登记一份就等于那份产物没有配置归属。

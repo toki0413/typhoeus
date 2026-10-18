@@ -636,7 +636,7 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
             coeff_eff = cfg.drainage_coeff_m_s * np.asarray(cfg.drainage_mult)
         if getattr(cfg, "sink_mask", None) is not None:
             coeff_eff = coeff_eff * np.where(
-                np.asarray(cfg.sink_mask), float(cfg.sink_pump_mult), 1.0)
+                np.asarray(cfg.sink_mask), np.asarray(cfg.sink_pump_mult, dtype=float), 1.0)
         q_drain = coeff_eff * np.sqrt(_inv + over) \
             * over ** cfg.flux_exponent
         drain = np.minimum(over, q_drain * dt_s)
