@@ -199,7 +199,7 @@ class Config:
     def load(path: str) -> "Config":
         """从JSON 读配置。
 
-        未知字段显式告警（`ENGINEERING_MATURITY.md` H6）。此前是静默
+        未知字段显式告警（`../docs/analysis/ENGINEERING_MATURITY.md` H6）。此前是静默
         `if hasattr` 跳过：字段名拼错、或者用了旧版本内核的字段名，
         用户看到"配置已加载"就以为新参数生效了，实际它没进对象也没进 hash。
         静默失败在这里的代价特别大——它让"复算"失去意义，

@@ -30,7 +30,7 @@ TOOLS = ROOT / "tools"
 CLOUD = ROOT / "cloud_artifacts"
 SELFTEST = ROOT / ".scratch" / "sar" / "_selftest_data"
 
-# 验收判据（取自 COMPOUND_RISK_PLAN.md L2b 面积层）
+# 验收判据（取自 ../docs/analysis/COMPOUND_RISK_PLAN.md L2b 面积层）
 CRITERIA = {"iou_ge": 0.50, "must_beat_otsu": True}
 
 

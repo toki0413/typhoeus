@@ -57,7 +57,7 @@ Nature Sustainability (2026)**，DOI [10.1038/s41893-026-01929-1](https://doi.or
 
 > **四条轴全部是"参数缩放"，没有一条生成"无先例的组合"。**
 
-我们在 `COMPOUND_RISK_PLAN.md` 里**规划过**复合风险，
+我们在 `analysis/COMPOUND_RISK_PLAN.md` 里**规划过**复合风险，
 但**没有一条实测的复合情景**。这一条必须承认。
 
 ### 2.2 但它要的第二条优先项，我们有实测

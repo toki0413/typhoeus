@@ -1,6 +1,6 @@
 """提比翁回归测试骨架。
 
-对应 `ENGINEERING_MATURITY.md` H1。当前 2647 行代码此前**零测试**，
+对应 `../docs/analysis/ENGINEERING_MATURITY.md` H1。当前 2647 行代码此前**零测试**，
 本会话修复的 8 个内核 bug 全部靠人工 debug 发现，没有一条能被回归拦住。
 
 设计取舍：

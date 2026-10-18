@@ -54,7 +54,10 @@ dsh plugin --profile web add github:toki0413/typhoeus
 ## 目录结构
 
 ```
-demo/
+typhoeus-demo/
+├── README.md                # 本文件：定位、安装、结果、边界
+├── package.json             # DSH 插件清单（dsh.bundle 指向 dsh-plugin/）
+├── pyproject.toml           # Python 包与三个命令：typhoeus / typhoeus-mcp / typhoeus-web
 ├── typhoeus/                # 主包，92 模块 / 25,333 行（下列为节选）
 │   ├── tests.py      (2529)  # 154 条测试
 │   ├── multievent.py ( 815)  # 18 场历史气旋批量标定
@@ -87,14 +90,14 @@ demo/
 │   ├── gpd_sample_size.py   # GPD 样本量需求合成实验
 │   ├── mcp_selftest.py      # MCP 自测与故障注入
 │   └── make_seed_data.py    # 占位数据生成
-├── data/                    # 320 MB
-│   ├── dem_n29e121.tif      # GLO-30 DSM（43 MB）
-│   ├── ibtracs_wp.csv       # IBTrACS 西北太平洋分片（110 MB）
-│   ├── ibtracs.csv          # 简版（119 MB）
-│   └── seed/                # 涝点台账、雨量站、停运通报等
-├── out/                     # 七份输出物 + config.json + manifest.json
-├── *.md                     # 13 份分析与评估文档
-└── README.md
+├── dsh-plugin/              # DSH 插件包：清单、挂载补丁、自检、图标、中英说明
+├── tools/                   # 诊断与自测脚本；tools/pkg/ 是安装/验收/值班台脚本
+├── docs/
+│   ├── analysis/            # 产品、工程、数据、竞品等 15 份评估
+│   └── adr/                 # 架构决策记录
+├── data/                    # 计算域数据（DEM、台风路径、台账；大文件不入库）
+├── out/                     # 一次推演的八份产物 + 页面 + manifest
+└── submission/              # 提交材料索引与正文
 ```
 
 ---
@@ -290,16 +293,16 @@ python -m typhoeus.cli run
 
 | 文件 | 内容 |
 |---|---|
-| `PRODUCT_MATURITY.md` | 产品形态评估 |
-| `ENGINEERING_MATURITY.md` | 工程成熟度与改进计划 |
-| `COVERAGE.md` | 承灾体系与四色分级口径 |
-| `DATA_SOURCE_EVAL.md` | 数据源评估 |
-| `COMPETITIVE_ANALYSIS.md` | 竞品对比 |
-| `REN_BENCHMARK.md` | 浙大 REN 对比 |
-| `AGENT_FORM_EVAL.md` | Agent 形态评估 |
-| `AGENT_POSITIONING_REPORT.md` | Agent 定位报告 |
-| `COMPOUND_RISK_PLAN.md` | 复合风险方案 |
-| `WORLD_MODEL_HJEPA.md` | H-JEPA 世界模型方案 |
-| `DOC_GAP_ANALYSIS.md` | 文档缺口分析 |
-| `UPGRADE_v3.1.md` | v3.1 升级记录 |
+| `docs/analysis/PRODUCT_MATURITY.md` | 产品形态评估 |
+| `docs/analysis/ENGINEERING_MATURITY.md` | 工程成熟度与改进计划 |
+| `docs/analysis/COVERAGE.md` | 承灾体系与四色分级口径 |
+| `docs/analysis/DATA_SOURCE_EVAL.md` | 数据源评估 |
+| `docs/analysis/COMPETITIVE_ANALYSIS.md` | 竞品对比 |
+| `docs/analysis/REN_BENCHMARK.md` | 浙大 REN 对比 |
+| `docs/analysis/AGENT_FORM_EVAL.md` | Agent 形态评估 |
+| `docs/analysis/AGENT_POSITIONING_REPORT.md` | Agent 定位报告 |
+| `docs/analysis/COMPOUND_RISK_PLAN.md` | 复合风险方案 |
+| `docs/analysis/WORLD_MODEL_HJEPA.md` | H-JEPA 世界模型方案 |
+| `docs/analysis/DOC_GAP_ANALYSIS.md` | 文档缺口分析 |
+| `docs/analysis/UPGRADE_v3.1.md` | v3.1 升级记录 |
 | `version.py` | **版本与全部口径修正的权威记录**，改动前先读它 |

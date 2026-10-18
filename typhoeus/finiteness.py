@@ -1,6 +1,6 @@
 """提比翁 Demo —— 非有限值防线（L0 数据完整性）。
 
-对应 `ENGINEERING_MATURITY.md` 的 H2，根因已实测：
+对应 `../docs/analysis/ENGINEERING_MATURITY.md` 的 H2，根因已实测：
   2x2 网格在第 3 步注入一个 NaN 雨量，`kernel.run` 返回
   `positivity_ok=True`、`max_depth=nan`、`mass_resid=nan`，
   守恒核算全项 NaN——**三道防线全部漏过**。
