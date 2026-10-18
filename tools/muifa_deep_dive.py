@@ -1,7 +1,7 @@
 """梅花 2022 全链深挖驱动器。
 
 复用烟花主链的纯函数（内核/投影/对账/测度/降雨源），不改任何既有模块
-的默认行为。产物落 `out_muifa/`，与 `out/`（烟花）同构、可逐列对比。
+的默认行为。产物落 `runs/out_muifa/`，与 `out/`（烟花）同构、可逐列对比。
 
 双口径：
   parameterized —— K.rainfall_field 由 IBTrACS 路径合成（与 18 场批量同口径）
@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 SEED = ROOT / "data" / "seed"
-OUT = ROOT / "out_muifa"
+OUT = ROOT / "runs/out_muifa"
 
 # 与 attribution.py 同一组域界（grid 实际范围，非请求框）
 LON_MIN, LON_MAX = 121.550139, 121.699583

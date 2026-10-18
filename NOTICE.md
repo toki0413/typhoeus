@@ -37,7 +37,7 @@
 
 ## 三、SAR 验证模型的来源与边界
 
-`tools/sar_train.py` 与 `cloud_artifacts/*/unet_ep*.pt` 为**本项目自行训练**的 U-Net，
+`tools/sar_train.py` 与 `runs/cloud_artifacts/*/unet_ep*.pt` 为**本项目自行训练**的 U-Net，
 训练数据为 Sen1Floods11（事件级切分）。其性能指标见 `out/p8_遥感淹没范围验证.html`。
 
 **边界**：训练事件域为全球（Ghana / Nigeria / Pakistan / Paraguay / Somalia /

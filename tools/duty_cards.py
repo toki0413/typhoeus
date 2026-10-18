@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "out"
-CA = ROOT / "cloud_artifacts"
+CA = ROOT / "runs/cloud_artifacts"
 
 # 卡片里允许出现的"看得见"阈值：低于此值即模型在该点几乎没有积水
 MODEL_SILENT_M = 0.05
@@ -33,13 +33,13 @@ def load(rel: str) -> dict:
 
 
 def band_from_envelope() -> tuple[float, float, str]:
-    d = load("cloud_artifacts/envelope_grid.json")
-    return (d["peak_min_m"], d["peak_max_m"], "cloud_artifacts/envelope_grid.json")
+    d = load("runs/cloud_artifacts/envelope_grid.json")
+    return (d["peak_min_m"], d["peak_max_m"], "runs/cloud_artifacts/envelope_grid.json")
 
 
 def coord_band() -> tuple[dict, str]:
-    d = load("cloud_artifacts/coord_sensitivity.json")
-    return (d["coverage_quantiles"], "cloud_artifacts/coord_sensitivity.json")
+    d = load("runs/cloud_artifacts/coord_sensitivity.json")
+    return (d["coverage_quantiles"], "runs/cloud_artifacts/coord_sensitivity.json")
 
 
 def osm_labels() -> dict:
@@ -58,7 +58,7 @@ def level_of(x: float) -> int:
     return bisect.bisect_right(LEVELS, x - 1e-12)
 
 
-def台账坐标() -> dict:
+def 台账坐标() -> dict:
     """坐标只在台账 CSV 里，产物 03 不带坐标——指针必须指到真正的源。"""
     sys.path.insert(0, str(ROOT))
     from typhoeus import observe as OB

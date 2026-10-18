@@ -15,7 +15,7 @@
     "定标": "sigma0 = DN^2 / A^2，dB = 20log10(DN) − 20log10(A)，A 取 cal LUT 中位",
     "几何": "用 annotation 的 GCP 建局部仿射（拟合残差中位 48 m、最大 102 m），重投影到 0.0005° 域内网格（358×498）",
     "VH来源": "代理（VV − 6.752 dB，训练集均值差）",
-    "推理": "U-Net（cloud_artifacts/cv7/unet_ep10.pt），sigmoid>0.5 判水",
+    "推理": "U-Net（runs/cloud_artifacts/cv7/unet_ep10.pt），sigmoid>0.5 判水",
     "瓦片": "12 个 128×128 滑窗（pad 到 512）"
   },
   "统计": {

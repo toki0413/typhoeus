@@ -12,7 +12,7 @@
 
 - **指纹不动**：默认路径 `config_hash 92cd76c2ea3f`、`source_hash 40d07eb29407b4b6` 跑完本计划全部任务后逐项复验不变。
 - **三态纪律**：每个新声称带 PASS/FAIL/BLOCKED 与出处；梅花无实测台账，**只主张"链条可迁移"，不主张"精度迁移"**。
-- **不覆盖 `out/` 现有文件**：梅花产物一律落 `out_muifa/`。
+- **不覆盖 `out/` 现有文件**：梅花产物一律落 `runs/out_muifa/`。
 - **回归**：`pytest typhoeus/tests.py` 全程 125 条口径不回归（允许新增通过项）。
 - **文档语言**：中文；数字全部可由命令复算。
 - **时间盒**：全部任务须在 2026-10-19 12:00 前完成（截止当天 24:00 要留出装订与视频时间）。
@@ -22,25 +22,25 @@
 ### Task 1: 参数化口径单场复跑（零代码改动）
 
 **Files:**
-- Create: `out_muifa/multievent_calibration.json`
+- Create: `runs/out_muifa/multievent_calibration.json`
 
 **Interfaces:**
-- Produces: `out_muifa/multievent_calibration.json` 中 MUIFA 单场记录，字段与 `out/07_multievent_calibration.json` 的场次明细一致（年/台风/路径点/最近距离_km/峰值风速_ms/最低气压_hPa/72h面雨量_mm/峰值雨强_mm_h/峰值水深_m/峰值时刻_h/Q_total/Q_气候/Q_超标/Q_工程失效/Q_残差/残差占比_pct/闭合）。
+- Produces: `runs/out_muifa/multievent_calibration.json` 中 MUIFA 单场记录，字段与 `out/07_multievent_calibration.json` 的场次明细一致（年/台风/路径点/最近距离_km/峰值风速_ms/最低气压_hPa/72h面雨量_mm/峰值雨强_mm_h/峰值水深_m/峰值时刻_h/Q_total/Q_气候/Q_超标/Q_工程失效/Q_残差/残差占比_pct/闭合）。
 
 - [ ] **Step 1: 单场批量**
 
 ```bash
-python -m typhoeus.cli multievent --catalog "2022:MUIFA" --outdir out_muifa
+python -m typhoeus.cli multievent --catalog "2022:MUIFA" --outdir runs/out_muifa
 ```
 
-预期：输出 `[1/1] OK 2022 MUIFA ... 雨量 40.7 mm ... Q 0.0703 ... 残差 6.4%`，落盘 `out_muifa/multievent_calibration.json`。
+预期：输出 `[1/1] OK 2022 MUIFA ... 雨量 40.7 mm ... Q 0.0703 ... 残差 6.4%`，落盘 `runs/out_muifa/multievent_calibration.json`。
 
 - [ ] **Step 2: 与既有批量结果逐字段对账**
 
 ```bash
 PYTHONIOENCODING=utf-8 python - <<'EOF'
 import json
-a = json.load(open('out_muifa/multievent_calibration.json', encoding='utf-8'))
+a = json.load(open('runs/out_muifa/multievent_calibration.json', encoding='utf-8'))
 b = json.load(open('out/07_multievent_calibration.json', encoding='utf-8'))
 ra = [e for e in a['场次明细'] if e['台风'] == 'MUIFA'][0]
 rb = [e for e in b['场次明细'] if e['台风'] == 'MUIFA'][0]
@@ -54,7 +54,7 @@ EOF
 - [ ] **Step 3: Commit**
 
 ```bash
-git add out_muifa/multievent_calibration.json && git commit -m "feat(muifa): 参数化口径单场复跑，与批量结果对账一致"
+git add runs/out_muifa/multievent_calibration.json && git commit -m "feat(muifa): 参数化口径单场复跑，与批量结果对账一致"
 ```
 
 ---
@@ -158,11 +158,11 @@ git commit -m "feat(rainsrc): 事件窗口/缓存分键可选参数化，拉取�
 
 **Files:**
 - Create: `tools/muifa_deep_dive.py`
-- Create: `out_muifa/m17_归因分解.json`
+- Create: `runs/out_muifa/m17_归因分解.json`
 
 **Interfaces:**
 - Consumes: `D.load_track(season=2022, name="MUIFA", lon_range=(115.0,135.0))`、`K.rainfall_field(track, grid, kcfg)`、`K.run(grid, rain, kcfg)`、`PRJ.aggregate(res.depth, prj_params)`、`RC.event_total(proj["Q"], dt_h)`、`RS.get_rainfall(..., cache_key="era5_muifa2022")`、`CFG.Config()`。组装方式照抄 `typhoeus/cli.py:510-515`（grid/kcfg/prj_params 三件套）。
-- Produces: `out_muifa/m17_归因分解.json`，schema 对齐 `out/p17_归因分解.json`（先读该文件确认键名）；双口径并排列：parameterized / era5 各一组分型结果。
+- Produces: `runs/out_muifa/m17_归因分解.json`，schema 对齐 `out/p17_归因分解.json`（先读该文件确认键名）；双口径并排列：parameterized / era5 各一组分型结果。
 
 - [ ] **Step 1: 写驱动器骨架**
 
@@ -184,12 +184,12 @@ from typhoeus import reconcile as RC, rainsrc as RS
 ```bash
 PYTHONIOENCODING=utf-8 python tools/muifa_deep_dive.py attribution
 ```
-预期：打印两场口径的峰值水深/Q/分型摘要，写 `out_muifa/m17_归因分解.json`。
+预期：打印两场口径的峰值水深/Q/分型摘要，写 `runs/out_muifa/m17_归因分解.json`。
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tools/muifa_deep_dive.py out_muifa/m17_归因分解.json
+git add tools/muifa_deep_dive.py runs/out_muifa/m17_归因分解.json
 git commit -m "feat(muifa): 双口径内核跑+归因分型 m17"
 ```
 
@@ -199,7 +199,7 @@ git commit -m "feat(muifa): 双口径内核跑+归因分型 m17"
 
 **Files:**
 - Modify: `tools/muifa_deep_dive.py`
-- Create: `out_muifa/m19-m20_决策稳定性.json`、`out_muifa/m21-m22_反问题.json`
+- Create: `runs/out_muifa/m19-m20_决策稳定性.json`、`runs/out_muifa/m21-m22_反问题.json`
 
 **Interfaces:**
 - Consumes: Task 4 的双口径雨场与内核入口；Task 2 的涝点 CSV（存在则做点位反解，不存在则反解整段标 BLOCKED）。
@@ -217,7 +217,7 @@ git commit -m "feat(muifa): 双口径内核跑+归因分型 m17"
 
 ```bash
 PYTHONIOENCODING=utf-8 python tools/muifa_deep_dive.py decisions inverse
-git add tools/muifa_deep_dive.py out_muifa/ && git commit -m "feat(muifa): 情景翻转带与反解门槛 m20/m21-m22"
+git add tools/muifa_deep_dive.py runs/out_muifa/ && git commit -m "feat(muifa): 情景翻转带与反解门槛 m20/m21-m22"
 ```
 
 ---
@@ -226,10 +226,10 @@ git add tools/muifa_deep_dive.py out_muifa/ && git commit -m "feat(muifa): 情�
 
 **Files:**
 - Modify: `tools/muifa_deep_dive.py`
-- Create: `out_muifa/m32_规划决策卡.json`、`out_muifa/m32_规划决策卡.html`
+- Create: `runs/out_muifa/m32_规划决策卡.json`、`runs/out_muifa/m32_规划决策卡.html`
 
 **Interfaces:**
-- Consumes: `out_muifa/` 下 m17/m19-m20/m21-m22 四件 + 涝点 CSV（有则逐点，无则只出全域行）。
+- Consumes: `runs/out_muifa/` 下 m17/m19-m20/m21-m22 四件 + 涝点 CSV（有则逐点，无则只出全域行）。
 - Produces: 与 `out/p32_规划决策卡.json` 同构（每点一行：分型→手段 / 翻转带→可信度 / 反解→投入方向；可信度四标签规则照 `decision_card.py:119-131`）。
 
 - [ ] **Step 1: 聚合落盘**
@@ -242,7 +242,7 @@ PYTHONIOENCODING=utf-8 python tools/muifa_deep_dive.py card
 - [ ] **Step 2: Commit**
 
 ```bash
-git add tools/muifa_deep_dive.py out_muifa/ && git commit -m "feat(muifa): 规划决策卡 m32"
+git add tools/muifa_deep_dive.py runs/out_muifa/ && git commit -m "feat(muifa): 规划决策卡 m32"
 ```
 
 ---

@@ -35,7 +35,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "jepa"
 OUT = ROOT / "out"
-CKPT = ROOT / "cloud_artifacts" / "jepa" / "jepa_dynamics.pt"
+CKPT = ROOT / "runs/cloud_artifacts" / "jepa" / "jepa_dynamics.pt"
 
 # 训练时把场降采样到这个尺寸，控制 CPU 成本
 H, W = 36, 68

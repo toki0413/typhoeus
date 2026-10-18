@@ -98,7 +98,7 @@
 ## 复跑命令
 
 ```bash
-python -m typhoeus.cli multievent --catalog "2022:MUIFA" --outdir out_muifa
+python -m typhoeus.cli multievent --catalog "2022:MUIFA" --outdir runs/out_muifa
 python tools/muifa_deep_dive.py all   # 需先有 era5_muifa2022 缓存：
 # 缓存拉取：RS.get_rainfall(..., event_window=("2022-09-13","2022-09-17"),
 #          anchor_iso="2022-09-14T12:00", cache_name="era5_muifa2022")

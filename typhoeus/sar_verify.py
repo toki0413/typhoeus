@@ -3,7 +3,7 @@
 本件回答一个问题：**这套 SAR 水面识别能不能替代阈值法，并且有没有被真实数据验证过。**
 
 三部分内容，来源严格分开：
-  1. 留出集指标（真实数据）：读 `cloud_artifacts/*/metrics.json` 与 `baseline.json`，
+  1. 留出集指标（真实数据）：读 `runs/cloud_artifacts/*/metrics.json` 与 `baseline.json`，
      7 次独立运行（6 折自切 + 1 次官方 splits），每次与 Otsu 阈值基线对比。
   2. 本机推理复现（合成自测数据）：在 `tools/sar_train.discover` 能识别的本地
      数据上真跑一次推理，证明管线可执行、结果可复现——**不代表真实性能**。
@@ -27,7 +27,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TOOLS = ROOT / "tools"
-CLOUD = ROOT / "cloud_artifacts"
+CLOUD = ROOT / "runs/cloud_artifacts"
 SELFTEST = ROOT / ".scratch" / "sar" / "_selftest_data"
 
 # 验收判据（取自 ../docs/analysis/COMPOUND_RISK_PLAN.md L2b 面积层）
@@ -97,7 +97,7 @@ def local_inference(n_tiles: int = 8) -> dict:
 
     ck_path = CLOUD / "cv7" / "unet_ep10.pt"
     if not ck_path.exists():
-        out["原因"] = "无权重 cloud_artifacts/cv7/unet_ep10.pt"
+        out["原因"] = "无权重 runs/cloud_artifacts/cv7/unet_ep10.pt"
         return out
 
     ck = torch.load(ck_path, map_location="cpu", weights_only=True)
@@ -425,8 +425,8 @@ IoU 均值 <b>{stats['val_IoU_均值']:.3f}</b>（最小 {stats['val_IoU_最小'
 </table>
 
 <footer>
-<b>数据来源</b>：留出集指标 <code>cloud_artifacts/*/metrics.json</code> 与
-<code>baseline.json</code>；权重 <code>cloud_artifacts/*/unet_ep*.pt</code>；
+<b>数据来源</b>：留出集指标 <code>runs/cloud_artifacts/*/metrics.json</code> 与
+<code>baseline.json</code>；权重 <code>runs/cloud_artifacts/*/unet_ep*.pt</code>；
 本地推理数据 <code>.scratch/sar/_selftest_data</code>（合成件）。<br>
 <b>复算</b>：本件由 <code>typhoeus.sar_verify</code> 生成；本机推理部分可在
 <code>python -m typhoeus.sar_verify</code> 下重复执行。

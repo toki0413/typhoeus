@@ -13,7 +13,7 @@
   - 内核/投影/Q 总量与主链同函数；分解四项不批量算（口径写明）；
   - 标定直接喂 multievent 的 fit_* 函数（构造 EventResult）。
 
-产物：out_era5/era5_multievent_calibration.json
+产物：runs/out_era5/era5_multievent_calibration.json
 
 用法：
   python tools/era5_multievent.py screen          # 只筛目录
@@ -36,7 +36,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-OUT = ROOT / "out_era5"
+OUT = ROOT / "runs/out_era5"
 
 # 扩目录筛选参数（E1 实测：框×2 + ≥25 m/s → 37 场）
 BOX = (120.4, 123.2, 27.8, 31.8)     # (lon_min, lon_max, lat_min, lat_max)

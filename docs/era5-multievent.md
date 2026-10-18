@@ -2,7 +2,7 @@
 
 时间 2026-10-17。实施计划见
 `docs/superpowers/plans/2026-10-17-era5-multievent.md`。
-驱动器 `tools/era5_multievent.py`，产物 `out_era5/era5_multievent_calibration.json`。
+驱动器 `tools/era5_multievent.py`，产物 `runs/out_era5/era5_multievent_calibration.json`。
 
 **一句话结论：同口径（ERA5）标定把强度—损失样本从 14 场扩到 36 场，
 R² 0.883→0.891、斜率 2.109→2.305；但暴露了两个必须如实记录的负结果——
@@ -79,7 +79,7 @@ ERA5 窗口径与参数化窗口径的雨量不可互换，且场间雨量-Q 排
 
 ## 五、产物与边界
 
-产物：`out_era5/era5_multievent_calibration.json`（38 场明细 + 标定 +
+产物：`runs/out_era5/era5_multievent_calibration.json`（38 场明细 + 标定 +
 GPD/经验频率 + 边界）。
 
 边界（与产物一起落盘）：

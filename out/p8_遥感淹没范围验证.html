@@ -137,8 +137,8 @@ SAR 观测 <b>0.023511</b>——模型把水面铺得<b>宽约 8 倍</b>；
 </table>
 
 <footer>
-<b>数据来源</b>：留出集指标 <code>cloud_artifacts/*/metrics.json</code> 与
-<code>baseline.json</code>；权重 <code>cloud_artifacts/*/unet_ep*.pt</code>；
+<b>数据来源</b>：留出集指标 <code>runs/cloud_artifacts/*/metrics.json</code> 与
+<code>baseline.json</code>；权重 <code>runs/cloud_artifacts/*/unet_ep*.pt</code>；
 本地推理数据 <code>.scratch/sar/_selftest_data</code>（合成件）。<br>
 <b>复算</b>：本件由 <code>typhoeus.sar_verify</code> 生成；本机推理部分可在
 <code>python -m typhoeus.sar_verify</code> 下重复执行。

@@ -10,7 +10,7 @@
 预期（写明再验）：多数低洼小区/路段点为无汇流型（p31），乘子不会唤醒
 它们——若 MAE 改善主要来自下穿档，这正是"分档 vs 一刀切"的证据。
 
-产物：out_tiers/tiers_calibration.json
+产物：runs/out_tiers/tiers_calibration.json
 用法：python tools/drainage_tiers.py
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 SEED = ROOT / "data" / "seed"
-OUT = ROOT / "out_tiers"
+OUT = ROOT / "runs/out_tiers"
 
 LON_MIN, LON_MAX = 121.550139, 121.699583
 LAT_MIN, LAT_MAX = 29.840417, 29.919861

@@ -25,7 +25,7 @@
 ## Global Constraints
 
 - 不动 `out/`、不动 `typhoeus/multievent.py`（默认路径与 07 件数字不动）。
-- 产物一律落 `out_era5/`；ERA5 缓存 `data/seed/rain_reanalysis_era5_<年名>.npz`
+- 产物一律落 `runs/out_era5/`；ERA5 缓存 `data/seed/rain_reanalysis_era5_<年名>.npz`
   （沿袭 npz 不入库惯例）。
 - 新声称全部三态；GPD 尾部"观测史实的空档不可合成填充"写死。
 - 分解四项不批量算（只算 Q 总量），报告写明与 07 件口径差。

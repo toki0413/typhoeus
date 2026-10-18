@@ -94,7 +94,7 @@ def overlay_png(r, out: Path) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ckpt", default=str(ROOT / "cloud_artifacts" / "cv7" / "unet_ep10.pt"))
+    ap.add_argument("--ckpt", default=str(ROOT / "runs/cloud_artifacts" / "cv7" / "unet_ep10.pt"))
     ap.add_argument("--root", default=str(ROOT / "data" / "sar" / "unzipped"))
     ap.add_argument("--n", type=int, default=10)
     ap.add_argument("--outdir", default=str(ROOT / "out" / "sar_demo"))
