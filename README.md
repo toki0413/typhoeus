@@ -13,6 +13,9 @@ powershell -ExecutionPolicy Bypass -File .\start_web.ps1  # 值班台 http://127
 
 `setup.ps1` 会补两样不入库的大文件：DEM（43 MB）与裁切后的台风路径（0.8 MB）；台账与雨量缓存随仓库提供。
 
+> 若 `pip` 长时间无输出，跳过 `setup.ps1`：确认系统 Python 已有 numpy / scipy / rasterio / pytest，
+> 直接 `python -m typhoeus.cli run`；手工装依赖时加 `--only-binary=:all:`。
+
 ## 作为 DSH 插件安装
 
 ```bash

@@ -13,7 +13,7 @@ Write-Host "== 2/4 装依赖 ==" -ForegroundColor Cyan
 if (Test-Path ".\wheels") {
     & $vpy -m pip install --no-index --find-links wheels -r requirements.txt
 } else {
-    & $vpy -m pip install -r requirements.txt
+    & $vpy -m pip install --only-binary=:all: -r requirements.txt
 }
 
 & $vpy -m pip install -e . --no-deps --quiet
