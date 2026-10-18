@@ -4,6 +4,15 @@
 
 内核 v0.6.1-demo / 输出物格式 v3.7.0 / `config_hash` `e464fea5962b`
 
+## 三步上手（克隆后）
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup.ps1   # 建 venv、装依赖、备数据、跑全链
+powershell -ExecutionPolicy Bypass -File .\start_web.ps1  # 值班台 http://127.0.0.1:8765
+```
+
+`setup.ps1` 会补两样不入库的大文件：DEM（43 MB）与裁切后的台风路径（0.8 MB）；台账与雨量缓存随仓库提供。
+
 ## 作为 DSH 插件安装
 
 ```bash
@@ -317,4 +326,18 @@ python -m typhoeus.cli run
 python -m typhoeus.cli run --outdir out_sinks --sinks
 ```
 
-细节与逐版本对比见 `docs/analysis/SINK_LAYER.md`。该层默认关闭，开启后进入产物指纹（`|sink:underpass_v3:17pts`）。
+细节与逐版本对比见 `docs/analysis/SINK_LAYER.md`。该层默认关闭，开启后进入产物指纹（`|sink:underpass_v5:c0.35:17pts`）。
+
+
+---
+
+## 验收入口
+
+| 事项 | 位置 |
+|---|---|
+| 验收单（三步、预期结果、已知限制） | `tools/pkg/验收单.md` |
+| 离线验收包 | `dist/typhoeus-acceptance-v1.0.zip`（构建：`tools/pack_acceptance.ps1`） |
+| DSH 插件包 | `dsh-plugin/` |
+| 一键验收 | `verify.ps1`（解压包根目录） |
+| 值班台 | `typhoeus-web` → http://127.0.0.1:8765 |
+| 泛化与实验记录 | `docs/analysis/GENERALIZATION.md`、`SINK_LAYER.md`、`TIME_AXIS.md` |

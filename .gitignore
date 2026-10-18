@@ -1,4 +1,4 @@
-# 数据文件不入库（体积大、且多数有第三方许可与再分发限制）
+# 数据文件（体积大、第三方许可）
 data/*.csv
 data/*.tif
 data/osm/
@@ -9,68 +9,37 @@ data/seed/cmpas/*.nc
 data/seed/_selftest/
 data/seed/imerg/*.HDF5
 data/seed/imerg/*.nc
-
-# SAR 原始影像（每景 500-660 MB，AWS 公开桶可匿名重下）
-# 重下方法见 data/seed/sentinel1_dry/README.md
 data/seed/sentinel1/*.tiff
 data/seed/sentinel1/*.xml
 data/seed/sentinel1_dry/*.tiff
 data/seed/sentinel1_dry/*.xml
-
-# 例外：JRC 深度-损失曲线只有 4.8 KB，且是 p55 外部对标的输入
+# 例外：JRC 深度-损失曲线 4.8 KB，是 p55 外部对标的输入
 !data/seed/jrc_depth_damage.csv
 
-# 产物可复算生成，但保留在库中便于评审直接查看
-# out/ 不忽略
+# 产物可复算生成，保留在库中便于评审查看（out/ 不忽略）
 
-# 沙箱/审计临时目录
+# 沙箱/临时/构建
 .scratch/
 .benchmarks/
 .pytest_cache/
 __pycache__/
 *.pyc
+build/
+*.egg-info/
+dist/
+bundle-typhoeus-mcp/
 
-# 打包件与云端权重（已有单独说明）
+# 实验层产物（--sinks / --dt-seconds），可由 cli run 重生成
+out_sinks*/
+out_house*/
+out_c*/
+
+# 打包件与云端权重
 typhoeus_core.tar.gz
 *.part
-
 existing_probe/
 mode700/
 default/
 pytmp/
 pytest_base/
 tmp/
-
-# DSH 侧适配件：配置型 bundle，绑本机绝对路径（python 解释器 + 仓库位置），
-# 换机即失效。重建配方见 docs/dsh-mcp-connect.md，故不入库。
-bundle-typhoeus-mcp/
-
-# 打包产物（可重建：tools/pack_acceptance.ps1）
-dist/
-
-# ���ع������pip install . ���ɣ�
-build/
-*.egg-info/
-
-
-# ʵ�����--sinks��
-out_sinks/
-
-
-out_sinks2/
-
-
-out_sinks3/
-
-
-out_sinks4/
-
-
-out_c*/
-
-
-out_house/
-
-
-out_house3/
-
