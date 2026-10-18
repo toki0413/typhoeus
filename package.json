@@ -1,0 +1,31 @@
+{
+  "name": "typhoeus",
+  "version": "0.6.1",
+  "description": "台风暴雨城市内涝风险推演与涝点决策支持：9 个只读 MCP 工具、38 条判据、双指纹可复算内核",
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["dsh-plugin", "mcp", "flood", "urban-drainage", "disaster", "climate"],
+  "exports": {
+    "./locale/*.json": "./dsh-plugin/locale/*.json",
+    "./icon": "./dsh-plugin/icon.svg"
+  },
+  "files": [
+    "dsh-plugin/cordis.patch.yml",
+    "dsh-plugin/prepare.mjs",
+    "dsh-plugin/locale/*.json",
+    "dsh-plugin/icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prepare": "node dsh-plugin/prepare.mjs"
+  },
+  "engines": {
+    "node": ">=22.19"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./dsh-plugin/cordis.patch.yml"
+    }
+  }
+}

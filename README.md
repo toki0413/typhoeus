@@ -4,6 +4,16 @@
 
 内核 v0.6.1-demo / 输出物格式 v3.7.0 / `config_hash` `e464fea5962b`
 
+## 作为 DSH 插件安装
+
+```bash
+dsh plugin --profile web add github:toki0413/typhoeus
+```
+
+前置：`pipx install typhoeus`（或 `pip install typhoeus`），并设置 `TYPHOEUS_HOME` 指向放 `data/` 与 `out/` 的目录；不设则回落 `~/.typhoeus`。装好后可用 9 个只读工具：预置方案、抢修排序、事件对账、韧性定价、体检指标、体检报告、多事件标定、涝点卡、坐标查询。
+
+本地值班台：`typhoeus-web`，浏览器打开 `http://127.0.0.1:8765`。
+
 ---
 
 ## 项目用途
