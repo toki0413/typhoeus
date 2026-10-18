@@ -19,7 +19,7 @@ source_hash `40d07eb29407b4b6`。当日实测：13 条门槛 **4 PASS / 3 FAIL /
 | D12 | 下穿立交结构清单 | structure_id, name, lon, lat, road_grade_m, deck_bottom_elev_m, drainage_capacity_l_s, has_pump | ST001, 甬江大桥东江东北路下立交, 121.5590, 29.8690, 6.8, 3.2, 850, 1 | 需向市政工程管理部门申请；OSM `way/underpass` 可定位但无桥下高程 | 待落盘 | **门槛 2 的首要瓶颈**。12/17 个落选涝点的模型水深 < 0.05 m，因 GLO-30 是 DSM，30 m 像元表达不了下穿凹陷 | 政府侧授权 |
 | D1 | 历史涝点台账 | point_id, name, district, lon, lat, depth_m, observed_at, structure_type | FP001, 鄞州大道(雅源南路), 鄞州, 121.6170, 29.8180, 0.68, 2021-07-27 09:00, 下穿立交 | 水利局/气象台/央广网/人民日报客户端通报逐条反推 | `flood_points_2021_infa.csv`（28 条，域内 17） | 仅 2021 单场，无多年份；坐标为地名定位近似（±100 m） | 无 |
 | D2 | 路网拓扑 | osm_id, node_lon, node_lat, highway_class, lanes, name, oneway | way/1350214888, 121.6182, 29.8195, primary, 4, 鄞州大道, 0 | OSM（ODbL），Geofabrik 按 bbox 裁剪或 BBBike 提取 | 待落盘 | 缺路网则恢复排序只能用 108 m 方窗，无法表达走廊级恢复单元 | 网络可达性：Overpass 主站 406、两个镜像 500、Geofabrik 全国包过大 |
-| D4 | 气象站实测累计雨量 | station, lon, lat, accum_mm, valid_at, duration_h | 丁家畈, 121.3500, 30.0800, 951.0, 2021-07-26 06:00, 74 | 余姚/宁波市气象局通报（破登陆浙江台风实测过程极值） | `rain_stations_2021_infa.csv`（8 站） | 只有累计量，无逐小时；8 站覆盖全市域 | 无 |
+| D4 | 气象站实测累计雨量 | station, lon, lat, accum_mm, valid_at, duration_h | 丁家畈, 121.3500, 30.0800, 868.8, 2021-07-26 06:00, 72 | 余姚/宁波市气象局通报（破登陆浙江台风实测过程极值） | `rain_stations_2021_infa.csv`（7 站，去重后） | 只有累计量，无逐小时；7 站覆盖全市域 | 无 |
 | D6 | 内涝监测点位（149 个） | site_id, district, lon, lat, water_level_m, observed_at | MS001, 海曙, 121.5612, 29.8703, 0.34, 2021-07-27 09:00 | 宁波市大数据局 + 市水利局，浙里办宁波城市频道 | `monitor_sites_synthetic.json`（149 条占位） | **坐标与实时水深非公开**。属 2026 年宁波城市可信数据空间「水利服务场景」，需签授权协议 | 数据授权 |
 
 ### P1 —— 决定门槛能否从 BLOCKED 转 PASS

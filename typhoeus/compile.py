@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -347,12 +348,24 @@ def health_metrics(ctx) -> dict:
 def health_report(ctx) -> dict:
     g = ctx["gates"]
     k = ctx["kernel"]
+    # 主链传的是门槛 list；兼容夹具/旧 ctx 里 {"items": [...]} 的形态。
+    rows = g if isinstance(g, (list, tuple)) else (g.get("items") or [])
     return {
         "名称": "标准体检报告",
         "事件": ctx["event_name"],
         "内核版本": KERNEL_VERSION,
         "config_hash": ctx["config_hash"],
         "source_hash": ctx["source_hash"],
+        # 05/06 必须是同一批门槛的两个视图。这里冗余落一份数值计数，
+        # 供 G21 逐对核对——2026-10-18 之前 06 的结论停在 15 条，
+        # 与 05 的 27 条并存，验收方读哪份得到两套项目状态（P0-3）。
+        "门槛统计": {
+            "总数": len(rows),
+            "PASS": sum(1 for x in rows if x["status"] == "PASS"),
+            "FAIL": sum(1 for x in rows if x["status"] == "FAIL"),
+            "DEGRADED": sum(1 for x in rows if x["status"] == "DEGRADED"),
+            "BLOCKED": sum(1 for x in rows if x["status"] == "BLOCKED"),
+        },
         "守恒性": {
             "相对残差": k["mass_resid"],
             "容差": ctx["cfg"].l4.tol_mass,
@@ -425,3 +438,41 @@ COMPILERS = {
 
 def compile_all(ctx) -> dict:
     return {name: fn(ctx) for name, fn in COMPILERS.items()}
+
+
+def finalize_manifest(outdir: str) -> list[str]:
+    """把后置产物（07/08）登记进 manifest，并给全部产物补指纹。
+
+    01–06 由 `Bundle.write` 登记；07 由 `calib_sheet`、08 由 `cards` 各自
+    写盘，只有这一步补登记。没登记的产物在验收时回答不了"这份文件属于
+    哪个配置"——而 08 是唯一面向公众的产物（P0-4，2026-10-18 修）。
+    """
+    d = Path(outdir)
+    pm = d / "manifest.json"
+    if not pm.exists():
+        return []
+    man = json.loads(pm.read_text(encoding="utf-8"))
+    ch, sh = man.get("config_hash"), man.get("source_hash")
+    outputs = set(man.get("outputs") or [])
+    for stem in ("07_multievent_calibration", "08_flood_cards"):
+        p = d / f"{stem}.json"
+        if not p.exists():
+            continue
+        payload = json.loads(p.read_text(encoding="utf-8"))
+        if ch:
+            payload["config_hash"] = ch
+        if sh:
+            payload["source_hash"] = sh
+        p.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
+                     encoding="utf-8")
+        outputs.add(stem)
+    hashes = {}
+    for stem in sorted(outputs):
+        p = d / f"{stem}.json"
+        if p.exists():
+            hashes[stem] = hashlib.sha256(p.read_bytes()).hexdigest()[:16]
+    man["outputs"] = sorted(outputs)
+    man["指纹"] = hashes
+    pm.write_text(json.dumps(man, ensure_ascii=False, indent=2),
+                  encoding="utf-8")
+    return [str(pm)]

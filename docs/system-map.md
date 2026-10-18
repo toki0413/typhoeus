@@ -100,11 +100,12 @@
 
 ### ⑦ 服务层
 
-**8 个只读 MCP 工具**（描述 963/2048 字节）：
+**9 个只读 MCP 工具**（描述 1230/2048 字节）：
 
 `get_preset_plan` · `get_recovery_order` · `get_event_reconciliation` ·
 `get_resilience_pricing` · `get_health_metrics` · `get_health_report` ·
-`get_multievent_calibration` · **`get_flood_cards`**
+`get_multievent_calibration` · **`get_flood_cards`** · **`get_point_depth`**
+（坐标查询，R1 越域的唯一入口；域内只给最近台账点，不插值）
 
 **4 条护栏**（工具层，非提示词层）：R1 越域 · R2 弱基线 · R3 单口径 · R4 调用预算
 
@@ -130,7 +131,7 @@
 
 | 支柱 | 实现 | 证据 |
 |---|---|---|
-| **可复算** | 双指纹 `e464fea5962b` / `40d07eb29407b4b6` + schema 3.6.1 | manifest / config.json / 运行时三者一致 |
+| **可复算** | 双指纹 `e464fea5962b` / `40d07eb29407b4b6` + schema 3.7.0 | manifest / config.json / 运行时三者一致 |
 | **可拒答** | R1–R4 + G16–G20，护栏在工具层 | 越界 100% 拒绝、无证据声明 0/8 |
 | **可迁移** | 决策链与阈值与城市无关；5 城实测 100% 跑通 | `p38` 工程泛化率 1.0 |
 

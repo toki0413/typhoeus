@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Typhoeus flood kernel">
+  <rect width="64" height="64" rx="14" fill="#0b3b4a"/>
+  <g fill="none" stroke="#6fd3c8" stroke-width="4.5" stroke-linecap="round">
+    <path d="M40 22c-6-4-14-3-18 3-4 6-1 14 6 16"/>
+    <path d="M24 42c6 4 14 3 18-3 4-6 1-14-6-16"/>
+  </g>
+  <path d="M32 25c2.6 3.6 4.4 5.8 4.4 8.2a4.4 4.4 0 0 1-8.8 0c0-2.4 1.8-4.6 4.4-8.2z" fill="#f5b942"/>
+  <g stroke="#9fe6dc" stroke-width="3" stroke-linecap="round">
+    <path d="M22 50h20"/>
+  </g>
+</svg>

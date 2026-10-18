@@ -39,7 +39,7 @@ OUT = ROOT / "out"
 
 # 基准值：体系"完整"时应有的规模。缩小即判退步。
 EXPECT = {
-    "mcp_tools": 8,
+    "mcp_tools": 9,          # 8 份产物工具 + get_point_depth（R1 入口）
     "g18_covered_docs": 5,
     "p6_scenarios": 4,
     "gate_total": 27,

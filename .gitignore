@@ -40,3 +40,10 @@ default/
 pytmp/
 pytest_base/
 tmp/
+
+# DSH 侧适配件：配置型 bundle，绑本机绝对路径（python 解释器 + 仓库位置），
+# 换机即失效。重建配方见 docs/dsh-mcp-connect.md，故不入库。
+bundle-typhoeus-mcp/
+
+# 打包产物（可重建：tools/pack_acceptance.ps1）
+dist/

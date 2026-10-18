@@ -1,0 +1,30 @@
+{
+  "name": "typhoeus-mcp",
+  "version": "0.6.1",
+  "description": "提比翁城市内涝内核的只读 MCP 连接：9 个只读工具、域外拒答、每个数字带可复算指纹",
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["dsh-plugin", "mcp", "flood", "urban-drainage", "disaster"],
+  "exports": {
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "prepare.mjs",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "scripts": {
+    "prepare": "node prepare.mjs"
+  },
+  "engines": {
+    "node": ">=22.19"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

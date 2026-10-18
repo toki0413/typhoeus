@@ -759,7 +759,7 @@ def test_gate15_passes_on_independent_domain_check():
 # ---------- MCP 只读服务 ----------
 
 def test_mcp_desc_budget():
-    """六个工具的描述总量须在 2 KB 内。超了就是往 Agent 上下文里塞噪声。"""
+    """九个工具的描述总量须在 2 KB 内。超了就是往 Agent 上下文里塞噪声。"""
     from typhoeus import mcp_server as MS
     n = MS.desc_bytes()
     assert n <= MS.DESC_BUDGET_B, f"描述总量 {n} B 超预算 {MS.DESC_BUDGET_B} B"
@@ -873,31 +873,81 @@ def test_mcp_is_readonly():
 
 
 def test_mcp_server_end_to_end():
-    """经 MCP 协议层实调七个工具，不只调底层函数。"""
+    """经 MCP 协议层实调九个工具，不只调底层函数。"""
     import asyncio
     pytest.importorskip("mcp")
     from typhoeus import mcp_server as MS
 
+    def _text(r):
+        return r[0][0].text if isinstance(r, tuple) else r[0].text
+
     async def _go():
         srv = MS.build_server()
         tools = await srv.list_tools()
-        assert len(tools) == len(MS._TOOL_FNS), (
+        assert len(tools) == len(MS._ALL_TOOL_FNS), (
             f"协议层暴露 {len(tools)} 个工具，"
-            f"函数表里{len(MS._TOOL_FNS)} 个")
+            f"函数表里{len(MS._ALL_TOOL_FNS)} 个")
+        # 参数表里不得再出现 outdir：目录由 --outdir 钉死，模型无从改口径。
+        for t in tools:
+            assert "outdir" not in (t.inputSchema.get("properties") or {}), (
+                f"{t.name} 仍在参数表里暴露 outdir")
+        # 坐标参数必须带描述：只留 title 时模型看不出单位与量纲。
+        point = [t for t in tools if t.name == "get_point_depth"][0]
+        for arg in ("lon", "lat"):
+            prop = point.inputSchema["properties"][arg]
+            assert prop.get("description"), (
+                f"参数 {arg} 在 Schema 里缺 description（FastMCP 会丢掉"
+                f"字符串元数据，必须用 pydantic Field）")
         out = {}
         for name in MS._TOOL_FNS:
             # 每个工具单次调用：R4 限制单次对话 2 个调用，
-            # 连调六个会超限。这条测的是协议层可达性，不是调用预算。
+            # 连调九个会超限。这条测的是协议层可达性，不是调用预算。
             MS.reset_call_budget()
-            r = await srv.call_tool(name, {})
-            txt = r[0][0].text if isinstance(r, tuple) else r[0].text
-            out[name] = json.loads(txt)
+            out[name] = json.loads(_text(await srv.call_tool(name, {})))
+        # 第九个工具吃坐标，不能空参调用。
+        MS.reset_call_budget()
+        out["get_point_depth"] = json.loads(_text(
+            await srv.call_tool("get_point_depth",
+                                {"lon": 121.556, "lat": 29.872})))
         return out
 
     res = asyncio.run(_go())
-    assert len(res) == len(MS._TOOL_FNS)
+    assert len(res) == len(MS._ALL_TOOL_FNS)
     for name, d in res.items():
         assert d["数据"]["名称"], f"{name} 未返回产物内容"
+
+
+def test_point_depth_rejects_out_of_domain():
+    """坐标工具是 R1 的唯一入口：域外抬 RefusalError，不给估计值。"""
+    from typhoeus import mcp_server as MS
+    from typhoeus import guardrails as GR
+    with pytest.raises(GR.RefusalError) as e:
+        MS.get_point_depth(121.15, 30.03)          # 余姚，域外暴雨中心
+    assert e.value.rule == "R1"
+    assert e.value.remedy, "拒答须带处理办法，否则下游无从处置"
+
+
+def test_point_depth_returns_nearest_ledger_card():
+    """域内坐标只回最近台账点，且说明里明写"不是该坐标的水深"。"""
+    from typhoeus import mcp_server as MS
+    r = MS.get_point_depth(121.556, 29.872)        # 海曙新芝路 FP002
+    d = r["数据"]
+    assert d["可回答"] is True
+    assert d["读数"]["point_id"] == "FP002"
+    assert r["查询"]["距离_m"] <= MS._NEAR_RADIUS_M
+    assert "不是该坐标的水深" in d["说明"]
+    assert d["读数"]["trust"] and d["读数"]["trust_why"], (
+        "读数必须自带可信度，否则引用者分不清能不能用")
+    assert r["护栏"]["R1_越域"].startswith("已校验")
+
+
+def test_point_depth_gives_no_number_when_no_ledger_point_nearby():
+    """1 km 内无台账点就不给数，也不插值。"""
+    from typhoeus import mcp_server as MS
+    r = MS.get_point_depth(121.699, 29.919)        # 域内东北角
+    assert r["数据"]["可回答"] is False
+    assert r["数据"]["读数"] is None
+    assert "只读，不重算" in r["数据"]["说明"]
 
 
 # ---------- 护栏：三条硬拒绝 ----------
@@ -1727,17 +1777,20 @@ def test_seventh_tool_registered_and_readable():
     assert r["数据"]["名称"] == "多事件标定单"
 
 
-def test_desc_budget_still_ok_with_eight_tools():
-    """八个只读工具的描述总量仍在预算内。
+def test_desc_budget_still_ok_with_nine_tools():
+    """九个只读工具的描述总量仍在预算内。
 
     原名为 `..._with_seven_tools` 并断言 7 —— 那是第 8 个工具
     （`get_flood_cards`）被工作树覆盖丢失期间的版本。恢复后工具数为 8，
-    材料也声明 8 个，故基准改为 8，并把工具数断言写成与 `_TOOL_FILES`
-    一致，避免再出现"测试与实况各说各话"。
+    材料也声明 8 个，故基准改为 8。2026-10-18 增第九个工具
+    `get_point_depth`（坐标查询，R1 的入口），基准改为 9；产物工具与
+    视图工具分开计数，避免"一份产物一个工具"的那条断言分母失真。
     """
     from typhoeus import mcp_server as MS
     assert len(MS._TOOL_FNS) == len(MS._TOOL_FILES) == 8, (
-        f"工具数 {len(MS._TOOL_FNS)} / 映射 {len(MS._TOOL_FILES)}，应为 8")
+        f"产物工具 {len(MS._TOOL_FNS)} / 映射 {len(MS._TOOL_FILES)}，应为 8")
+    assert len(MS._ALL_TOOL_FNS) == 9, (
+        f"MCP 对外工具数 {len(MS._ALL_TOOL_FNS)}，应为 9")
     n = MS.desc_bytes()
     assert n <= MS.DESC_BUDGET_B, f"描述总量 {n} B 超预算"
 
@@ -2281,14 +2334,27 @@ def test_validation_artifacts_have_conclusions_and_boundaries():
     assert not no_concl, f"验证件缺『结论』：{no_concl}"
     assert not no_bound, f"验证件缺『边界』（否定性结论会被误读为通过）：{no_bound}"
 
-def _demo(*args):
+def _run_py(*args, timeout: int = 900) -> str:
+    """跑一个 `python -m …` 子进程，按 UTF-8 读回 stdout。
+
+    子进程的 stdout 走管道时**不继承控制台编码**：Windows 上默认是 ANSI
+    代码页（本机 cp936），而下面按 UTF-8 解码。不显式给
+    `PYTHONIOENCODING` 就会拿到 mojibake，断言随环境随机挂——2026-10-18
+    修的 7 条 `-k demo` 失败全部是这个原因，与业务逻辑无关。
+    """
+    import os
     import subprocess
     import sys
 
-    r = subprocess.run([sys.executable, "-m", "typhoeus.cli", "demo", *args],
-                       capture_output=True, timeout=900)
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+    r = subprocess.run([sys.executable, *args], capture_output=True,
+                       timeout=timeout, env=env)
     assert r.returncode == 0, r.stderr.decode("utf-8", "replace")[-800:]
     return r.stdout.decode("utf-8", "replace")
+
+
+def _demo(*args):
+    return _run_py("-m", "typhoeus.cli", "demo", *args)
 
 
 def test_demo_is_input_driven_not_a_canned_report():
@@ -2327,15 +2393,7 @@ def test_demo_map_path_reports_corrected_with_band():
     assert "0.0909" in out, "缺样本外口径，读者会把样本内数字当成绩"
 
 def _demo_series(vals: str, *args):
-    import subprocess
-    import sys
-
-    r = subprocess.run(
-        [sys.executable, "-m", "typhoeus.cli", "demo",
-         "--rain-series", vals, *args],
-        capture_output=True, timeout=900)
-    assert r.returncode == 0, r.stderr.decode("utf-8", "replace")[-800:]
-    return r.stdout.decode("utf-8", "replace")
+    return _run_py("-m", "typhoeus.cli", "demo", "--rain-series", vals, *args)
 
 
 def test_series_input_unlocks_the_timing_question():
@@ -2396,16 +2454,91 @@ def test_compare_proves_semantic_comparison_needs_a_language_model():
     但规则分类器必须承认**判不了**——因为两个"处"指的不是同一类对象。
     若某天分类器假装判得出，这个测试会失败，说明我们在吹牛。
     """
-    import subprocess
-    import sys
-
-    r = subprocess.run([sys.executable, "-m", "typhoeus.demo",
-                        "--compare", "354.1", "338.8"],
-                       capture_output=True, timeout=600)
-    assert r.returncode == 0, r.stderr.decode("utf-8", "replace")[-600:]
-    out = r.stdout.decode("utf-8", "replace")
+    out = _run_py("-m", "typhoeus.demo", "--compare", "354.1", "338.8",
+                  timeout=600)
     assert "规则判不了" in out, "分类器未如实承认判不了"
     assert "需语言模型" in out
     assert "两个『处』指的不是同一种对象" in out
     # 必须给出"为什么不用枚举"的理由，否则读者会以为我们只是懒得改
     assert "直接进预案" in out
+
+
+# ---------- P0 回归：交付包内部不得自相矛盾（2026-10-18） ----------
+
+def test_health_report_and_metrics_agree():
+    """05 与 06 必须给出同一套门槛统计。
+
+    2026-10-18 之前 06 的结论停在 15 条（5/4/6），05 是 27 条（15/5/7）：
+    同一个交付包，验收方读哪份得到两套项目状态。
+    """
+    o = Path(__file__).resolve().parent.parent / "out"
+    hm = json.loads((o / "05_health_metrics.json").read_text(encoding="utf-8"))
+    hr = json.loads((o / "06_health_report.json").read_text(encoding="utf-8"))
+    stat = hr["门槛统计"]
+    assert stat["总数"] == hm["指标总数"]
+    for k in ("PASS", "FAIL", "DEGRADED", "BLOCKED"):
+        assert stat[k] == hm[k], f"{k} 在 05/06 不一致：{stat[k]} vs {hm[k]}"
+    assert f"{stat['总数']} 条门槛" in hr["结论"], "结论文本与门槛统计脱钩"
+
+
+def test_manifest_covers_every_artifact():
+    """manifest 必须登记全部八份产物并给出指纹。
+
+    07/08 曾经只登记 6 份、指纹为 null——而 08 是唯一面向公众的产物。
+    """
+    o = Path(__file__).resolve().parent.parent / "out"
+    m = json.loads((o / "manifest.json").read_text(encoding="utf-8"))
+    assert set(m["outputs"]) == set(COMPILER_NAMES) | {
+        "07_multievent_calibration", "08_flood_cards"}
+    assert set(m["指纹"]) == set(m["outputs"]), "有产物没有指纹"
+    for stem in ("07_multievent_calibration", "08_flood_cards"):
+        d = json.loads((o / f"{stem}.json").read_text(encoding="utf-8"))
+        assert d.get("config_hash") == m["config_hash"]
+        assert d.get("source_hash") == m["source_hash"]
+
+
+COMPILER_NAMES = ("01_preset_plan", "02_recovery_order",
+                  "03_event_reconciliation", "04_resilience_pricing",
+                  "05_health_metrics", "06_health_report")
+
+
+def test_cards_out_of_domain_never_claim_zero_depth():
+    """域外卡不得复用「模型未产出积水」的静默点文案。
+
+    域外是"没算"，不是"算了没有"。巡查员读到后者会以为模型看过这个点。
+    """
+    from typhoeus import cards as CRD
+    doc = CRD.build(Path(__file__).resolve().parent.parent / "out")
+    out = [c for c in doc["卡片"] if not c["in_domain"]]
+    assert out, "台账里应含域外点"
+    for c in out:
+        assert c["model_depth_m"] is None
+        assert c["人工处置"].startswith("域外未计算"), c["人工处置"]
+        assert "未产出积水" not in c["人工处置"]
+
+
+def test_rain_station_rows_are_deduplicated():
+    """同站同刻只留一行：累加量与窗口绑定，混用会换分母。"""
+    from typhoeus import observe as OB
+    rows = OB.load_rain_stations()
+    keys = [(r["station"], r["valid_at"]) for r in rows]
+    assert len(keys) == len(set(keys)), "雨量站台账存在同站同刻重复行"
+    kept = [r for r in rows
+            if r["station"] == "丁家畈" and r["valid_at"] == "2021-07-26 06:00"]
+    assert len(kept) == 1, "丁家畈同刻两行未去重"
+    assert float(kept[0]["duration_h"]) == 72.0, "应保留 72 h 窗那条"
+
+
+def test_webapp_routes_questions_and_refuses_out_of_domain():
+    """值班台：问一句要路由到对的工具；域外坐标必须在壳里也拒答。"""
+    from typhoeus import mcp_server as MS
+    from typhoeus import webapp as W
+    MS.reset_call_budget()
+    r = W.ask("先修哪条路")
+    assert r["tool"] == "get_recovery_order"
+    assert r["payload"]["产物"] == "恢复排序单"
+    MS.reset_call_budget()
+    r2 = W.ask("坐标 121.15, 30.03")          # 余姚，域外
+    assert r2["refused"] is True and r2["rule"] == "R1"
+    assert r2["remedy"], "壳里的拒答也要带处理办法"
+    assert W.ask("")["refused"] is True, "空问题应被拒"

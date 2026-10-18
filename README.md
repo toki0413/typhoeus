@@ -32,8 +32,8 @@
 | numpy | 2.4.4 | 图守恒律求解器全部数值计算 |
 | scipy | 1.17.1 | GPD 极值分布拟合（`stats.genextreme`） |
 | rasterio | 1.5.2 | GLO-30 DEM 读取与重采样 |
-| pytest | 9.1.1 | 140 条回归测试 |
-| mcp | 可选 | MCP 只读服务（7 个工具） |
+| pytest | 9.1.1 | 154 条回归测试 |
+| mcp | 可选 | MCP 只读服务（9 个工具） |
 
 **无 pandas 依赖**（本机装有但代码未引用）。**零环境变量、零 API key** —— 外部网络调用只有 Open-Meteo archive-api 免 key 接口（降雨 + 土壤状态两条），且都带本地缓存。
 
@@ -45,8 +45,8 @@
 
 ```
 demo/
-├── typhoeus/                # 主包，10387 行
-│   ├── tests.py      (2193)  # 137 条测试
+├── typhoeus/                # 主包，92 模块 / 25,333 行（下列为节选）
+│   ├── tests.py      (2529)  # 154 条测试
 │   ├── multievent.py ( 815)  # 18 场历史气旋批量标定
 │   ├── kernel.py     ( 707)  # 图守恒律求解器 + Green-Ampt 入渗 + Ghil-Sellers 能量平衡
 │   ├── cli.py        ( 622)  # 命令行入口 + KernelParams 单一构造源
@@ -59,7 +59,7 @@ demo/
 │   ├── compile.py    ( 377)  # 七份输出物编译
 │   ├── agent_gates.py( 357)  # G16–G24 Agent 侧门槛
 │   ├── planner.py    ( 298)  # 次模贪心恢复排序
-│   ├── mcp_server.py ( 297)  # MCP 只读服务
+│   ├── mcp_server.py ( 472)  # MCP 只读服务（9 个工具）
 │   ├── data.py       ( 297)  # DEM 与台风路径加载
 │   ├── guardrails.py ( 288)  # R1–R4 硬拒绝规则
 │   ├── serving.py    ( 262)  # 缓存与调用预算
@@ -152,7 +152,7 @@ python -m typhoeus.cli multievent --catalog "2021:IN-FA,2014:FUNG-WONG"
 ### 测试
 
 ```bash
-python -m pytest typhoeus/tests.py -q          # 140 条，约 15 s
+python -m pytest typhoeus/tests.py -q          # 154 条，约 15 s
 python tools/mcp_selftest.py                   # MCP 通过率 + 故障注入 10 项
 python tools/infil_diag.py                     # 入渗机制 A/B 诊断
 python tools/gpd_sample_size.py                # GPD 样本量合成实验

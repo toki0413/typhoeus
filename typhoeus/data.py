@@ -14,7 +14,9 @@ from pathlib import Path
 
 import numpy as np
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+from . import paths as _paths
+
+DATA_DIR = _paths.data_dir()
 
 # 鄞州 + 海曙主城区 bbox。
 #

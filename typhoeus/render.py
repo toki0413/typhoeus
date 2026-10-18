@@ -114,6 +114,17 @@ def render_dashboard(outdir: str = "out", grid=None) -> str:
         _sec_health(hm, hr),
     ]
     caveat = hr.get("caveat", "")
+    # 149 个监测点坐标是 synthetic 占位。这一条此前只落在 05/06 的
+    # monitor_sites_provenance 字段里，只读页面的读者无从分辨（P1-6）。
+    _acc = hr.get("数据接入") or {}
+    _prov = str(_acc.get("monitor_sites_provenance") or "")
+    data_note = ""
+    if "synthetic" in _prov.lower():
+        data_note = (
+            f'<div class="caveat" style="margin-top:8px">'
+            f"<b>数据边界</b>：{_acc.get('monitor_sites', '?')} 个内涝监测点"
+            f"坐标为合成占位（provenance={_prov}），真实坐标非公开，"
+            f"不应当作实测点位引用。</div>")
     html = _PAGE.format(
         title=f"提比翁 · 韧性驾驶舱 · {hr.get('事件', '')}",
         event=hr.get("事件", ""),
@@ -123,6 +134,7 @@ def render_dashboard(outdir: str = "out", grid=None) -> str:
         sv=mf.get("schema_version", ""),
         body="\n".join(body),
         caveat=caveat,
+        data_note=data_note,
     )
     out = d / "dashboard.html"
     out.write_text(html, encoding="utf-8")
@@ -433,5 +445,5 @@ footer {{ max-width:1180px; margin:0 auto; padding:0 16px 40px; }}
 <main>
 {body}
 </main>
-<footer><div class="caveat"><b>使用边界</b>：{caveat}</div></footer>
+<footer><div class="caveat"><b>使用边界</b>：{caveat}</div>{data_note}</footer>
 </body></html>"""

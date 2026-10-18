@@ -1,21 +1,22 @@
 """提比翁计算内核的 MCP 只读服务。
 
-把六份 L3 编译输出物暴露成六个 MCP 工具。Agent 通过这一层与内核交互，
-读到的全部是已落盘、带 schema 版本、带 caveat 的产物。
+把八份 L3 编译输出物暴露成八个 MCP 工具，外加一个坐标查询视图
+（`get_point_depth`）——它是 R1 越域拒绝的唯一入口。Agent 通过这一层
+与内核交互，读到的全部是已落盘、带 schema 版本、带 caveat 的产物。
 
 只读边界（三条，都是硬约束）：
 
 1. **不调 `kernel.run`**。工具只能读 `out/` 里已编译好的 JSON。内核重算
    是 47 s 的确定性计算，不是 Agent 该编排的事——让 Agent 试参数就是在
    把确定性计算变成随机搜索。
-2. **不写任何文件**。六个工具全是读，server 启动后对文件系统只做读。
+2. **不写任何文件**。九个工具全是读，server 启动后对文件系统只做读。
 3. **不改参数**。配置由 `typhoeus.cli run`的 config 决定，Agent 无入口。
 
 第四条边界由 `guardrails` 承担：**每次返回都过护栏**，越域、弱基线、
 单一口径三类问题直接抛 `RefusalError`，不返回降级答案。护栏放在工具
 层而非提示词层，因为提示词约束不住模型，而工具返回是确定性的。
 
-为什么不需要 Code Mode 或惰性加载：六个工具的全量输出是 26 KB，
+为什么不需要 Code Mode 或惰性加载：九个工具的全量输出约 90 KB，
 一次性塞进上下文毫无压力。行业里 MCP token 爆炸的问题（GitHub + Slack +
 Sentry 吃掉 71.5% 上下文）来自几十个工具和 MB 级响应，本项目两个条件
 都不具备，做折叠或惰性加载是纯过度工程。本 server 的实际瓶颈是磁盘
@@ -28,16 +29,36 @@ Sentry 吃掉 71.5% 上下文）来自几十个工具和 MB 级响应，本项�
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 from typing import Any
 
+from typing import Annotated, Any
+
 from .version import KERNEL_VERSION, SCHEMA_VERSION, check_compat
-from .guardrails import guard_query, RefusalError
+from .guardrails import guard_query, check_in_domain, RefusalError
 
-DEFAULT_OUTDIR = Path(__file__).resolve().parent.parent / "out"
+# 参数描述只有走 pydantic Field 才进得了 JSON Schema——`Annotated[float, "…"]`
+# 会被 FastMCP 1.29 整条丢掉（实测：字符串元数据不进 properties.description）。
+# pydantic 是 mcp SDK 的依赖，但本模块要求"未装 SDK 时仍可 import"，
+# 故降级成裸 float：没有 mcp 就没有 server，Schema 也就无从谈起。
+_LON_DESC = "经度（十进制度），如 121.617"
+_LAT_DESC = "纬度（十进制度），如 29.818"
+try:  # pragma: no cover - 取决于环境里有没有 mcp/pydantic
+    from pydantic import Field as _Field
 
-# 六个工具 → out/ 里的文件名。键名同时是 MCP 工具名。
+    _LON_ARG: Any = Annotated[float, _Field(description=_LON_DESC)]
+    _LAT_ARG: Any = Annotated[float, _Field(description=_LAT_DESC)]
+except Exception:  # noqa: BLE001
+    _LON_ARG = float
+    _LAT_ARG = float
+
+from . import paths as _paths
+
+DEFAULT_OUTDIR = _paths.out_dir()
+
+# 八个产物工具 → out/ 里的文件名。键名同时是 MCP 工具名。
 _TOOL_FILES = {
     "get_preset_plan": "01_preset_plan",
     "get_recovery_order": "02_recovery_order",
@@ -129,6 +150,14 @@ def _deliver(outdir: Path, stem: str, label: str) -> dict:
     payload = {"产物": label,
                "来源": _provenance(outdir),
                "数据": _load(outdir, stem)}
+    # 同一句 caveat 不在一次回答里说两遍。manifest 与产物各带一份，
+    # 逐字相同时来源段只留指针——边界要少而硬，不是多而软：
+    # 重复的话读者会跳过去，跳过去的边界等于没有边界。
+    src_cav = payload["来源"].get("caveat")
+    dat_cav = (payload["数据"] or {}).get("caveat")
+    if (isinstance(src_cav, str) and isinstance(dat_cav, str)
+            and src_cav.strip() == dat_cav.strip()):
+        payload["来源"]["caveat"] = "同『数据.caveat』（与 manifest 逐字相同）"
     return guard_query(payload, outdir)
 
 
@@ -152,10 +181,10 @@ def _deliver_budgeted(outdir: Path, stem: str, label: str) -> dict:
     return _deliver(outdir, stem, label)
 
 
-# ---------- 六个只读工具 ----------
+# ---------- 八份产物 → 八个只读工具 ----------
 # 描述只回答"这个工具回答什么问题"。不写使用方法示例，不写错误处理
 # 指南——那是模型该自己从错误返回里学的，写进描述只占context。
-# 总量控制在 2 KB 内：六个工具 × 约 300 B。
+# 总量控制在 2 KB 内：九个工具 × 约 120 B。
 
 
 def get_preset_plan(outdir: str | None = None) -> dict:
@@ -222,30 +251,157 @@ _TOOL_FNS = {
     "get_flood_cards": get_flood_cards,
 }
 
+
+# ---------- 第九个工具：坐标查询（R1 越域的唯一入口） ----------
+# 它不读新产物，是 08 涝点卡在坐标上的视图。**不并入 `_TOOL_FNS`**：
+# 那张表被 G18/G19/G20 当成「八份产物各一个工具」逐份扫，混进一个视图
+# 工具会让分母失真，也会让 test_mcp_tools_match_artifacts_exactly 的
+# 「一份产物一个工具」断掉。故另立一张表，两者在 build_server 里合并。
+
+# 1 km：28 个台账点在 0.15°×0.08° 的域内平均间距 1–3 km。取 1 km 是
+# 「最近的台账点还算同一个位置」的上界；超过就不给数，只说没有。
+_NEAR_RADIUS_M = 1000.0
+
+
+def _haversine_m(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    """两点球面距离。
+
+    用球面公式而不是度差：1 度纬度 ≈ 111 km，1 度经度在 29.9°N ≈ 96 km，
+    两者不等，按度差取最近点会系统性偏向东西方向。
+    """
+    r = 6371008.8
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = p2 - p1
+    dl = math.radians(lon2 - lon1)
+    a = (math.sin(dp / 2) ** 2
+         + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2)
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def get_point_depth(lon: _LON_ARG, lat: _LAT_ARG,
+                    outdir: str | None = None) -> dict:
+    """这个坐标淹多深、模型覆盖没覆盖。域外一律拒答（R1），不降级外推。
+
+    域内只给最近的涝点台账读数，不插值：模型水深只在 28 个台账点上有
+    定义，任意坐标的水深要重跑内核，本服务只读不重算。
+    """
+    d = Path(outdir) if outdir else DEFAULT_OUTDIR
+    # R1 落在这一行。guard_query 的注释写着「域检查在查询入口做」，
+    # 在此之前没有入口——坐标工具是那个入口。
+    q = check_in_domain(lon, lat, "查询点")
+    cards = _load(d, _TOOL_FILES["get_flood_cards"]).get("卡片") or []
+
+    best: dict | None = None
+    best_m: float | None = None
+    for c in cards:
+        if c.get("lon") is None or c.get("lat") is None:
+            continue
+        m = _haversine_m(q["lon"], q["lat"], c["lon"], c["lat"])
+        if best_m is None or m < best_m:
+            best, best_m = c, m
+
+    near = best is not None and best_m is not None and best_m <= _NEAR_RADIUS_M
+    if near:
+        readout = {
+            "point_id": best.get("point_id"),
+            "name": best.get("name"),
+            "district": best.get("district"),
+            "structure_type": best.get("structure_type"),
+            "obs_depth_m": best.get("obs_depth_m"),
+            "obs_level": best.get("obs_level"),
+            "model_depth_m": best.get("model_depth_m"),
+            "model_level": best.get("model_level"),
+            "model_visible": best.get("model_visible"),
+            "trust": best.get("trust"),
+            "trust_why": best.get("trust_why"),
+            "model_depth_corrected_m": best.get("model_depth_corrected_m"),
+            "correction_band_m": best.get("correction_band_m"),
+            "correction_note": best.get("correction_note"),
+            "人工处置": best.get("人工处置"),
+            "读数时间": (best.get("source") or {}).get("observed_at"),
+        }
+        note = (
+            f"这是距离该坐标 {best_m:.0f} m 的台账点 {best.get('point_id')} "
+            f"的读数，**不是该坐标的水深**。模型水深只在这 28 个台账点上"
+            f"有定义，坐标间不插值。引用 model_depth_m 时须同时引用该点的 "
+            f"trust 与 model_visible；model_visible=false 时不得报模型水深。")
+    else:
+        readout = None
+        note = (
+            f"该坐标 {_NEAR_RADIUS_M:.0f} m 内没有涝点台账记录"
+            + (f"（最近的 {best.get('point_id')} 距 "
+               f"{best_m:.0f} m）" if best is not None and best_m is not None
+               else "")
+            + "。本内核的模型水深只在 28 个台账点上有定义，任意坐标的水深"
+              "要重跑内核——本服务只读，不重算，因此这里不给数。"
+              "请改用台账点坐标再问。")
+
+    payload: dict[str, Any] = {
+        "产物": "点位水深查询",
+        "来源": _provenance(d),
+        "查询": {
+            "lon": q["lon"],
+            "lat": q["lat"],
+            "in_domain": True,
+            "搜索半径_m": _NEAR_RADIUS_M,
+            "最近台账点": (f"{best.get('point_id')} {best.get('name')}"
+                        if best is not None else None),
+            "距离_m": round(best_m, 1) if best_m is not None else None,
+        },
+        "数据": {
+            "名称": "点位水深查询",
+            "schema_version": SCHEMA_VERSION,
+            "坐标": {"lon": q["lon"], "lat": q["lat"]},
+            "可回答": bool(near),
+            "读数": readout,
+            "说明": note,
+        },
+    }
+    return guard_query(payload, d, r1_checked=True)
+
+
+_POINT_TOOL_FNS = {"get_point_depth": get_point_depth}
+_ALL_TOOL_FNS = {**_TOOL_FNS, **_POINT_TOOL_FNS}
+
 #工具描述总字节数。这是本server 的显式预算，不是估计——超了就在
 # 自测里FAIL，不靠自觉。
 DESC_BUDGET_B = 2048
 
 
+def _no_arg_schema() -> dict:
+    """产物工具不收任何参数。
+
+    2026-10-18 之前这里带一个 `outdir` 参数。它让「固定目录」只是默认值
+    而不是约束——模型可以传别的路径去读别处的 JSON，只读边界还在，但
+    审计口径会漂。现在目录由 `--outdir` 一次性钉死在 server 进程里，
+    参数表里不再出现它。
+    """
+    return {"type": "object", "properties": {}, "required": [],
+            "additionalProperties": False}
+
+
+def _coord_schema() -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "lon": {"type": "number", "description": _LON_DESC},
+            "lat": {"type": "number", "description": _LAT_DESC},
+        },
+        "required": ["lon", "lat"],
+        "additionalProperties": False,
+    }
+
+
 def tool_descriptors() -> list[dict]:
-    """六个工具的 MCP 描述符，供自测与文档共用。"""
+    """九个工具的 MCP 描述符，供自测与文档共用。"""
     out = []
-    for name, fn in _TOOL_FNS.items():
+    for name, fn in _ALL_TOOL_FNS.items():
         doc = (fn.__doc__ or "").strip()
         out.append({
             "name": name,
             "description": doc,
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "outdir": {
-                        "type": "string",
-                        "description": "输出物目录，缺省用项目 out/",
-                    }
-                },
-                "required": [],
-                "additionalProperties": False,
-            },
+            "inputSchema": (_coord_schema() if name in _POINT_TOOL_FNS
+                            else _no_arg_schema()),
         })
     return out
 
@@ -257,7 +413,8 @@ def desc_bytes() -> int:
 def build_server(outdir: str | None = None):
     """构造 FastMCP server。import 放在函数内，未装 SDK 时模块仍可导入。
 
-    `outdir` 固定后所有工具共用同一个目录，避免 Agent 在参数里猜路径。
+    `outdir` 钉死后所有工具共用同一个目录，**且参数表里不暴露它**——
+    Agent 猜不到路径，也改不了口径。
     """
     from mcp.server.fastmcp import FastMCP
 
@@ -272,12 +429,23 @@ def build_server(outdir: str | None = None):
         ),
     )
 
-    for name, fn in _TOOL_FNS.items():
+    for name, fn in _ALL_TOOL_FNS.items():
         doc = (fn.__doc__ or "").strip()
 
+        if name in _POINT_TOOL_FNS:
+            def _make_point(fn=fn):
+                # 注解必须挂在这个 wrapper 上：注册给 MCP 的是它，不是
+                # `get_point_depth` 本身，Schema 也只从它推。
+                def _tool(lon: _LON_ARG, lat: _LAT_ARG) -> dict:
+                    return fn(lon, lat, fixed)
+                return _tool
+
+            srv.add_tool(_make_point(), name=name, description=doc)
+            continue
+
         def _make(fn=fn):
-            def _tool(outdir: str | None = None) -> dict:
-                return fn(outdir or fixed)
+            def _tool() -> dict:
+                return fn(fixed)
             return _tool
 
         srv.add_tool(_make(), name=name, description=doc)

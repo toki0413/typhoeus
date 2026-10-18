@@ -77,6 +77,25 @@ CONSISTENCY_PAIRS = (
      ("06_health_report", "土壤标定", "净短波_标定_W_m2"),
      ("06_health_report", "土壤标定", "净短波_实际使用_W_m2"),
      0.005),
+    # 05 与 06 必须是同一批门槛的两个视图。06 的结论文本由 cli 在接入
+    # Agent/标定门槛后重算；只重写 05 不回写 06，验收方读 06 会拿到一套
+    # 与 README 不同的项目状态（2026-10-18 修 P0-3）。
+    ("门槛统计·总数",
+     ("05_health_metrics", "指标总数"),
+     ("06_health_report", "门槛统计", "总数"),
+     0.0),
+    ("门槛统计·PASS",
+     ("05_health_metrics", "PASS"),
+     ("06_health_report", "门槛统计", "PASS"),
+     0.0),
+    ("门槛统计·FAIL",
+     ("05_health_metrics", "FAIL"),
+     ("06_health_report", "门槛统计", "FAIL"),
+     0.0),
+    ("门槛统计·BLOCKED",
+     ("05_health_metrics", "BLOCKED"),
+     ("06_health_report", "门槛统计", "BLOCKED"),
+     0.0),
 )
 
 

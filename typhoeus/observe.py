@@ -86,11 +86,28 @@ def load_service_outages() -> list[dict]:
 
 
 def load_rain_stations() -> list[dict]:
+    """雨量站台账（同站同刻先去重）。
+
+    2021-07-26 06:00 的丁家畈同时记了 868.8 mm/72 h 与 951.0 mm/74 h
+    两行（P1-3）。累加量与窗口绑定，混用会让面雨量订正吃到不同分母，
+    所以去重规则必须显式：**取窗口最接近事件窗 72 h 的那条**，其余丢弃。
+    """
     p = SEED_DIR / "rain_stations_2021_infa.csv"
     if not p.exists():
         return []
     with open(p, encoding="utf-8-sig", newline="") as f:
-        return list(csv.DictReader(f))
+        rows = list(csv.DictReader(f))
+    best: dict[tuple[str, str], tuple[float, dict]] = {}
+    for r in rows:
+        key = ((r.get("station") or "").strip(),
+               (r.get("valid_at") or "").strip())
+        try:
+            gap = abs(float(r.get("duration_h") or 0.0) - 72.0)
+        except ValueError:
+            gap = float("inf")
+        if key not in best or gap < best[key][0]:
+            best[key] = (gap, r)
+    return [r for _, r in best.values()]
 
 
 # ---------- 门槛 2：涝点覆盖率 ----------

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Typhoeus Flood Kernel",
+    "description": "Connects the Typhoeus urban-flood kernel as nine read-only tools: preset plan, recovery order, event reconciliation, resilience pricing, health gates, multi-event calibration, per-point risk cards and coordinate queries (out-of-domain refused)."
+  }
+}

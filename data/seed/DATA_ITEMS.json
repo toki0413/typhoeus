@@ -29,7 +29,7 @@
     "示例值": "way/1350214888, 121.6182, 29.8195, primary, 4, 鄞州大道, 0",
     "来源": "OpenStreetMap（ODbL），Geofabrik china-latest-free.shp.zip 按 bbox 裁剪，或 BBBike extract 按矩形提取",
     "许可": "ODbL，使用须标注来源",
-    "落盘": "data/osm_roads_clip.geojson",
+    "落盘": "未落盘（当前仅 data/osm/nb_nodes.json 节点快照）",
     "覆盖度": "待落盘（Overpass 镜像本次不可达，Geofabrik 全国包过大）",
     "缺口": "缺路网则恢复排序的影响半径只能用方窗近似（当前 108 m），无法表达走廊级恢复单元",
     "阻塞方": "网络可达性：Overpass 主站 406、两个镜像 500"
@@ -115,7 +115,7 @@
     "示例值": "S1A_IW_GRDH_1SDV_20210726T032543_*",
     "来源": "Copernicus Open Access Hub（免费注册）或 ASF Vertex",
     "许可": "Copernicus Data Licence（免费、开放、署名）",
-    "落盘": "data/seed/sar_scenes.csv（清单）",
+    "落盘": "未入库：本机 data/seed/sentinel1*/ 有影像，场景清单待生成",
     "覆盖度": "待落盘",
     "缺口": "2021-07-25 至 07-28 鄞州/海曙上空的重访覆盖需实际查询确认",
     "阻塞方": "需注册 Copernicus 账号"

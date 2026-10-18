@@ -28,7 +28,7 @@
 |---|---|---|---|
 | 历史涝点 | `seed/flood_points_2021_infa.csv` | 28（域内 17） | 1、2、5 |
 | 功能中断 | `seed/service_outages_2021_infa.csv` | 10 条 5 类 | 4、5 |
-| 站点累计雨量 | `seed/rain_stations_2021_infa.csv` | 8 站 | 2、9 |
+| 站点累计雨量 | `seed/rain_stations_2021_infa.csv` | 7 站（去重后；丁家畈同刻两行取 72 h 窗） | 2、9 |
 | 逐小时降雨 | `seed/rain_hourly_synthetic.json` | 8 站 × 73 时（合成） | 2、3、9 |
 | 149 监测点 | `seed/monitor_sites_synthetic.json` | 149（**synthetic 占位**） | 1、2、3 |
 | 改造项目 | `seed/retrofit_projects.csv` | 6 项目 | 10 |

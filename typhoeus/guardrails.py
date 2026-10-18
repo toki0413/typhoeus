@@ -217,7 +217,8 @@ def check_dual_basis(section: dict, where: str) -> dict:
 
 # ---------- 查询级护栏 ----------
 
-def guard_query(payload: dict, outdir: Path | None = None) -> dict:
+def guard_query(payload: dict, outdir: Path | None = None,
+                r1_checked: bool = False) -> dict:
     """对一次工具返回做全量护栏。不通过即抛，不返回降级答案。
 
     这是 MCP 层唯一该调用的入口。护栏的失败必须是响亮的——静默
@@ -266,7 +267,10 @@ def guard_query(payload: dict, outdir: Path | None = None) -> dict:
                 "重算对账分解")
 
     payload["护栏"] = {
-        "R1_越域": "本次返回不含坐标，域检查在查询入口做",
+        # r1_checked 由查询入口置位：只有 `get_point_depth` 真的吃了坐标
+        # 并调过 check_in_domain，其余工具的返回里没有坐标可查。
+        "R1_越域": ("已校验：查询点在计算域内" if r1_checked
+                  else "本次返回不含坐标，域检查在查询入口做"),
         "R2_弱基线": "已校验双基线与评分窗口" if "R2" in applied
                   else "本次返回不含排序结论",
         "R3_单口径": "已校验双口径" if "R3" in applied

@@ -78,8 +78,8 @@
     "verdict_basis": "官方全市面雨量（与订正锚点不同源）",
     "rel_err_verdict": -0.3091,
     "n_stations": 1,
-    "n_stations_total": 8,
-    "n_outside": 7,
+    "n_stations_total": 7,
+    "n_outside": 6,
     "allcity_mm": 375.0,
     "sampling_bias": "域内仅 1 站且集中于南部，均值不含北部暴雨中心余姚（官方 475 mm），观测侧偏低，故 rel_err 偏乐观；对全市口径的偏差为 -31%",
     "criterion": "≤15%"

@@ -264,9 +264,16 @@ def check_all(ctx) -> list[dict]:
         # 逐点实测：模型水深恰为 0 的点占多少。这些点不是"算得浅"，
         # 是内核在该格点上根本没积水，调任何源项参数都动不了它们。
         items14 = hit.get("items") or []
-        n_zero = sum(1 for q in items14
-                     if q.get("model_depth_m", 1.0) < 0.05)
-        zero_share = f"{n_zero}/{len(items14)}" if items14 else "0/0"
+        # 「低于 0.05 m」与「恰好为 0.000 m」是两个数：实测 12 个低于
+        # 0.05 m，其中 10 个恰为 0.000 m，另 2 个是 0.001 m。把两件事
+        # 写成一句"（恰好为零）"是措辞错误（P1-1，2026-10-18 修）。
+        n_silent = sum(1 for q in items14
+                       if q.get("model_depth_m") is not None
+                       and q["model_depth_m"] < 0.05)
+        n_exact_zero = sum(1 for q in items14
+                           if q.get("model_depth_m") is not None
+                           and abs(q["model_depth_m"]) < 5e-4)
+        zero_share = f"{n_silent}/{len(items14)}" if items14 else "0/0"
         _inf = float(ctx.get("infil_mm") or 0.0)
         _rain = float(ctx.get("rain_total_mm") or 0.0)
         infil_share = (100.0 * _inf / _rain) if _rain > 0 else 0.0
@@ -281,7 +288,8 @@ def check_all(ctx) -> list[dict]:
                      f"管网与地面积水按强度失效。总量与极值方向相反——"
                      f"再分析能约束过程总量但不能约束对流尺度极值。"
                      f"但它不是主因：逐点实测 {zero_share} 个点的模型水深"
-                     f"低于 0.05 m（恰好为零），内核在这些格点上没有积水。"
+                     f"低于 0.05 m，其中 {n_exact_zero} 个恰为 0.000 m"
+                     f"（内核在这些格点上没有积水）。"
                      f"把入渗从地表水深驱动换成土壤饱和度驱动（Green-Ampt）"
                      f"只让这些点动0.001–0.020 m，因为入渗总量仅 "
                      f"{_inf:.1f} mm，占面雨量 {infil_share:.1f}%。"

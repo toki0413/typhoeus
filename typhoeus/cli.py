@@ -383,7 +383,8 @@ def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
         "monitor_sites_provenance": "synthetic（坐标非公开，占位）",
         "service_outages": len(obs_out),
         "rain_stations": len(obs_st),
-        "data_dir": str(OB.SEED_DIR),
+        # 只记相对位置：绝对路径会把本机用户名带进对外产物。
+        "data_dir": "data/seed",
     }
     ctx["prj_params"] = prj_params.to_dict()
     ctx["elapsed_s"] = time.perf_counter() - t0
@@ -477,6 +478,11 @@ def _attach_agent_gates(ctx, outdir: str) -> list[str]:
     p = Path(outdir) / "05_health_metrics.json"
     with open(p, "w", encoding="utf-8",) as f:
         json.dump(hm, f, ensure_ascii=False, indent=2)
+    # 06 由同一份 ctx 编译，必须同步重写。只重写 05 会让交付包里出现
+    # 两套项目状态（06 的结论停在 15 条而 05 已到 27 条，2026-10-18 修）。
+    p6 = Path(outdir) / "06_health_report.json"
+    with open(p6, "w", encoding="utf-8") as f:
+        json.dump(C.health_report(ctx), f, ensure_ascii=False, indent=2)
     n_pass = sum(1 for x in ag if x["status"] == "PASS")
     print(f"[后置] G21 跨产物一致性 {g21['value']}  {g21['status']}")
     for x in cg:
@@ -490,7 +496,7 @@ def _attach_agent_gates(ctx, outdir: str) -> list[str]:
         print(f"{'✅' if x['status'] == 'PASS' else '❌'} "
               f"门槛{x['id']} {x['content']}  {x['value']}  "
               f"门槛 {x['threshold']}")
-    return [str(p)]
+    return [str(p), str(p6)]
 
 
 def _run_multievent(cfg: CFG.Config, outdir: str, catalog: str | None) -> int:
@@ -683,6 +689,18 @@ def main(argv=None) -> int:
             json.dump(CSH.multievent_sheet(args.outdir), f,
                       ensure_ascii=False, indent=2)
         written.append(str(_p))
+
+        # 第八份产物：涝点转译卡。此前只有手动 `cards.write` 会产出它，
+        # 于是它既不在 manifest 的 outputs 里、也没有指纹——而它是唯一
+        # 面向公众的产物（P0-4）。依赖 03（逐点对照）与 05（门槛实测），
+        # 故必须排在上面的回填之后。
+        from . import cards as CRD
+        _w8 = CRD.write(args.outdir)
+        written += [_w8["json"], _w8["html"]]
+
+        # 07/08 写完后补登记并补指纹；manifest 是"可复算"的落点，
+        # 少登记一份就等于那份产物没有配置归属。
+        written += C.finalize_manifest(args.outdir)
 
     if cmd in ("check", "report", "run"):
         print("\n" + "=" * 68)

@@ -45,6 +45,12 @@ LEVEL_BOUNDS = PRJ.DEPTH_LEVELS          # (0.10, 0.20, 0.50) 宁波官方四色
 LEVEL_NAMES = PRJ.LEVEL_NAMES
 
 SILENT_ACTION = ("该点本轮模型未产出积水，建议按台账人工巡查一次并回报实况")
+# 域外点不得复用上面那句：它把 BLOCKED 写成了读数。域外是"没算"，
+# 不是"算了没有"——巡查员读到前者会以为模型看过这个点（2026-10-18 修）。
+OUT_OF_DOMAIN_ACTION = ("域外未计算：该点坐标在计算域外，模型未覆盖。"
+                        "建议人工核实坐标后再判断，不得引用任何模型读数")
+UNPAIRED_ACTION = ("该点不在本次事件对账单的逐点对照里，"
+                   "建议按台账人工核实")
 
 
 def level_of(depth_m: float) -> int:
@@ -162,7 +168,10 @@ def build(outdir: str | Path) -> dict:
                      else f"{lvl}级，通行受阻风险上升"),
             "对账": (f"该点在本次事件对账单中的记录号 {fp.point_id}，"
                      f"模型读数 {'无记录' if model_m is None else f'{model_m:.3f} m'}"),
-            "人工处置": None if visible else SILENT_ACTION,
+            "人工处置": (None if visible else
+                       (OUT_OF_DOMAIN_ACTION if not vis_dom
+                        else (UNPAIRED_ACTION if d is None
+                              else SILENT_ACTION))),
             "source": {"file": "03_event_reconciliation.json",
                        "record": fp.point_id,
                        "point_provenance": fp.provenance,
