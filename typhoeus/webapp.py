@@ -56,8 +56,15 @@ def summary() -> dict:
     hm = json.loads((OUT / "05_health_metrics.json").read_text(encoding="utf-8"))
     mf = json.loads((OUT / "manifest.json").read_text(encoding="utf-8"))
     hr = json.loads((OUT / "06_health_report.json").read_text(encoding="utf-8"))
+    cards = json.loads((OUT / "08_flood_cards.json").read_text(encoding="utf-8")).get("卡片", [])
+    publishable = sum(1 for c in cards if c.get("trust") == "可发")
+    outside = sum(1 for c in cards if not c.get("in_domain"))
     return {
         "事件": hr.get("事件"),
+        "峰值水深_m": hr.get("峰值水深_m"),
+        "面雨量_mm": hr.get("面雨量_mm"),
+        "卡片": {"总数": len(cards), "可发布": publishable,
+               "需人工核实": len(cards) - publishable - outside, "域外": outside},
         "config_hash": mf.get("config_hash"),
         "source_hash": mf.get("source_hash"),
         "门槛": {k: hm.get(k) for k in
@@ -102,34 +109,47 @@ def _page() -> str:
 <title>提比翁 · 值班台</title>
 <style>
 :root{--ink:#14212b;--mut:#5b6b78;--line:#dde5ea;--bg:#f6f9fa;--accent:#0b6e8f;--bad:#b3261e}
-*{box-sizing:border-box}body{margin:0;font:15px/1.6 "Segoe UI","Microsoft YaHei",sans-serif;
+*{box-sizing:border-box}body{margin:0;font:15px/1.65 "Segoe UI","Microsoft YaHei",sans-serif;
 color:var(--ink);background:var(--bg)}
 header{background:#0b3b4a;color:#eaf6f7;padding:20px 28px}
 header h1{margin:0;font-size:20px;font-weight:600}header .sub{color:#a9cfd6;font-size:13px;margin-top:4px}
 main{max-width:1080px;margin:0 auto;padding:22px 20px 60px}
 .card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin-bottom:16px}
+.nums{display:flex;gap:14px;flex-wrap:wrap}
+.num{flex:1;min-width:150px;background:#f2f8f9;border-radius:8px;padding:14px}
+.num b{display:block;font-size:26px;line-height:1.2}
+.num span{color:var(--mut);font-size:12.5px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.chip{padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:#fff;cursor:pointer;font-size:13px}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
 .badges{display:flex;gap:8px;flex-wrap:wrap}
 .badge{font:12px/1 ui-monospace,Consolas,monospace;padding:6px 10px;border-radius:999px;background:#eef4f6;border:1px solid var(--line)}
-.badge b{font-weight:700}.pass{color:#146c43}.fail{color:var(--bad)}
+.pass{color:#146c43}.fail{color:var(--bad)}
 h2{font-size:15px;margin:0 0 10px}h3{font-size:13px;color:var(--mut);margin:14px 0 6px}
 .ask{display:flex;gap:8px}.ask input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:6px;font-size:14px}
 button{padding:10px 16px;border:0;border-radius:6px;background:var(--accent);color:#fff;font-size:14px;cursor:pointer}
 pre{background:#0f1c24;color:#d6e6ee;padding:14px;border-radius:6px;overflow:auto;max-height:420px;
 font:12.5px/1.55 ui-monospace,Consolas,monospace}
-.tool{font:12px/1 ui-monospace,monospace;color:var(--accent);margin-bottom:8px}
+.tool{font:12px/1 ui-monospace,monospace;color:var(--mut);margin-bottom:8px}
 .refused{border-left:4px solid var(--bad);background:#fdf0ef;padding:12px 14px;border-radius:4px}
+details{margin-top:6px}summary{cursor:pointer;color:var(--mut);font-size:13px}
 footer{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:var(--mut);font-size:12px}
 </style></head><body>
 <header><h1>提比翁 · 值班台</h1><div class="sub" id="sub">加载中…</div></header>
 <main>
   <div class="card">
-    <h2>一屏结论</h2>
-    <div class="badges" id="badges"></div>
-    <h3>结论文本</h3><div id="concl" style="font-size:13.5px;color:#33454f"></div>
+    <h2>这一场的结论</h2>
+    <div class="nums">
+      <div class="num"><b id="n-peak">–</b><span>最大积水深度（米）</span></div>
+      <div class="num"><b id="n-cards">–</b><span>可直接发布的涝点卡</span></div>
+      <div class="num"><b id="n-rain">–</b><span>面雨量（毫米）</span></div>
+    </div>
+    <h3>一句话</h3><div id="concl" style="font-size:13.5px;color:#33454f"></div>
   </div>
   <div class="card">
     <h2>问一句</h2>
-    <div class="ask"><input id="q" placeholder="例如：先修哪条路 / 涝点能不能用 / 坐标 121.617, 29.818">
+    <div class="chips" id="chips"></div>
+    <div class="ask"><input id="q" placeholder="也可以直接写，例如：先修哪条路 / 坐标 121.617, 29.818">
     <button onclick="ask()">问</button></div>
     <div id="answer" style="margin-top:14px"></div>
   </div>
@@ -138,22 +158,34 @@ footer{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:var(--mut);font-
     <div class="badges" id="tabs"></div>
     <div id="artifact" style="margin-top:14px"></div>
   </div>
+  <div class="card">
+    <details><summary>审计信息（指纹与 27 条判据）</summary>
+      <div class="badges" id="badges" style="margin-top:10px"></div>
+    </details>
+  </div>
 </main>
-<footer>所有数字来自 <code>out/</code> 已落盘产物及其指纹；护栏在工具层，域外一律拒答。</footer>
+<footer>数字来自已落盘产物与其指纹；计算范围外的坐标一律拒答，不给估计值。</footer>
 <script>
 let S = null;
 const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const QUESTIONS = ["先修哪条路", "哪些涝点能直接发", "这场损失怎么算的", "减少损失要投多少钱", "这场雨有多大"];
 async function boot(){
   S = await (await fetch('/api/summary')).json();
-  document.getElementById('sub').textContent =
-    `${S['事件'] || ''} ｜ config_hash ${S.config_hash} ｜ source_hash ${S.source_hash}`;
+  document.getElementById('sub').textContent = S['事件'] || '';
+  document.getElementById('n-peak').textContent = S['峰值水深_m'] ?? '–';
+  document.getElementById('n-rain').textContent = S['面雨量_mm'] ?? '–';
+  const c = S['卡片'] || {};
+  document.getElementById('n-cards').textContent = `${c['可发布'] ?? '–'}/${c['总数'] ?? '–'}`;
+  document.getElementById('concl').textContent = S['结论'] || '';
+  document.getElementById('chips').innerHTML = QUESTIONS
+    .map(q => `<span class="chip" onclick="doAsk('${esc(q)}')">${esc(q)}</span>`).join('');
   const g = S['门槛'];
   document.getElementById('badges').innerHTML =
-    `<span class="badge">门槛 <b>${g['指标总数']}</b></span>` +
-    `<span class="badge pass">PASS <b>${g.PASS}</b></span>` +
-    `<span class="badge fail">FAIL <b>${g.FAIL}</b></span>` +
-    `<span class="badge">BLOCKED <b>${g.BLOCKED}</b></span>`;
-  document.getElementById('concl').textContent = S['结论'] || '';
+    `<span class="badge">判据 <b>${g['指标总数']}</b></span>` +
+    `<span class="badge pass">通过 <b>${g.PASS}</b></span>` +
+    `<span class="badge fail">不达标 <b>${g.FAIL}</b></span>` +
+    `<span class="badge">缺数据 <b>${g.BLOCKED}</b></span>` +
+    `<span class="badge">config ${esc(S.config_hash)}</span>`;
   document.getElementById('tabs').innerHTML = Object.entries(S['产物'])
     .map(([k, v]) => `<span class="badge" style="cursor:pointer" onclick="load('${k}')">${esc(v[1])}</span>`).join('');
 }
@@ -164,24 +196,25 @@ async function load(k){
 }
 function render(o){
   if (o.refused) {
-    return `<div class="refused"><b>[${esc(o.rule)}] 拒答</b><div>${esc(o.reason)}</div>
-      <div style="margin-top:6px;color:#5b6b78">处理办法：${esc(o.remedy || '')}</div></div>`;
+    return `<div class="refused"><b>这个位置算不了：${esc(o.reason || '')}</b>
+      <div style="margin-top:6px">${esc(o.remedy || '')}</div>
+      <div style="margin-top:6px;color:#5b6b78;font-size:12px">规则 ${esc(o.rule || '')}（供复核）</div></div>`;
   }
   const body = o.payload || o;
-  return (o.tool ? `<div class="tool">调用了 ${esc(o.tool)}</div>` : '') +
+  return (o.tool ? `<div class="tool">数据来自 ${esc(o.tool)}</div>` : '') +
     `<pre>${esc(JSON.stringify(body, null, 1))}</pre>`;
 }
-async function ask(){
-  const q = document.getElementById('q').value;
+async function doAsk(q){
+  document.getElementById('q').value = q;
   document.getElementById('answer').innerHTML = '<div style="color:#5b6b78">查询中…</div>';
   const r = await fetch('/api/ask', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({q})});
   document.getElementById('answer').innerHTML = render(await r.json());
 }
+function ask(){ return doAsk(document.getElementById('q').value); }
 document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
 boot();
 </script></body></html>"""
-
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "TyphoeusWeb/1.0"
