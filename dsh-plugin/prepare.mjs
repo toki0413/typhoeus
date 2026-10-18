@@ -16,7 +16,7 @@ const r = spawnSync(cmd, ['--list-tools'], { encoding: 'utf8' })
 
 if (r.error || r.status !== 0) {
   console.warn('\n[typhoeus] 没有找到 `typhoeus-mcp`。先装内核：')
-  console.warn('  pipx install typhoeus        # 或 pip install typhoeus')
+  console.warn('  pip install "git+https://github.com/toki0413/typhoeus"')
   console.warn('  typhoeus-mcp --list-tools    # 应打印 9 个工具')
 } else {
   const line = (r.stdout || '').trim().split('\n').pop()

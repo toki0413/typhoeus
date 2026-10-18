@@ -3,7 +3,7 @@
 # 本包是配置型 bundle：不导出 apply(ctx)，只插入一行 @deepseek-ai/dsh-mcp-client，
 # 由它拉起 `typhoeus-mcp`（pip/pipx 安装的 Python 服务）。
 #
-# 前置：pipx install typhoeus  ·  TYPHOEUS_HOME 指向放 data/ 与 out/ 的目录
+# 前置：pip install "git+https://github.com/toki0413/typhoeus"  ·  TYPHOEUS_HOME 指向放 data/ 与 out/ 的目录
 - insert:
     - id: mcp-typhoeus
       name: '@deepseek-ai/dsh-mcp-client'

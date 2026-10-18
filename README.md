@@ -22,7 +22,7 @@ powershell -ExecutionPolicy Bypass -File .\start_web.ps1  # 值班台 http://127
 dsh plugin --profile web add github:toki0413/typhoeus
 ```
 
-前置：`pipx install typhoeus`（或 `pip install typhoeus`），并设置 `TYPHOEUS_HOME` 指向放 `data/` 与 `out/` 的目录；不设则回落 `~/.typhoeus`。装好后可用 9 个只读工具：预置方案、抢修排序、事件对账、韧性定价、体检指标、体检报告、多事件标定、涝点卡、坐标查询。
+前置：`pip install "git+https://github.com/toki0413/typhoeus"`，并设置 `TYPHOEUS_HOME` 指向放 `data/` 与 `out/` 的目录；不设则回落 `~/.typhoeus`。装好后可用 9 个只读工具：预置方案、抢修排序、事件对账、韧性定价、体检指标、体检报告、多事件标定、涝点卡、坐标查询。
 
 本地值班台：`typhoeus-web`，浏览器打开 `http://127.0.0.1:8765`。
 

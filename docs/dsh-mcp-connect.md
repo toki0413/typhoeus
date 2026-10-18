@@ -41,7 +41,7 @@
 中文读数会变成 mojibake。
 
 **patch 里不再出现任何绝对解释器/仓库路径**：换机器只要
-`pipx install typhoeus`，再把 `TYPHOEUS_HOME` 指向放数据与产物的目录。
+`pip install "git+https://github.com/toki0413/typhoeus"`，再把 `TYPHOEUS_HOME` 指向放数据与产物的目录。
 
 ## 三、装与验
 

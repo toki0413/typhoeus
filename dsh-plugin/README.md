@@ -11,7 +11,7 @@ dsh plugin --profile web add github:<owner>/typhoeus-mcp
 **前置**：内核是 Python 服务，先装它并准备数据目录。
 
 ```bash
-pipx install typhoeus          # 或 pip install typhoeus
+pipx install "git+https://github.com/toki0413/typhoeus"
 typhoeus-mcp --list-tools      # 应打印 9 个工具、描述 1230/2048 B
 ```
 
