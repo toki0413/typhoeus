@@ -106,13 +106,41 @@ def _run_map(target_mm: float, hours: float,
         i = int(np.abs(lat - fp.lat).argmin())
         j = int(np.abs(lon - fp.lon).argmin())
         m = float(peak[i, j])
-        rows.append({"id": fp.point_id, "name": fp.name,
+        rows.append({"id": fp.point_id, "name": fp.name, "st": fp.structure_type,
                      "obs": float(fp.depth_m), "raw": m,
                      "cor": round(m + C.BIAS_M, 3),
                      "band": C.BIAS_BAND_M})
     return {"rows": rows, "scale": k, "sec": float(res.mass_resid),
             "t_h": np.asarray(res.t_h), "curve": curve,
             "series": series}
+
+
+# 按结构类型的雨前准备动作。
+# 这些是通用工程动作，不依赖本地台账；**责任人与物资数量必须由本单位填写**。
+PREP_TASKS = {
+    "下穿立交": [
+        ("挡水板/沙袋到位", 4.0),
+        ("泵组试运行并接电", 3.0),
+        ("两端警示牌与绕行牌布设", 2.0),
+        ("值守人员到位，禁止涉水通行", 1.0),
+    ],
+    "桥洞": [
+        ("限高与积水标尺检查", 3.0),
+        ("排水口清掏", 4.0),
+        ("警戒线布设", 1.0),
+    ],
+    "低洼小区": [
+        ("地下车库入口挡水", 4.0),
+        ("沙袋与移动泵到位", 3.0),
+        ("独居老人与行动不便者名单核实", 6.0),
+        ("单元口提示张贴", 2.0),
+    ],
+    "低洼路段": [
+        ("雨水口清掏", 6.0),
+        ("路缘石排水通道检查", 4.0),
+        ("临时禁停与绕行提示", 2.0),
+    ],
+}
 
 
 def _load_series(spec: str | None, path: str | None) -> list[float] | None:
@@ -306,8 +334,47 @@ def main(argv: list[str] | None = None) -> int:
         print("  逐点校正的样本外误差：留一法 MAE 0.0909 m（基线 0.3593 m）。")
     print()
 
+    # ---------- 四之二：雨前准备清单 ----------
+    if a.map and series:
+        print(SUB)
+        print("五、雨前准备清单（按具名点位）")
+        print(SUB)
+        t_h = m["t_h"]
+        curve = m["curve"]
+        t_orange = _first_cross(t_h, curve, 0.20)
+        if t_orange is None:
+            print("  本次未达橙级，按常规巡查即可。")
+        else:
+            lead = a.remaining if a.remaining is not None else t_orange
+            print(f"  橙级预计第 {t_orange:.1f} 小时到达；"
+                  f"你手上的提前量 {lead:.1f} 小时。")
+            print("  下表按「必须在越阈前完成」倒排，来源是结构类型 + 越阈时刻。")
+            print()
+            rows = sorted(m["rows"], key=lambda x: -x["cor"])
+            shown = 0
+            for x in rows:
+                st = x.get("st") if x.get("st") in PREP_TASKS else None
+                if st is None:
+                    continue
+                tasks = PREP_TASKS[st]
+                if shown >= 4:
+                    break
+                shown += 1
+                print(f"  ▸ {x['id']} {x['name'][:20]}"
+                      f"（{st}）预计水深 {x['cor']:.2f} ± {x['band']:.2f} m")
+                for name, need in tasks:
+                    slack = lead - need
+                    ok = "✓" if slack >= 0 else "✗"
+                    print(f"      {ok} {name:<24} 需 {need:>4.1f} h　"
+                          f"{'余 ' + format(slack, '.1f') + ' h' if slack >= 0 else '缺 ' + format(-slack, '.1f') + ' h'}")
+                print(f"      责任人：＿＿＿　物资数量：＿＿＿（需本单位填写）")
+                print()
+            print("  ★ 动作是按结构类型的通用工程做法，不是本地台账；"
+                  "责任人一栏本产品不知道，故留空。")
+        print()
+
     print(SUB)
-    print("五、这条结论的边界")
+    print("六、这条结论的边界")
     print(SUB)
     def _bullets(v) -> str:
         items = v if isinstance(v, (list, tuple)) else [v]

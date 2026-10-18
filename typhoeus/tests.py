@@ -2367,3 +2367,24 @@ def test_non_72h_duration_refuses_to_grade():
     assert "不适用" in out, "非 72 h 历时未拒绝给档"
     assert "只对 72 h 历时标定过" in out
     assert "无法给出" in out
+
+def test_prep_checklist_is_per_point_with_time_slack():
+    """雨前准备清单必须落到具名点位、具体动作、时间余量，且不编责任人。
+
+    这一段是对手（浙里雨安、风险翻译官）的强项：把预警落成社区里具体的事。
+    我们的约束是：动作可以按结构类型给（通用工程做法），
+    责任人必须留空——产品不知道，编了就是假。
+    """
+    vals = ",".join(
+        "%.2f" % (34.0 * (2.718281828 ** (-0.5 * ((h - 34) / 3.0) ** 2)))
+        for h in range(72))
+    out = _demo_series(vals, "--remaining", "6")
+    assert "雨前准备清单" in out
+    # 必须落到具名点位
+    assert "FP" in out and "下穿立交" in out
+    # 必须给时间余量或缺口
+    assert ("余 " in out) or ("缺 " in out)
+    # 责任人不能编：必须留空占位
+    assert "需本单位填写" in out
+    # 必须声明动作来源不是本地台账
+    assert "不是本地台账" in out
