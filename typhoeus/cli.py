@@ -112,8 +112,16 @@ def _with_sinks(kp, grid, bbox):
             break
         acc = nxt
     acc = np.clip(acc.reshape(ny, nx), 1.0, 20.0)
+    # 管网分流：上游雨量只有一部分以地表汇流进入坑，其余进管道。
+    import os as _os
+    try:
+        cap = float(_os.environ.get("TYPHOEUS_SINK_CAPTURE", "0.35"))
+    except ValueError:
+        cap = 1.0
+    cap = max(0.0, min(1.0, cap))
+    acc = 1.0 + (acc - 1.0) * cap
     kp.sink_rain_mult = np.where(mask, acc, 1.0)
-    kp.sink_profile = f"underpass_v3:{len(pts)}pts"
+    kp.sink_profile = f"underpass_v5:c{cap:g}:{len(pts)}pts"
     return kp
 
 
