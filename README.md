@@ -306,3 +306,15 @@ python -m typhoeus.cli run
 | `docs/analysis/DOC_GAP_ANALYSIS.md` | 文档缺口分析 |
 | `docs/analysis/UPGRADE_v3.1.md` | v3.1 升级记录 |
 | `version.py` | **版本与全部口径修正的权威记录**，改动前先读它 |
+
+---
+
+## 实验层：下穿凹陷与泵（`--sinks`）
+
+默认链路不做下穿凹陷，17 个域内涝点中 12 个模型水深 <0.05 m（命中率 0.0%）。实验层保留洼地、按结构类型下挖并给泵、按 DEM 汇流累积补汇水面积，命中率提升到 **47.1%**（MAE 0.28 m），仍低于门槛 14 的 50%。
+
+```bash
+python -m typhoeus.cli run --outdir out_sinks --sinks
+```
+
+细节与逐版本对比见 `docs/analysis/SINK_LAYER.md`。该层默认关闭，开启后进入产物指纹（`|sink:underpass_v3:17pts`）。
