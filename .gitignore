@@ -47,3 +47,8 @@ bundle-typhoeus-mcp/
 
 # æ‰“åŒ…äº§ç‰©ï¼ˆå¯é‡å»ºï¼štools/pack_acceptance.ps1ï¼‰
 dist/
+
+# ±¾µØ¹¹½¨²úÎï£¨pip install . Éú³É£©
+build/
+*.egg-info/
+

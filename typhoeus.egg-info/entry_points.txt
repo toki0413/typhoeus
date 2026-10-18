@@ -1,4 +1,0 @@
-[console_scripts]
-typhoeus = typhoeus.cli:main
-typhoeus-mcp = typhoeus.mcp_server:main
-typhoeus-web = typhoeus.webapp:main
