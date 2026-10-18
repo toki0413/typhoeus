@@ -159,7 +159,8 @@ def run_chain(cfg: CFG.Config | None = None, verbose: bool = True,
         rain, rain_rep = RS.get_rainfall(
             inputs.grid, stations=rain_st,
             use_cache=cfg.l2.rain_use_cache,
-            calibrate=cfg.l2.rain_calibrate, verbose=verbose)
+            calibrate=cfg.l2.rain_calibrate, verbose=verbose,
+            dt_s=cfg.l4.dt_s)
         log(f"     降雨源 {rain_rep['driver']}  面雨量 "
             f"{rain_rep['grid_accum_mm']:.1f} mm")
         cal = rain_rep.get("calibration") or {}
@@ -631,6 +632,8 @@ def main(argv=None) -> int:
     p_run.add_argument("--config", default=None)
     p_run.add_argument("--sinks", action="store_true",
                        help="启用下穿凹陷与泵（实验层，默认关）")
+    p_run.add_argument("--dt-seconds", type=float, default=None,
+                       help="内核时间步长（秒），默认取配置的 600")
 
     sub.add_parser("check", help="只跑门槛")
     sub.add_parser("report", help="打印体检摘要")
@@ -677,6 +680,9 @@ def main(argv=None) -> int:
     cmd = args.cmd or "run"
 
     cfg = CFG.Config.load(args.config) if getattr(args, "config", None) else CFG.Config()
+    if getattr(args, "dt_seconds", None):
+        # 只改步长，不改其它口径；默认 600 s 时产物与既有指纹一致。
+        cfg.l4.dt_s = float(args.dt_seconds)
 
     # 多事件批量与主链共用同一套内核参数、投影参数与 Q 分解函数，
     # 因此它的口径与主链逐位可比。单独一条命令，不并进 run：

@@ -161,7 +161,8 @@ def _bilinear_to_grid(node_lats: np.ndarray, node_lons: np.ndarray,
 
 def fetch_era5(grid: Grid, start: str = EVENT_START, end: str = EVENT_END,
                margin_deg: float = 0.15,
-               nx: int = 6, ny: int = 4) -> ReanalysisField:
+               nx: int = 6, ny: int = 4,
+               dt_s: float = 600.0) -> ReanalysisField:
     """拉取 ERA5 再分析降水，双线性插值到计算域。
 
     参数 `nx`/`ny` 是请求的节点数（外扩后均匀布点）。实测 24 点可用，
@@ -197,8 +198,9 @@ def fetch_era5(grid: Grid, start: str = EVENT_START, end: str = EVENT_END,
     t_first = dt.datetime.fromisoformat(times[0])
     # 找 anchor 落在哪个小时区间
     hour_idx = int((anchor - t_first).total_seconds() // 3600)
-    step_per_hour = int(round(3600.0 / 600.0))   # dt_s=600 → 6 步/小时
-    nt = int(72 * 3600 / 600.0) + 1
+    # 步长由内核参数决定，不再写死 600（10 分钟）。
+    step_per_hour = max(1, int(round(3600.0 / float(dt_s))))
+    nt = int(72 * 3600 / float(dt_s)) + 1
 
     out = np.zeros((nt, grid.shape[0], grid.shape[1]), dtype=np.float32)
     n_extrap = 0
@@ -210,7 +212,7 @@ def fetch_era5(grid: Grid, start: str = EVENT_START, end: str = EVENT_END,
         n_extrap = max(n_extrap, ne)
         out[k:k + step_per_hour] = plane[None, :, :]
 
-    dt_h = 600.0 / 3600.0
+    dt_h = float(dt_s) / 3600.0
     grid_accum = float(out.mean(axis=(1, 2)).sum() * dt_h)
     node_accum = precip.sum(axis=1).tolist()
 
@@ -274,8 +276,9 @@ def calibrate_against_stations(rain: np.ndarray, stations: list[dict],
     if not inside:
         return rain, {"applied": False, "reason": "计算域内无实测站，未订正"}
 
-    step_per_hour = 6
-    dt_h = 600.0 / 3600.0
+    # 步长从场长度反推（长度 = 72h/dt + 1），不再假设 600 s。
+    step_per_hour = max(1, int(round((rain.shape[0] - 1) / 72.0)))
+    dt_h = 72.0 / max(rain.shape[0] - 1, 1)
 
     # 逐时（在 ERA5 节点上）取样，构造站点观测的时序分布
     n_steps = rain.shape[0]
@@ -386,7 +389,8 @@ def load_cache(name: str = "era5") -> ReanalysisField | None:
 
 def get_rainfall(grid: Grid, stations: list[dict] | None = None,
                  use_cache: bool = True, calibrate: bool = True,
-                 verbose: bool = True) -> tuple[np.ndarray, dict]:
+                 verbose: bool = True,
+                 dt_s: float = 600.0) -> tuple[np.ndarray, dict]:
     """取降雨驱动场。优先缓存，其次 ERA5 实时拉取，都失败则降级参数化场。
 
     返回 `(rain_mm_h, 来源报告)`。报告里的 `driver` 字段标明实际用了
@@ -404,6 +408,9 @@ def get_rainfall(grid: Grid, stations: list[dict] | None = None,
     except Exception:                                    # noqa: BLE001
         _ny, _nx = (0, 0)
     _cache_name = f"era5_{_ny}x{_nx}" if _ny and _nx else "era5"
+    if abs(float(dt_s) - 600.0) > 1e-9:
+        # 缓存按步长分名，避免 10 分钟的场被当成 15 分钟用
+        _cache_name += f"_dt{int(round(dt_s))}"
 
     if use_cache:
         cached = load_cache(_cache_name)
@@ -413,7 +420,7 @@ def get_rainfall(grid: Grid, stations: list[dict] | None = None,
 
     try:
         log("[L0] 拉取 ERA5 再分析降水（免 key） ...")
-        fld = fetch_era5(grid)
+        fld = fetch_era5(grid, dt_s=dt_s)
         log(f"     {fld.n_timesteps} 步  {len(fld.node_lats)} 节点  "
             f"插值后面雨量 {fld.grid_accum_mm:.1f} mm")
         save_cache(fld, _cache_name)
