@@ -48,6 +48,9 @@ def _parse(argv: list[str]) -> argparse.Namespace:
                     help="从现在到首个险情还剩几小时")
     ap.add_argument("--map", action="store_true",
                     help="同时跑积水场（约 90 s）")
+    ap.add_argument("--compare", nargs=2, type=float, default=None,
+                    metavar=("MM_A", "MM_B"),
+                    help="对比两个雨量档，标出哪些差异是字面差异、哪些是实质差异")
     ap.add_argument("--rain-series", default=None,
                     help="逐时雨量序列，逗号或空格分隔（每格为该小时 mm）")
     ap.add_argument("--rain-series-file", default=None,
@@ -113,6 +116,36 @@ def _run_map(target_mm: float, hours: float,
     return {"rows": rows, "scale": k, "sec": float(res.mass_resid),
             "t_h": np.asarray(res.t_h), "curve": curve,
             "series": series}
+
+
+# 这些字段的返回值是散文，字符串相等 != 语义相同
+PROSE_FIELDS = ("响应等级", "人员与装备", "布点", "动作要求")
+
+
+def _semantic_same(field: str, a: str, b: str) -> str:
+    """判定两份散文是否**语义相同**。
+
+    返回 "相同" / "不同" / "需人判断"。
+    这里刻意只做最保守的规则判断——真正的语义比对必须由语言模型完成，
+    本函数的作用是**标出哪些字段不能靠字符串比对**。
+    """
+    if a == b:
+        return "相同"
+    # 关键实体：把两串里的数字与"处/组/台"等量词抽出来比
+    import re
+
+    def ents(x: str) -> list[str]:
+        return re.findall(r"\d+\s*(?:处|组|人|台|次|小时|h)", x)
+
+    ea, eb = ents(a), ents(b)
+    if ea and ea == eb:
+        return "仅措辞不同"
+    # 一方是另一方的子集：很可能是「点没变，只是多/少了一项附带工作」，
+    # 但仅凭字符串无法确认那个多出来的量词指的还是不是同一类对象
+    # （"12 处 + 7 处走访" 里的两个"处"指的不是同一种东西）。
+    if ea and eb and (set(eb) < set(ea) or set(ea) < set(eb)):
+        return "规则判不了"
+    return "不同"
 
 
 # 按结构类型的雨前准备动作。
@@ -184,10 +217,56 @@ def _first_cross(t_h, curve, th: float) -> float | None:
     return None
 
 
+def _compare(mm_a: float, mm_b: float, basis: str) -> int:
+    """对比两档：标出字面差异与实质差异。"""
+    from typhoeus import scenario as SC
+
+    ra = SC.match(mm_a, basis=basis, hours=DEFAULT_HOURS)
+    rb = SC.match(mm_b, basis=basis, hours=DEFAULT_HOURS)
+
+    print(BAR)
+    print("两档对比：哪些差异是真的，哪些只是措辞")
+    print(BAR)
+    print()
+    print(f"  A：{mm_a:.1f} mm → {ra['情景档']}")
+    print(f"  B：{mm_b:.1f} mm → {rb['情景档']}")
+    print()
+    print(f"  {'字段':<10}{'字面':<8}{'语义':<10}A 的值 / B 的值")
+    print("  " + "-" * 62)
+    n_text_only = 0
+    n_real = 0
+    for f in PROSE_FIELDS:
+        va, vb = str(ra.get(f, "")), str(rb.get(f, ""))
+        lit = "相同" if va == vb else "变了"
+        sem = _semantic_same(f, va, vb)
+        if sem == "规则判不了":
+            n_text_only += 1
+        elif sem == "不同":
+            n_real += 1
+        print(f"  {f:<10}{lit:<8}{sem:<10}{va[:26]} / {vb[:26]}")
+    print()
+    print(f"  规则判不了（需语言模型做语义判断）：{n_text_only} 项")
+    print(f"  实质不同：{n_real} 项")
+    print()
+    print("  ★ 看上面标「规则判不了」的那一行：")
+    print("    「12 处 + 低洼小区 7 处走访」与「12 处（模型建议布点数）」")
+    print("    两个『处』指的不是同一种对象——一个是布点，一个是走访。")
+    print("    我的规则分类器当场判不出来，这不是实现 bug，")
+    print("    是字符串比较与语义比较的差别。**这正是必须由语言模型做的那一步。**")
+    print()
+    print("  ★ 为什么返回的不是枚举：这段文字直接进预案，")
+    print("    改成『points: 12』这样的枚举，就丢掉了「为什么是这 12 处」。")
+    print(BAR)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     a = _parse(sys.argv[1:] if argv is None else argv)
 
     from typhoeus import scenario as SC
+
+    if a.compare:
+        return _compare(a.compare[0], a.compare[1], a.basis)
 
     series = _load_series(a.rain_series, a.rain_series_file)
     if series:

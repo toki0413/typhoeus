@@ -2388,3 +2388,24 @@ def test_prep_checklist_is_per_point_with_time_slack():
     assert "需本单位填写" in out
     # 必须声明动作来源不是本地台账
     assert "不是本地台账" in out
+
+def test_compare_proves_semantic_comparison_needs_a_language_model():
+    """--compare 必须证明"语义比对"不是字符串比对能做的工作。
+
+    具体地：358/338 两档里，布点字段的**字面**变了，
+    但规则分类器必须承认**判不了**——因为两个"处"指的不是同一类对象。
+    若某天分类器假装判得出，这个测试会失败，说明我们在吹牛。
+    """
+    import subprocess
+    import sys
+
+    r = subprocess.run([sys.executable, "-m", "typhoeus.demo",
+                        "--compare", "354.1", "338.8"],
+                       capture_output=True, timeout=600)
+    assert r.returncode == 0, r.stderr.decode("utf-8", "replace")[-600:]
+    out = r.stdout.decode("utf-8", "replace")
+    assert "规则判不了" in out, "分类器未如实承认判不了"
+    assert "需语言模型" in out
+    assert "两个『处』指的不是同一种对象" in out
+    # 必须给出"为什么不用枚举"的理由，否则读者会以为我们只是懒得改
+    assert "直接进预案" in out

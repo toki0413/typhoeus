@@ -122,7 +122,11 @@ python -m typhoeus.cli demo --rain 320 --remaining 8 --map   # 再跑积水场�
 
 # 给它气象台的逐时预报曲线 —— 这样它才能回答「什么时候」
 python -m typhoeus.cli demo --rain-series-file storm.csv --remaining 6
-python -m typhoeus.cli demo --rain-series "0.5,0.8,2.1,3.4" 
+python -m typhoeus.cli demo --rain-series "0.5,0.8,2.1,3.4"
+
+# 看 AI 到底承担什么：这个命令会显示规则程序判不出来的那一格
+python -m typhoeus.demo --compare 354.1 338.8
+
 
 python -m typhoeus.cli run          # 跑全链并导出全部输出物（约 90 s）
 python -m typhoeus.cli check        # 只跑门槛
