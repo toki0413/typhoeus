@@ -2542,3 +2542,13 @@ def test_webapp_routes_questions_and_refuses_out_of_domain():
     assert r2["refused"] is True and r2["rule"] == "R1"
     assert r2["remedy"], "壳里的拒答也要带处理办法"
     assert W.ask("")["refused"] is True, "空问题应被拒"
+
+
+def test_sink_layer_is_off_by_default():
+    """下穿凹陷实验层默认关闭，默认指纹里不出现 sink 标记。"""
+    from typhoeus import kernel as K
+    kp = K.KernelParams()
+    assert kp.sink_mask is None and kp.sink_carve_m is None
+    assert kp.sink_rain_mult is None
+    assert kp.sink_profile == "none"
+    assert "sink" not in K.drainage_fingerprint(kp)

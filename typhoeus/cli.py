@@ -95,7 +95,25 @@ def _with_sinks(kp, grid, bbox):
     kp.sink_mask = mask
     kp.sink_carve_m = carve
     kp.sink_pump_mult = pump
-    kp.sink_profile = f"underpass_v2:{len(pts)}pts"
+    # 汇水面积：DEM 汇流累积（每格贡献 1），得到「该点上游有多少格」。
+    # 这是物理量，不是拟合参数；上限 20 防止出域边界累积异常。
+    from . import kernel as _K
+    z = _K._fill_depressions(np.asarray(grid.elev, dtype=np.float64))
+    rows, cols = _K.d8_downstream(z)
+    flat = np.arange(ny * nx).reshape(ny, nx)
+    valid = rows >= 0
+    src = flat[valid]
+    dst = rows[valid] * nx + cols[valid]
+    acc = np.ones(ny * nx)
+    for _ in range(400):
+        nxt = acc.copy()
+        np.add.at(nxt, dst, acc[src])
+        if np.allclose(nxt, acc):
+            break
+        acc = nxt
+    acc = np.clip(acc.reshape(ny, nx), 1.0, 20.0)
+    kp.sink_rain_mult = np.where(mask, acc, 1.0)
+    kp.sink_profile = f"underpass_v3:{len(pts)}pts"
     return kp
 
 

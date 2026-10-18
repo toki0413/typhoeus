@@ -70,6 +70,7 @@ class KernelParams:
     sink_mask: object = None
     sink_carve_m: object = None
     sink_pump_mult: float = 0.2
+    sink_rain_mult: object = None     # 汇水面积 / 像元面积（逐格），来自 DEM 汇流累积
     sink_profile: str = "none"
     # ---- 汇流集中（D8 路由）----
     # 每步把一部分地表水沿**最陡下降方向**移到下游格。0 = 关闭，逐位不变。
@@ -465,6 +466,12 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
     z = _fill_depressions(elev_eff)
     if _sink is not None:
         z = np.where(np.asarray(_sink), elev_eff, z)
+        _rmult = getattr(cfg, "sink_rain_mult", None)
+        if _rmult is not None:
+            # 汇水面积 / 像元面积：把上游来水折算到该格，来自 DEM 汇流累积
+            rain_mm_h = (np.asarray(rain_mm_h, dtype=np.float64)
+                         * np.where(np.asarray(_sink),
+                                    np.asarray(_rmult, dtype=float), 1.0))
     # 汇流集中的 D8 下游索引：与时间无关，整场只算一次。
     # 默认 concentration_rate=0 时不使用，故不影响既有结果。
     if getattr(cfg, 'concentration_rate', 0.0) > 0.0:
@@ -477,7 +484,6 @@ def run(grid, rain_mm_h: np.ndarray, cfg: KernelParams = KernelParams()) -> RunR
 
     h = np.zeros((ny, nx), dtype=np.float64)
     depth = np.zeros((nt, ny, nx), dtype=np.float32)
-
     # 根区土壤水：逐格状态，初值占**有效**饱和容量的 soil_theta0。
     # 用「占饱和容量的比例」初始化而不是绝对 mm，这样改 capacity
     # 不会静默改掉初始湿润程度。
