@@ -16,6 +16,8 @@ if (Test-Path ".\wheels") {
     & $vpy -m pip install -r requirements.txt
 }
 
+& $vpy -m pip install -e . --no-deps --quiet
+
 Write-Host "== 3/4 准备数据 ==" -ForegroundColor Cyan
 & $vpy .\tools\fetch_data.py
 if ($LASTEXITCODE -ne 0) {
