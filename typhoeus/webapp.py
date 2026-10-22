@@ -271,6 +271,9 @@ class Handler(BaseHTTPRequestHandler):
             elif u.path == "/api/artifact":
                 name = (parse_qs(u.query).get("name") or [""])[0]
                 self._json(artifact(name))
+            elif u.path in ("/dashboard", "/citizen"):
+                fn = "dashboard.html" if u.path == "/dashboard" else "citizen.html"
+                self._send(200, (OUT / fn).read_bytes(), "text/html; charset=utf-8")
             else:
                 self._json({"error": "not found"}, 404)
         except RefusalError as e:
