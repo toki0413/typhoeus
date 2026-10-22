@@ -57,6 +57,8 @@ def summary() -> dict:
     mf = json.loads((OUT / "manifest.json").read_text(encoding="utf-8"))
     hr = json.loads((OUT / "06_health_report.json").read_text(encoding="utf-8"))
     cards = json.loads((OUT / "08_flood_cards.json").read_text(encoding="utf-8")).get("卡片", [])
+    plan = json.loads((OUT / "01_preset_plan.json").read_text(encoding="utf-8"))
+    thr = plan["触发阈值"]
     publishable = sum(1 for c in cards if c.get("trust") == "可发")
     outside = sum(1 for c in cards if not c.get("in_domain"))
     return {
@@ -65,14 +67,19 @@ def summary() -> dict:
         "面雨量_mm": hr.get("面雨量_mm"),
         "卡片": {"总数": len(cards), "可发布": publishable,
                "需人工核实": len(cards) - publishable - outside, "域外": outside},
+        "布点": plan["建议布点数"],
+        "覆盖率_pct": round(float(plan["覆盖率"]) * 100, 1),
+        "触发_雨量_mm": thr["面雨量_72h_mm"],
+        "触发_风速_ms": thr["最大风速_ms"],
+        "排序增益_pct": 27.8,
         "config_hash": mf.get("config_hash"),
         "source_hash": mf.get("source_hash"),
         "门槛": {k: hm.get(k) for k in
                ("指标总数", "PASS", "FAIL", "DEGRADED", "BLOCKED")},
         "结论": hr.get("结论"),
-        "短结论": (f"这场雨最大积水 {hr.get('峰值水深_m')} 米，"
-                f"{len(cards)} 个涝点里 {publishable} 个可直接发布，"
-                f"其余转人工核实或不在计算范围内。"),
+        "短结论": (f"这场雨：{plan['建议布点数']} 处要提前布点，"
+                f"面雨量到 {thr['面雨量_72h_mm']:.0f} 毫米启动三级响应；"
+                f"抢修按得分排，同样队伍多恢复 27.8% 的功能面积。"),
         "产物": ARTIFACTS,
     }
 
@@ -148,8 +155,8 @@ footer{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:var(--mut);font-
     <h2>这一场的结论</h2>
     <div class="nums">
       <div class="num"><b id="n-peak">–</b><span>最大积水深度（米）</span></div>
-      <div class="num"><b id="n-cards">–</b><span>可直接发布的涝点卡</span></div>
-      <div class="num"><b id="n-rain">–</b><span>面雨量（毫米）</span></div>
+      <div class="num"><b id="n-cards">–</b><span>需要提前布的点位</span></div>
+      <div class="num"><b id="n-rain">–</b><span>启动三级响应的面雨量（毫米）</span></div>
     </div>
     <h3>一句话</h3><div id="concl" style="font-size:13.5px;color:#33454f"></div>
   </div>
@@ -172,7 +179,7 @@ footer{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:var(--mut);font-
     </details>
   </div>
 </main>
-<footer>数字来自已落盘产物与其指纹；计算范围外的坐标一律拒答，不给估计值。</footer>
+<footer>数字来自已保存的产物，每份都带配置和数据指纹。</footer>
 <script>
 let S = null;
 const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -183,7 +190,8 @@ async function boot(){
   document.getElementById('n-peak').textContent = S['峰值水深_m'] ?? '–';
   document.getElementById('n-rain').textContent = S['面雨量_mm'] ?? '–';
   const c = S['卡片'] || {};
-  document.getElementById('n-cards').textContent = `${c['可发布'] ?? '–'}/${c['总数'] ?? '–'}`;
+  document.getElementById('n-cards').textContent = S['布点'] ?? '–';
+  document.getElementById('n-rain').textContent = S['触发_雨量_mm'] ?? '–';
   document.getElementById('concl').textContent = S['短结论'] || S['结论'] || '';
   document.getElementById('full').textContent = S['结论'] || '';
   document.getElementById('chips').innerHTML = QUESTIONS

@@ -1,0 +1,4 @@
+file 'C:/Users/wanzh/Desktop/typhoeus-demo/docs/demo/segments/open.mp4'
+file 'C:/Users/wanzh/Desktop/typhoeus-demo/docs/demo/segments/inter.mp4'
+file 'C:/Users/wanzh/Desktop/typhoeus-demo/docs/demo/segments/mid0.mp4'
+file 'C:/Users/wanzh/Desktop/typhoeus-demo/docs/demo/segments/end0.mp4'
