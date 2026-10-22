@@ -70,6 +70,9 @@ def summary() -> dict:
         "门槛": {k: hm.get(k) for k in
                ("指标总数", "PASS", "FAIL", "DEGRADED", "BLOCKED")},
         "结论": hr.get("结论"),
+        "短结论": (f"这场雨最大积水 {hr.get('峰值水深_m')} 米，"
+                f"{len(cards)} 个涝点里 {publishable} 个可直接发布，"
+                f"其余转人工核实或不在计算范围内。"),
         "产物": ARTIFACTS,
     }
 
@@ -161,6 +164,7 @@ footer{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:var(--mut);font-
   <div class="card">
     <details><summary>审计信息（指纹与 27 条判据）</summary>
       <div class="badges" id="badges" style="margin-top:10px"></div>
+      <div id="full" style="font-size:12.5px;color:#5b6b78;margin-top:10px;line-height:1.7"></div>
     </details>
   </div>
 </main>
@@ -176,7 +180,8 @@ async function boot(){
   document.getElementById('n-rain').textContent = S['面雨量_mm'] ?? '–';
   const c = S['卡片'] || {};
   document.getElementById('n-cards').textContent = `${c['可发布'] ?? '–'}/${c['总数'] ?? '–'}`;
-  document.getElementById('concl').textContent = S['结论'] || '';
+  document.getElementById('concl').textContent = S['短结论'] || S['结论'] || '';
+  document.getElementById('full').textContent = S['结论'] || '';
   document.getElementById('chips').innerHTML = QUESTIONS
     .map(q => `<span class="chip" onclick="doAsk('${esc(q)}')">${esc(q)}</span>`).join('');
   const g = S['门槛'];
