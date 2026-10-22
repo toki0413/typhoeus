@@ -135,6 +135,10 @@ pre{background:#0f1c24;color:#d6e6ee;padding:14px;border-radius:6px;overflow:aut
 font:12.5px/1.55 ui-monospace,Consolas,monospace}
 .tool{font:12px/1 ui-monospace,monospace;color:var(--mut);margin-bottom:8px}
 .refused{border-left:4px solid var(--bad);background:#fdf0ef;padding:12px 14px;border-radius:4px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left}
+.tbl th{color:var(--mut);font-weight:600;font-size:12px}
+.hint{color:var(--mut);font-size:12px;margin-top:8px}
 details{margin-top:6px}summary{cursor:pointer;color:var(--mut);font-size:13px}
 footer{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:var(--mut);font-size:12px}
 </style></head><body>
@@ -206,6 +210,22 @@ function render(o){
       <div style="margin-top:6px;color:#5b6b78;font-size:12px">规则 ${esc(o.rule || '')}（供复核）</div></div>`;
   }
   const body = o.payload || o;
+  const d = body['数据'] || body;
+  if (Array.isArray(d['卡片'])) {
+    const rows = d['卡片'].slice(0, 8).map(c =>
+      `<tr><td>${esc(c.point_id)}</td><td>${esc(c.name)}</td><td>${esc(c.structure_type || '')}</td>` +
+      `<td>${c.obs_depth_m ?? '—'}</td><td>${c.model_depth_m ?? '—'}</td><td>${esc(c.trust || '')}</td></tr>`).join('');
+    return (o.tool ? `<div class="tool">数据来自 ${esc(o.tool)}</div>` : '') +
+      `<table class="tbl"><tr><th>编号</th><th>点位</th><th>类型</th><th>实测 m</th><th>推演 m</th><th>采信</th></tr>${rows}</table>` +
+      `<div class="hint">共 ${d['卡片'].length} 张卡，此处列前 8 张；完整内容见「八份产物」。</div>`;
+  }
+  if (Array.isArray(d['档位'])) {
+    const rows = d['档位'].map(x =>
+      `<tr><td>${esc(x['档'])}</td><td>${(x['区间'] || []).join(' – ')} ${esc(x['单位'] || '')}</td>` +
+      `<td>${x['对应减少功能损失_pct'] ?? ''}%</td></tr>`).join('');
+    return (o.tool ? `<div class="tool">数据来自 ${esc(o.tool)}</div>` : '') +
+      `<table class="tbl"><tr><th>档位</th><th>投入区间</th><th>对应减少损失</th></tr>${rows}</table>`;
+  }
   return (o.tool ? `<div class="tool">数据来自 ${esc(o.tool)}</div>` : '') +
     `<pre>${esc(JSON.stringify(body, null, 1))}</pre>`;
 }

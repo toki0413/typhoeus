@@ -336,7 +336,7 @@ python -m typhoeus.cli run --outdir out_sinks --sinks
 
 ## 验收入口
 
-| 演示材料 | `docs/demo/typhoeus-demo.pptx` · `docs/demo/typhoeus-demo.mp4` |
+| 演示材料 | `docs/demo/typhoeus-demo.pptx`（14 页）· `typhoeus-demo.mp4`（2:55 讲解片）· `typhoeus-interaction.mp4`（0:47 真实交互录屏） |
 
 | 事项 | 位置 |
 |---|---|

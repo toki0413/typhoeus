@@ -49,3 +49,7 @@ tmp/
 # 演示材料的中间帧（PPTX 与 MP4 已入库）
 docs/demo/render*/
 docs/demo/frames/
+
+# 录屏中间帧
+docs/demo/capture/
+docs/demo/capture_burned/
