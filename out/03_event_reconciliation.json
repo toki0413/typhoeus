@@ -2,86 +2,109 @@
   "名称": "事件对账单",
   "事件": "2021 年第6 号台风「烟花」（In-Fa）· 宁波鄞东南片区",
   "Q分解": {
-    "Q_total": 0.7248,
-    "Q_climate": 0.6786,
-    "Q_excess": 0.0814,
-    "Q_engineering": 0.011,
-    "Q_residual": -0.0462,
+    "Q_total": 0.6976,
+    "Q_climate": 0.6532,
+    "Q_excess": 0.0784,
+    "Q_engineering": 0.0105,
+    "Q_residual": -0.0445,
     "closed": true,
     "resid_share_pct": 6.4,
     "note": "",
     "cc_mid_pct_per_K": 7.0,
     "climate_ratio": 0.9597,
     "exceed_frac_p90_over_p50": 0.1798,
-    "Q可干预": 0.0924
+    "Q可干预": 0.0889
   },
   "闭合性": "四项相加等于事件总量",
   "实测校验": {
-    "涝点总数": 17,
-    "命中数": 5,
-    "覆盖率": 0.2941,
+    "涝点总数": 26,
+    "命中数": 18,
+    "覆盖率": 0.6923,
     "域外排除点": [
-      "FP001",
-      "FP007",
-      "FP009",
-      "FP010",
-      "FP012",
-      "FP013",
-      "FP019",
-      "FP023",
-      "FP026",
       "FP027",
       "FP028"
     ],
-    "水位MAE_m": 0.359,
-    "水位最大偏差_m": 0.5,
+    "水位MAE_m": 0.257,
+    "水位最大偏差_m": 0.563,
     "逐点对照": [
+      {
+        "point_id": "FP001",
+        "name": "鄞州大道(雅源南路)",
+        "obs_depth_m": 0.68,
+        "model_depth_m": 0.344,
+        "abs_diff_m": 0.336,
+        "structure_type": "下穿立交"
+      },
       {
         "point_id": "FP002",
         "name": "海曙新芝路",
         "obs_depth_m": 0.64,
-        "model_depth_m": 0.172,
-        "abs_diff_m": 0.468,
+        "model_depth_m": 0.599,
+        "abs_diff_m": 0.041,
         "structure_type": "低洼路段"
       },
       {
         "point_id": "FP003",
         "name": "甬江大桥东江东北路下立交",
         "obs_depth_m": 0.5,
-        "model_depth_m": 0.0,
-        "abs_diff_m": 0.5,
+        "model_depth_m": 0.656,
+        "abs_diff_m": 0.156,
         "structure_type": "下穿立交"
       },
       {
         "point_id": "FP004",
         "name": "盛莫路1278弄立交",
         "obs_depth_m": 0.5,
-        "model_depth_m": 0.0,
-        "abs_diff_m": 0.5,
+        "model_depth_m": 0.304,
+        "abs_diff_m": 0.196,
         "structure_type": "下穿立交"
       },
       {
         "point_id": "FP005",
         "name": "人民南路立交",
         "obs_depth_m": 0.5,
-        "model_depth_m": 0.094,
-        "abs_diff_m": 0.406,
+        "model_depth_m": 0.681,
+        "abs_diff_m": 0.181,
         "structure_type": "下穿立交"
       },
       {
         "point_id": "FP006",
         "name": "建兴路下立交",
         "obs_depth_m": 0.5,
-        "model_depth_m": 0.001,
-        "abs_diff_m": 0.499,
+        "model_depth_m": 0.908,
+        "abs_diff_m": 0.408,
+        "structure_type": "下穿立交"
+      },
+      {
+        "point_id": "FP007",
+        "name": "段三线绕城高速立交",
+        "obs_depth_m": 0.5,
+        "model_depth_m": 0.0,
+        "abs_diff_m": 0.5,
         "structure_type": "下穿立交"
       },
       {
         "point_id": "FP008",
         "name": "百宁街下立交",
         "obs_depth_m": 0.5,
-        "model_depth_m": 0.149,
-        "abs_diff_m": 0.351,
+        "model_depth_m": 0.697,
+        "abs_diff_m": 0.197,
+        "structure_type": "下穿立交"
+      },
+      {
+        "point_id": "FP009",
+        "name": "紫城路西侧桥洞",
+        "obs_depth_m": 0.5,
+        "model_depth_m": 0.001,
+        "abs_diff_m": 0.499,
+        "structure_type": "桥洞"
+      },
+      {
+        "point_id": "FP010",
+        "name": "鄞县大道立交",
+        "obs_depth_m": 0.2,
+        "model_depth_m": 0.588,
+        "abs_diff_m": 0.388,
         "structure_type": "下穿立交"
       },
       {
@@ -93,27 +116,43 @@
         "structure_type": "下穿立交"
       },
       {
+        "point_id": "FP012",
+        "name": "洞桥明苑南门",
+        "obs_depth_m": 0.8,
+        "model_depth_m": 0.237,
+        "abs_diff_m": 0.563,
+        "structure_type": "低洼路段"
+      },
+      {
+        "point_id": "FP013",
+        "name": "西湾路",
+        "obs_depth_m": 0.48,
+        "model_depth_m": 0.0,
+        "abs_diff_m": 0.48,
+        "structure_type": "低洼路段"
+      },
+      {
         "point_id": "FP014",
         "name": "东柳社区793弄17号",
         "obs_depth_m": 0.44,
-        "model_depth_m": 0.0,
-        "abs_diff_m": 0.44,
+        "model_depth_m": 0.147,
+        "abs_diff_m": 0.293,
         "structure_type": "低洼小区"
       },
       {
         "point_id": "FP015",
         "name": "中塘路87弄",
         "obs_depth_m": 0.41,
-        "model_depth_m": 0.0,
-        "abs_diff_m": 0.41,
+        "model_depth_m": 0.251,
+        "abs_diff_m": 0.159,
         "structure_type": "低洼小区"
       },
       {
         "point_id": "FP016",
         "name": "中华路",
         "obs_depth_m": 0.37,
-        "model_depth_m": 0.001,
-        "abs_diff_m": 0.369,
+        "model_depth_m": 0.249,
+        "abs_diff_m": 0.121,
         "structure_type": "低洼路段"
       },
       {
@@ -128,16 +167,24 @@
         "point_id": "FP018",
         "name": "古中小区",
         "obs_depth_m": 0.38,
-        "model_depth_m": 0.138,
-        "abs_diff_m": 0.242,
+        "model_depth_m": 0.258,
+        "abs_diff_m": 0.122,
         "structure_type": "低洼小区"
+      },
+      {
+        "point_id": "FP019",
+        "name": "文昌街76号",
+        "obs_depth_m": 0.34,
+        "model_depth_m": 0.592,
+        "abs_diff_m": 0.252,
+        "structure_type": "低洼路段"
       },
       {
         "point_id": "FP020",
         "name": "体育场路30弄12号",
         "obs_depth_m": 0.34,
-        "model_depth_m": 0.0,
-        "abs_diff_m": 0.34,
+        "model_depth_m": 0.259,
+        "abs_diff_m": 0.081,
         "structure_type": "低洼小区"
       },
       {
@@ -152,48 +199,57 @@
         "point_id": "FP022",
         "name": "清河路",
         "obs_depth_m": 0.3,
-        "model_depth_m": 0.065,
-        "abs_diff_m": 0.235,
+        "model_depth_m": 0.617,
+        "abs_diff_m": 0.317,
+        "structure_type": "低洼路段"
+      },
+      {
+        "point_id": "FP023",
+        "name": "裘市老街",
+        "obs_depth_m": 0.26,
+        "model_depth_m": 0.0,
+        "abs_diff_m": 0.26,
         "structure_type": "低洼路段"
       },
       {
         "point_id": "FP024",
         "name": "张家新村",
         "obs_depth_m": 0.25,
-        "model_depth_m": 0.0,
-        "abs_diff_m": 0.25,
+        "model_depth_m": 0.228,
+        "abs_diff_m": 0.022,
         "structure_type": "低洼小区"
       },
       {
         "point_id": "FP025",
         "name": "红梅小区",
         "obs_depth_m": 0.22,
-        "model_depth_m": 0.0,
-        "abs_diff_m": 0.22,
+        "model_depth_m": 0.246,
+        "abs_diff_m": 0.026,
         "structure_type": "低洼小区"
+      },
+      {
+        "point_id": "FP026",
+        "name": "五乡西路",
+        "obs_depth_m": 0.23,
+        "model_depth_m": 0.021,
+        "abs_diff_m": 0.209,
+        "structure_type": "低洼路段"
       }
     ],
     "落选点位": [
       {
-        "point_id": "FP003",
-        "name": "甬江大桥东江东北路下立交",
+        "point_id": "FP007",
+        "name": "段三线绕城高速立交",
         "depth_m": 0.5,
         "model_depth_m": 0.0,
         "structure_type": "下穿立交"
       },
       {
-        "point_id": "FP004",
-        "name": "盛莫路1278弄立交",
-        "depth_m": 0.5,
-        "model_depth_m": 0.0,
-        "structure_type": "下穿立交"
-      },
-      {
-        "point_id": "FP006",
-        "name": "建兴路下立交",
+        "point_id": "FP009",
+        "name": "紫城路西侧桥洞",
         "depth_m": 0.5,
         "model_depth_m": 0.001,
-        "structure_type": "下穿立交"
+        "structure_type": "桥洞"
       },
       {
         "point_id": "FP011",
@@ -203,24 +259,10 @@
         "structure_type": "下穿立交"
       },
       {
-        "point_id": "FP014",
-        "name": "东柳社区793弄17号",
-        "depth_m": 0.44,
+        "point_id": "FP013",
+        "name": "西湾路",
+        "depth_m": 0.48,
         "model_depth_m": 0.0,
-        "structure_type": "低洼小区"
-      },
-      {
-        "point_id": "FP015",
-        "name": "中塘路87弄",
-        "depth_m": 0.41,
-        "model_depth_m": 0.0,
-        "structure_type": "低洼小区"
-      },
-      {
-        "point_id": "FP016",
-        "name": "中华路",
-        "depth_m": 0.37,
-        "model_depth_m": 0.001,
         "structure_type": "低洼路段"
       },
       {
@@ -231,13 +273,6 @@
         "structure_type": "低洼路段"
       },
       {
-        "point_id": "FP020",
-        "name": "体育场路30弄12号",
-        "depth_m": 0.34,
-        "model_depth_m": 0.0,
-        "structure_type": "低洼小区"
-      },
-      {
         "point_id": "FP021",
         "name": "新芝小区95弄13号",
         "depth_m": 0.31,
@@ -245,18 +280,18 @@
         "structure_type": "低洼小区"
       },
       {
-        "point_id": "FP024",
-        "name": "张家新村",
-        "depth_m": 0.25,
+        "point_id": "FP023",
+        "name": "裘市老街",
+        "depth_m": 0.26,
         "model_depth_m": 0.0,
-        "structure_type": "低洼小区"
+        "structure_type": "低洼路段"
       },
       {
-        "point_id": "FP025",
-        "name": "红梅小区",
-        "depth_m": 0.22,
-        "model_depth_m": 0.0,
-        "structure_type": "低洼小区"
+        "point_id": "FP026",
+        "name": "五乡西路",
+        "depth_m": 0.23,
+        "model_depth_m": 0.021,
+        "structure_type": "低洼路段"
       }
     ]
   },

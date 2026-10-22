@@ -1793,8 +1793,8 @@ def test_desc_budget_still_ok_with_all_tools():
     from typhoeus import mcp_server as MS
     assert len(MS._TOOL_FNS) == len(MS._TOOL_FILES) == 8, (
         f"产物工具 {len(MS._TOOL_FNS)} / 映射 {len(MS._TOOL_FILES)}，应为 8")
-    assert len(MS._ALL_TOOL_FNS) == 9, (
-        f"MCP 对外工具数 {len(MS._ALL_TOOL_FNS)}，应为 9")
+    assert len(MS._ALL_TOOL_FNS) == 10, (
+        f"MCP 对外工具数 {len(MS._ALL_TOOL_FNS)}，应为 10")
     n = MS.desc_bytes()
     assert n <= MS.DESC_BUDGET_B, f"描述总量 {n} B 超预算"
 
@@ -2543,8 +2543,9 @@ def test_webapp_routes_questions_and_refuses_out_of_domain():
     assert r["payload"]["产物"] == "恢复排序单"
     MS.reset_call_budget()
     r2 = W.ask("坐标 121.15, 30.03")          # 余姚，域外
-    assert r2["refused"] is True and r2["rule"] == "R1"
-    assert r2["remedy"], "壳里的拒答也要带处理办法"
+    assert "typhoeus city" in json.dumps(r2, ensure_ascii=False), \
+        "主域外应给出可算路径，而不是空白拒答"
+    assert r2.get("payload") or r2.get("已算外域") is not None
     assert W.ask("")["refused"] is True, "空问题应被拒"
 
 

@@ -630,8 +630,8 @@ def main(argv=None) -> int:
     p_run = sub.add_parser("run", help="跑全链并导出六份输出物")
     p_run.add_argument("--outdir", default="out")
     p_run.add_argument("--config", default=None)
-    p_run.add_argument("--sinks", action="store_true",
-                       help="启用下穿凹陷与泵（实验层，默认关）")
+    p_run.add_argument("--no-sinks", action="store_true",
+                       help="关闭下穿凹陷与泵（默认开启）")
     p_run.add_argument("--dt-seconds", type=float, default=None,
                        help="内核时间步长（秒），默认取配置的 600")
 
@@ -736,7 +736,7 @@ def main(argv=None) -> int:
         return DC.main(["--gap", str(args.gap)] if args.gap is not None else [])
 
     ctx = run_chain(cfg, outdir=getattr(args, "outdir", None),
-                    sinks=getattr(args, "sinks", False))
+                    sinks=not getattr(args, "no_sinks", False))
 
     # 写盘必须在打印之前：G16–G20 量的是服务层对落盘产物的行为，
     # 产物没写出来时测的是空目录。写完再测、再回填体检包，然后一次性

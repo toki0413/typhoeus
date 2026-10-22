@@ -1,5 +1,5 @@
 {
-  "config_hash": "e464fea5962b",
+  "config_hash": "3bccaa583d77",
   "L1_physical": {
     "g": 9.81,
     "manning_n": 0.016,
@@ -12,10 +12,10 @@
     "rain_calibrate": true,
     "rain_use_cache": true,
     "bbox": {
-      "lon_min": 121.55,
+      "lon_min": 121.52,
       "lon_max": 121.7,
-      "lat_min": 29.84,
-      "lat_max": 29.92
+      "lat_min": 29.78,
+      "lat_max": 29.925
     },
     "dem_file": "dem_n29e121.tif",
     "dem_is_dsm": true,

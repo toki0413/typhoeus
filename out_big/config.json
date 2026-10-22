@@ -1,0 +1,82 @@
+{
+  "config_hash": "3bccaa583d77",
+  "L1_physical": {
+    "g": 9.81,
+    "manning_n": 0.016,
+    "cc_exponent": 0.07,
+    "sst_cc_lim": 0.6,
+    "kinematic_viscosity": 1.31e-06
+  },
+  "L2_site": {
+    "rain_source": "era5",
+    "rain_calibrate": true,
+    "rain_use_cache": true,
+    "bbox": {
+      "lon_min": 121.52,
+      "lon_max": 121.7,
+      "lat_min": 29.78,
+      "lat_max": 29.925
+    },
+    "dem_file": "dem_n29e121.tif",
+    "dem_is_dsm": true,
+    "flatten_building_m": 12.0,
+    "design_drainage_yr": 15,
+    "storage_capacity_mm": 30.0,
+    "drainage_invert_m": 0.05,
+    "drainage_coeff_m_s": 0.0012,
+    "infiltration_mode": "green_ampt",
+    "infiltration_m_h": 0.0012,
+    "soil_ksat_m_h": 0.0012,
+    "soil_psi_m": 0.1,
+    "soil_capacity_mm": 30.0,
+    "impervious_frac": 0.75,
+    "soil_theta0": 0.45,
+    "soil_theta_res": 0.08,
+    "net_sw_wm2": 40.0,
+    "soil_source": "era5land",
+    "urban_theta_frac": 0.456,
+    "evap_area_frac": 0.25,
+    "albedo": 0.15,
+    "ground_flux_frac": 0.25,
+    "sensible_frac": 0.45,
+    "evap_efficiency": 0.65
+  },
+  "L3_strategy": {
+    "ensemble_members": 5,
+    "preselect_budget": 12,
+    "adj_tol": 0.1,
+    "resid_gate": 0.02,
+    "resid_tol": 0.2,
+    "climate_share": 0.55,
+    "excess_share": 0.25,
+    "engineering_share": 0.15,
+    "road_capacity": {
+      "支路": {
+        "a": 0.25,
+        "b": 0.45
+      },
+      "主干路": {
+        "a": 0.35,
+        "b": 0.6
+      },
+      "下穿立交": {
+        "a": 0.12,
+        "b": 0.25
+      }
+    },
+    "road_mix": {
+      "支路": 0.6,
+      "主干路": 0.3,
+      "下穿立交": 0.1
+    }
+  },
+  "L4_solver": {
+    "dt_s": 600.0,
+    "max_t_h": 72.0,
+    "resample": 2,
+    "min_depth_m": 0.0001,
+    "tol_mass": 1e-06,
+    "max_depth_m": 3.0,
+    "flux_relax": 3
+  }
+}

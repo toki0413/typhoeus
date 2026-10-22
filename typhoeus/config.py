@@ -40,8 +40,7 @@ class L2_Site:
     rain_use_cache: bool = True
 
     bbox: dict = field(default_factory=lambda: {
-        "lon_min": 121.55, "lon_max": 121.70,
-        "lat_min": 29.84, "lat_max": 29.92,
+        "lon_min": 121.520, "lon_max": 121.700, "lat_min": 29.780, "lat_max": 29.925,
     })
     dem_file: str = "dem_n29e121.tif"
     dem_is_dsm: bool = True         # 关键：GLO-30 是 DSM

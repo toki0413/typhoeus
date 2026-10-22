@@ -1,8 +1,8 @@
 {
   "schema_version": "3.7.0",
   "kernel_version": "0.6.1-demo",
-  "config_hash": "e464fea5962b",
-  "source_hash": "40d07eb29407b4b6",
+  "config_hash": "3bccaa583d77",
+  "source_hash": "2f3ce75b9462f4f0",
   "outputs": [
     "01_preset_plan",
     "02_recovery_order",
@@ -13,15 +13,15 @@
     "07_multievent_calibration",
     "08_flood_cards"
   ],
-  "caveat": "降雨驱动为 ERA5 再分析（经 Open-Meteo archive-api，免 key），非台风路径参数化合成。面雨量对域内站口径偏差 -8%、对官方全市面雨量 375 mm 偏差 -31%。该源已用域内 1 个实测站做分位数订正，订正锚点与门槛 15 的观测侧同源，故域内口径偏差（-8%）是自样本数字，不作判据。再分析能约束过程总量但不能约束对流尺度极值：涝点水深命中率（门槛 14）在面雨量口径改善的同时归零，峰值雨强只有参数化场的约三分之一，管网与地面积水按强度失效。未接 CMFD 2.0 与雷达实测。",
+  "caveat": "降雨驱动为 ERA5 再分析（经 Open-Meteo archive-api，免 key），非台风路径参数化合成。面雨量对域内站口径偏差 -7%、对官方全市面雨量 375 mm 偏差 -33%。该源已用域内 3 个实测站做分位数订正，订正锚点与门槛 15 的观测侧同源，故域内口径偏差（-7%）是自样本数字，不作判据。再分析能约束过程总量但不能约束对流尺度极值：涝点水深命中率（门槛 14）在面雨量口径改善的同时归零，峰值雨强只有参数化场的约三分之一，管网与地面积水按强度失效。未接 CMFD 2.0 与雷达实测。",
   "指纹": {
-    "01_preset_plan": "27bda797e98f8a37",
-    "02_recovery_order": "2ce7c531061a93e6",
-    "03_event_reconciliation": "1edce5583a9b6a8c",
-    "04_resilience_pricing": "e2bf57b9512b65c3",
-    "05_health_metrics": "9dfbf111461948d0",
-    "06_health_report": "232b998cca37a7de",
-    "07_multievent_calibration": "1e35cd445fcca226",
-    "08_flood_cards": "6feea94213d84897"
+    "01_preset_plan": "3a2e0dfba9a9180d",
+    "02_recovery_order": "10db20fb9f9febae",
+    "03_event_reconciliation": "a937fdf29c7ada85",
+    "04_resilience_pricing": "68312b8c774df2e1",
+    "05_health_metrics": "c3c1374a1b9b7d14",
+    "06_health_report": "70cb5cfec9aa2c98",
+    "07_multievent_calibration": "6c086c0819e1ef75",
+    "08_flood_cards": "514736bbd759dc35"
   }
 }

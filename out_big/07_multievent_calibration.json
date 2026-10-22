@@ -1,0 +1,8 @@
+{
+  "名称": "多事件标定单",
+  "状态": "未运行",
+  "说明": "多事件批量标定未运行。执行 `python -m typhoeus.cli multievent` 后重新导出本单。单场产物不依赖这份单子，缺它不影响前六份。",
+  "schema_version": "3.7.0",
+  "config_hash": "3bccaa583d77",
+  "source_hash": "2f3ce75b9462f4f0"
+}
