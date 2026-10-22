@@ -59,7 +59,7 @@ def summary() -> dict:
     cards = json.loads((OUT / "08_flood_cards.json").read_text(encoding="utf-8")).get("卡片", [])
     plan = json.loads((OUT / "01_preset_plan.json").read_text(encoding="utf-8"))
     thr = plan["触发阈值"]
-    publishable = sum(1 for c in cards if c.get("trust") == "可发")
+    publishable = sum(1 for c in cards if c.get("trust") == "可直接用")
     outside = sum(1 for c in cards if not c.get("in_domain"))
     return {
         "事件": hr.get("事件"),
@@ -224,7 +224,7 @@ function render(o){
       `<tr><td>${esc(c.point_id)}</td><td>${esc(c.name)}</td><td>${esc(c.structure_type || '')}</td>` +
       `<td>${c.obs_depth_m ?? '—'}</td><td>${c.model_depth_m ?? '—'}</td><td>${esc(c.trust || '')}</td></tr>`).join('');
     return (o.tool ? `<div class="tool">数据来自 ${esc(o.tool)}</div>` : '') +
-      `<table class="tbl"><tr><th>编号</th><th>点位</th><th>类型</th><th>实测 m</th><th>推演 m</th><th>采信</th></tr>${rows}</table>` +
+      `<table class="tbl"><tr><th>编号</th><th>点位</th><th>类型</th><th>实测 m</th><th>推演 m</th><th>数值来源</th></tr>${rows}</table>` +
       `<div class="hint">共 ${d['卡片'].length} 张卡，此处列前 8 张；完整内容见「八份产物」。</div>`;
   }
   if (Array.isArray(d['档位'])) {

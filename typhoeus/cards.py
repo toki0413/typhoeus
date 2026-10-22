@@ -131,17 +131,17 @@ def build(outdir: str | Path) -> dict:
         vis_dom = in_domain(fp)
         if not vis_dom:
             # R1 越域：计算域外的点不产出任何模型结论，只转述台账记录
-            trust, why = "域外未计算", (
+            trust, why = "仅台账", (
                 f"该点坐标不在计算域内（{bb['lon_min']}–{bb['lon_max']}E / "
                 f"{bb['lat_min']}–{bb['lat_max']}N），模型未覆盖，以下均为台账记录")
         elif d is None:
-            trust, why = "未验证", "该点不在本次事件对账单的逐点对照里"
+            trust, why = "待核实", "该点不在本次事件对账单的逐点对照里"
         elif not visible:
-            trust, why = "不采信模型", (
+            trust, why = "用实测值", (
                 f"预测水深 {model_m:.3f} m < {MODEL_SILENT_M} m，"
                 f"而实测 {obs_m:.2f} m；历史上这类点恰是深积水点")
         else:
-            trust, why = "可发", f"预测 {model_m:.2f} m 对实测 {obs_m:.2f} m"
+            trust, why = "可直接用", f"预测 {model_m:.2f} m 对实测 {obs_m:.2f} m"
         lvl = LEVEL_NAMES[lv_obs].split(" ")[0]
         cards.append({
             "point_id": fp.point_id, "name": fp.name, "district": fp.district,
@@ -241,7 +241,7 @@ const x0=Math.min.apply(null,lon),x1=Math.max.apply(null,lon);
 const y0=Math.min.apply(null,lat),y1=Math.max.apply(null,lat);
 const sx=v=>24+(v-x0)/((x1-x0)||1)*372,sy=v=>396-(v-y0)/((y1-y0)||1)*372;
 const COL={'绿':'#5ad17a','黄':'#e3b341','橙':'#ff9f4d','红':'#ff7b72'};
-const TC={'可发':'t-ok','不采信模型':'t-no','未验证':'t-nv'};
+const TC={'可直接用':'t-ok','用实测值':'t-no','待核实':'t-nv','仅台账':'t-nv'};
 document.getElementById('map').innerHTML=
  '<rect x="20" y="20" width="380" height="380" fill="#141a20" stroke="#2a3440"/>'
  +cs.map((c,i)=>{const col=COL[c.obs_level[0]]||'#8899aa';
