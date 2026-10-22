@@ -45,3 +45,7 @@ pytest_base/
 tmp/
 
 .venv/
+
+# 演示材料的中间帧（PPTX 与 MP4 已入库）
+docs/demo/render*/
+docs/demo/frames/
