@@ -407,7 +407,13 @@ def get_rainfall(grid: Grid, stations: list[dict] | None = None,
         _ny, _nx = (int(grid.elev.shape[0]), int(grid.elev.shape[1]))
     except Exception:                                    # noqa: BLE001
         _ny, _nx = (0, 0)
-    _cache_name = f"era5_{_ny}x{_nx}" if _ny and _nx else "era5"
+    # 缓存键必须带位置：同形状不同城市会误命中（外域推演踩过）
+    try:
+        _bb = (float(grid.lon.min()), float(grid.lat.min()))
+        _loc = f"_{_bb[0]*100:.0f}_{_bb[1]*100:.0f}"
+    except Exception:                                    # noqa: BLE001
+        _loc = ""
+    _cache_name = f"era5_{_ny}x{_nx}{_loc}" if _ny and _nx else "era5"
     if abs(float(dt_s) - 600.0) > 1e-9:
         # 缓存按步长分名，避免 10 分钟的场被当成 15 分钟用
         _cache_name += f"_dt{int(round(dt_s))}"

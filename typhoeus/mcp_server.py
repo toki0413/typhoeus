@@ -360,8 +360,41 @@ def get_point_depth(lon: _LON_ARG, lat: _LAT_ARG,
     return guard_query(payload, d, r1_checked=True)
 
 
+def get_city_scenario(city: str = "", outdir: str | None = None) -> dict:
+    """外域推演结果：列出已跑过的城市，或读某一城的峰值水深与出处。
+
+    这些城市不在标定域内，参数未按当地重标，只给结构与量级结论。
+    """
+    d = Path(outdir) if outdir else DEFAULT_OUTDIR
+    root = d / "cities"
+    if not root.exists():
+        return {"城市": [], "说明": "还没有外域结果，先跑 `typhoeus city`。"}
+    items = []
+    for p in sorted(root.glob("*/city.json")):
+        try:
+            o = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        items.append({
+            "城市": p.parent.name,
+            "中心坐标": o.get("中心坐标"),
+            "面雨量_mm": (o.get("降雨") or {}).get("面雨量_mm"),
+            "峰值水深_m": (o.get("结果") or {}).get("峰值水深_m"),
+            "峰值时刻_h": (o.get("结果") or {}).get("峰值时刻_h"),
+            "产物": (o.get("产物") or {}).get("峰值水深栅格"),
+        })
+    if not city:
+        return {"城市": items, "说明": "参数未按当地重标，只给结构与量级结论。"}
+    hit = next((x for x in items if x["城市"] == city), None)
+    if hit is None:
+        return {"城市": items, "说明": f"没有名为 {city} 的外域结果。"}
+    full = json.loads((root / city / "city.json").read_text(encoding="utf-8"))
+    return {"城市": hit, "明细": full}
+
+
 _POINT_TOOL_FNS = {"get_point_depth": get_point_depth}
-_ALL_TOOL_FNS = {**_TOOL_FNS, **_POINT_TOOL_FNS}
+_CITY_TOOL_FNS = {"get_city_scenario": get_city_scenario}
+_ALL_TOOL_FNS = {**_TOOL_FNS, **_POINT_TOOL_FNS, **_CITY_TOOL_FNS}
 
 #工具描述总字节数。这是本server 的显式预算，不是估计——超了就在
 # 自测里FAIL，不靠自觉。
@@ -392,17 +425,30 @@ def _coord_schema() -> dict:
     }
 
 
+def _city_schema() -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "city": {"type": "string",
+                     "description": "城市名，例如「台州」。留空则列出全部已跑城市。"},
+        },
+        "required": [],
+        "additionalProperties": False,
+    }
+
+
 def tool_descriptors() -> list[dict]:
-    """九个工具的 MCP 描述符，供自测与文档共用。"""
+    """十个工具的 MCP 描述符，供自测与文档共用。"""
     out = []
     for name, fn in _ALL_TOOL_FNS.items():
         doc = (fn.__doc__ or "").strip()
-        out.append({
-            "name": name,
-            "description": doc,
-            "inputSchema": (_coord_schema() if name in _POINT_TOOL_FNS
-                            else _no_arg_schema()),
-        })
+        if name in _POINT_TOOL_FNS:
+            schema = _coord_schema()
+        elif name in _CITY_TOOL_FNS:
+            schema = _city_schema()
+        else:
+            schema = _no_arg_schema()
+        out.append({"name": name, "description": doc, "inputSchema": schema})
     return out
 
 

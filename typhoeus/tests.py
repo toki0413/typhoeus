@@ -1777,7 +1777,7 @@ def test_seventh_tool_registered_and_readable():
     assert r["数据"]["名称"] == "多事件标定单"
 
 
-def test_desc_budget_still_ok_with_nine_tools():
+def test_desc_budget_still_ok_with_all_tools():
     """九个只读工具的描述总量仍在预算内。
 
     原名为 `..._with_seven_tools` 并断言 7 —— 那是第 8 个工具

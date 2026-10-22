@@ -635,6 +635,11 @@ def main(argv=None) -> int:
     p_run.add_argument("--dt-seconds", type=float, default=None,
                        help="内核时间步长（秒），默认取配置的 600")
 
+    p_city = sub.add_parser("city", help="外域推演：坐标 → 下载 DEM 与 ERA5 → 跑一次")
+    p_city.add_argument("--name", required=True, help="城市名，用作产物目录")
+    p_city.add_argument("--lon", type=float, required=True)
+    p_city.add_argument("--lat", type=float, required=True)
+
     sub.add_parser("check", help="只跑门槛")
     sub.add_parser("report", help="打印体检摘要")
 
@@ -709,6 +714,12 @@ def main(argv=None) -> int:
         if getattr(args, "rain_series_file", None) is not None:
             av += ["--rain-series-file", str(args.rain_series_file)]
         return DM.main(av)
+
+    # 外域推演：不依赖标定域台账，单独一条命令。
+    if cmd == "city":
+        from . import city as CITY
+        CITY.run_city(args.name, args.lon, args.lat)
+        return 0
 
     # 两个交互入口：纯查询/聚合，不重算主链，故在 run_chain 之前分流。
     if cmd == "scenario":

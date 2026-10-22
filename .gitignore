@@ -53,3 +53,8 @@ docs/demo/frames/
 # å½•å±ä¸­é—´å¸§
 docs/demo/capture/
 docs/demo/capture_burned/
+
+# ÍâÓòÍÆÑİµÄ DEM ÍßÆ¬ÓëÕ¤¸ñ
+data/seed/cities/
+out/cities/*/*.tif
+
