@@ -909,22 +909,26 @@ def test_mcp_server_end_to_end():
         out["get_point_depth"] = json.loads(_text(
             await srv.call_tool("get_point_depth",
                                 {"lon": 121.556, "lat": 29.872})))
+        MS.reset_call_budget()
+        out["get_city_scenario"] = json.loads(_text(
+            await srv.call_tool("get_city_scenario", {"city": ""})))
         return out
 
     res = asyncio.run(_go())
     assert len(res) == len(MS._ALL_TOOL_FNS)
     for name, d in res.items():
+        if name == "get_city_scenario":
+            assert "城市" in d
+            continue
         assert d["数据"]["名称"], f"{name} 未返回产物内容"
 
 
-def test_point_depth_rejects_out_of_domain():
-    """坐标工具是 R1 的唯一入口：域外抬 RefusalError，不给估计值。"""
+def test_point_depth_out_of_domain_points_to_a_way_to_compute():
+    """主域外的坐标不再一律拒答：有外域结果答结果，没有就给出可算命令。"""
     from typhoeus import mcp_server as MS
-    from typhoeus import guardrails as GR
-    with pytest.raises(GR.RefusalError) as e:
-        MS.get_point_depth(121.15, 30.03)          # 余姚，域外暴雨中心
-    assert e.value.rule == "R1"
-    assert e.value.remedy, "拒答须带处理办法，否则下游无从处置"
+    r = MS.get_point_depth(120.0, 30.0)            # 无已算外域
+    assert "typhoeus city" in r["说明"]
+    assert "已算外域" in r
 
 
 def test_point_depth_returns_nearest_ledger_card():

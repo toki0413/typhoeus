@@ -285,10 +285,41 @@ def get_point_depth(lon: _LON_ARG, lat: _LAT_ARG,
     域内只给最近的涝点台账读数，不插值：模型水深只在 28 个台账点上有
     定义，任意坐标的水深要重跑内核，本服务只读不重算。
     """
-    d = Path(outdir) if outdir else DEFAULT_OUTDIR
-    # R1 落在这一行。guard_query 的注释写着「域检查在查询入口做」，
-    # 在此之前没有入口——坐标工具是那个入口。
-    q = check_in_domain(lon, lat, "查询点")
+    if outdir:
+        d = Path(outdir)
+    elif Path("out").exists():
+        d = Path("out")
+    else:
+        d = DEFAULT_OUTDIR
+    # 主域之外先看有没有跑过的外域结果（out/cities/<城>/），有就答该城，
+    # 没有就给出可算路径——不再把坐标一概拒掉。
+    try:
+        q = check_in_domain(lon, lat, "查询点")
+    except RefusalError:
+        hit = None
+        for p in sorted((d / "cities").glob("*/city.json")) if (d / "cities").exists() else []:
+            try:
+                o = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            c = o.get("中心坐标") or []
+            if len(c) == 2 and abs(c[0] - lon) <= 0.08 and abs(c[1] - lat) <= 0.05:
+                hit = (p.parent.name, o)
+                break
+        if hit is None:
+            names = [p.parent.name for p in (d / "cities").glob("*/city.json")] \
+                if (d / "cities").exists() else []
+            return {"已算外域": names,
+                    "说明": (f"({lon:.4f}, {lat:.4f}) 不在已算范围内。"
+                           "可用 `typhoeus city --name <城> --lon <经度> --lat <纬度>` "
+                           "先算一片再查。")}
+        name, o = hit
+        return {"城": name, "中心坐标": o.get("中心坐标"),
+                "面雨量_mm": (o.get("降雨") or {}).get("面雨量_mm"),
+                "峰值水深_m": (o.get("结果") or {}).get("峰值水深_m"),
+                "峰值位置": (o.get("结果") or {}).get("峰值位置"),
+                "分级面积占比": (o.get("结果") or {}).get("分级面积占比"),
+                "说明": "该点在外域结果覆盖范围内；参数未按本城重标，只给结构与量级。"}
     cards = _load(d, _TOOL_FILES["get_flood_cards"]).get("卡片") or []
 
     best: dict | None = None
