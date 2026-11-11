@@ -163,9 +163,9 @@ export const AUDIO_CONSTANTS = {
   },
   delay: {
     defaultTime: 0.34,
-    feedback: 0.26,
-    wet: 0.22,
-    filterCutoff: 1600,
+    feedback: 0.30,
+    wet: 0.30,
+    filterCutoff: 2600,
   },
   drone: {
     defaultGain: 0.0001,
@@ -173,8 +173,8 @@ export const AUDIO_CONSTANTS = {
   },
   reverbAndTension: {
     /* setAudioChain 从 finalReverb 映射到 delayWet 的范围 */
-    wetRange: { min: 0.05, max: 0.40 },
-    fbRange:  { min: 0.12, max: 0.32 },
+    wetRange: { min: 0.08, max: 0.55 },
+    fbRange:  { min: 0.14, max: 0.40 },
     /* finalTension 加到 chaosTemperature 的系数（最高不超过 1.0）*/
     tensionChaosCoef: 0.3,
   },

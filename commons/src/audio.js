@@ -164,7 +164,14 @@ export class AudioEngine {
     this.panner = ctx.createStereoPanner();
     this.panner.pan.value = this.pan;
 
-    this.master.connect(this.compressor);
+    /* 空气感：高频搁架 +3dB，让五声旋律的泛音不至于被低音吃掉 */
+    this.air = ctx.createBiquadFilter();
+    this.air.type = 'highshelf';
+    this.air.frequency.value = 2800;
+    this.air.gain.value = 3;
+
+    this.master.connect(this.air);
+    this.air.connect(this.compressor);
     this.compressor.connect(this.panner);
     this.panner.connect(this.destination);
 
@@ -189,7 +196,7 @@ export class AudioEngine {
     this.noteBus.gain.value = 0.9;
     this.noteBus.connect(this.master);
     this.noteSend = ctx.createGain();
-    this.noteSend.gain.value = 0.35;
+    this.noteSend.gain.value = 0.5;
     this.noteBus.connect(this.noteSend);
     this.noteSend.connect(this.delay);
 
@@ -209,18 +216,26 @@ export class AudioEngine {
       { osc: null, ratio: 2, gain: 0.2 },
       { osc: null, ratio: 0.5, gain: 0.22 },
     ];
-    for (const d of this.drones) {
+    /* 每个 drone 单独声像 + 微失谐：单声道 drone 是"单薄"的主要来源之一 */
+    const dronePans = [-0.7, 0.62, -0.45, 0.78];
+    const droneDetune = [-4, 5, -7, 8];
+    this.drones.forEach((d, i) => {
       const osc = ctx.createOscillator();
       osc.type = d.ratio === 2 ? 'triangle' : 'sine';
       osc.frequency.value = 110 * d.ratio;
+      osc.detune.value = droneDetune[i] ?? 0;
       const g = ctx.createGain();
       g.gain.value = d.gain;
+      const p = ctx.createStereoPanner();
+      p.pan.value = dronePans[i] ?? 0;
       osc.connect(g);
-      g.connect(this.droneGain);
+      g.connect(p);
+      p.connect(this.droneGain);
       osc.start();
       d.osc = osc;
       d.node = g;
-    }
+      d.panner = p;
+    });
 
     this.lfo = ctx.createOscillator();
     this.lfo.type = 'sine';
@@ -230,6 +245,45 @@ export class AudioEngine {
     this.lfo.connect(this.lfoGain);
     this.lfoGain.connect(this.droneGain.gain);
     this.lfo.start();
+
+    /* 空气层：极轻的粉噪床 + 3.2kHz 带通，填补 2kHz 以上的空白，
+       让稀疏的心跳/旋律不显得"干"和"单薄"（电平很低，不会变噪声）。
+       左右各一条独立噪声 → 真实去相关，拓宽声场。 */
+    try {
+      const airChannels = [];
+      const airSpecs = [{ pan: -0.85, hz: 3000 }, { pan: 0.85, hz: 3600 }];
+      for (const spec of airSpecs) {
+        const len = Math.floor(ctx.sampleRate * 2);
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0;
+        for (let i = 0; i < len; i++) {
+          const w = Math.random() * 2 - 1;
+          b0 = 0.99765 * b0 + w * 0.0990460;
+          b1 = 0.96300 * b1 + w * 0.2965164;
+          b2 = 0.57000 * b2 + w * 1.0526913;
+          data[i] = (b0 + b1 + b2 + w * 0.1848) * 0.18;
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = spec.hz;
+        bp.Q.value = 0.45;
+        const g = ctx.createGain();
+        g.gain.value = 0.014;
+        const p = ctx.createStereoPanner();
+        p.pan.value = spec.pan;
+        src.connect(bp);
+        bp.connect(g);
+        g.connect(p);
+        p.connect(this.master);
+        src.start();
+        airChannels.push({ src, gain: g, panner: p });
+      }
+      this.airBed = airChannels;
+    } catch (_) { /* 某些环境不支持 BufferSource 时静默跳过 */ }
 
     this.built = true;
   }
@@ -321,7 +375,7 @@ export class AudioEngine {
     const now = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(now);
     if (on) {
-      this.master.gain.setTargetAtTime(0.72, now, 0.35);
+      this.master.gain.setTargetAtTime(0.95, now, 0.35);
       this.nextNote = now + 0.15;
       this._tuneDrone();
     } else {
@@ -589,11 +643,13 @@ export class AudioEngine {
         mapping.octave ?? 3,
         rootMidi - 12,   // chord pad 在低八度，听起来是支撑
       );
-      /* Attention 音乐性增强：音量 × dyn.chordPad（Pet mood → pp ↔ ff）*/
-      for (const midi of chordMidi) {
+      /* Attention 音乐性增强：音量 × dyn.chordPad（Pet mood → pp ↔ ff）
+         pad 音符交替左右声像，避免整个和弦挤在正中 */
+      chordMidi.forEach((midi, ci) => {
         const freq = midiToFreq(midi);
-        this._chordTone(freq, this._chordNext, chordSec * 0.9, dyn.chordPad, waves.chordPad);
-      }
+        const pan = (ci % 2 === 0 ? -1 : 1) * (0.18 + 0.1 * (ci % 3));
+        this._chordTone(freq, this._chordNext, chordSec * 0.9, dyn.chordPad, waves.chordPad, pan);
+      });
       this._chordNext += chordSec;
     }
 
@@ -624,7 +680,7 @@ export class AudioEngine {
           const counterFreq = this._degreeFreq(counterDegree, counterOct);
           const counterAmp = dyn.counter;
           const counterDur = dur * 0.8;
-          this._tone(counterFreq, this.nextNote, counterDur, counterAmp, waves.counter, 0.5);
+          this._tone(counterFreq, this.nextNote, counterDur, counterAmp, waves.counter, 0.5, 0, 0.42);
         }
       }
       // 保留原有 cell 触发音（新生儿）
@@ -668,16 +724,17 @@ export class AudioEngine {
   }
 
   /* ---- Layer 2: Chord pad tone（长 attack，slow rise）---- */
-  _chordTone(freq, when, dur, amp = 0.14, wave = 'triangle') {
+  _chordTone(freq, when, dur, amp = 0.14, wave = 'triangle', pan = 0) {
     if (this.voices > 24) return;
     if (!Number.isFinite(freq) || freq <= 0) return;   // 防御：非法频率不能中断 tick 循环
     const ctx = this.ctx;
     const osc = ctx.createOscillator();
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = 900;
-    filter.Q.value = 0.7;
-    osc.type = wave;   /* Attention 音乐性增强：wave 可配置 */
+    /* 900Hz 会把 pad 的泛音全部滤掉 → 听感闷、单薄；抬到 2.2kHz 保留中高频 */
+    filter.frequency.value = 2200;
+    filter.Q.value = 0.9;
+    osc.type = wave === 'sine' ? 'triangle' : wave;   /* pad 不用纯 sine，留一点泛音 */
     osc.frequency.setValueAtTime(freq, when);
 
     const g = ctx.createGain();
@@ -685,13 +742,21 @@ export class AudioEngine {
     g.gain.linearRampToValueAtTime(amp, when + 1.2);  /* Attention 音乐性增强：amp 可配置 */
     g.gain.linearRampToValueAtTime(0.0001, when + dur);
 
+    /* pad 左右铺开：让和弦音符分布在不同声像，制造宽度 */
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+
     osc.connect(filter);
     filter.connect(g);
-    g.connect(this.master);  // chord 直接到 master，不走 delay（太脏）
+    g.connect(p);
+    p.connect(this.master);  // chord 直接到 master，不走 delay（太脏）
     this.voices++;
     osc.start(when);
     osc.stop(when + dur + 0.1);
-    osc.onended = () => { this.voices = Math.max(0, this.voices - 1); try { g.disconnect(); } catch {} };
+    osc.onended = () => {
+      this.voices = Math.max(0, this.voices - 1);
+      try { g.disconnect(); p.disconnect(); } catch (_) { /* noop */ }
+    };
   }
 
   /* ---- Layer 4: Sparkle Crystal（3 harmonic 谐波闪烁）---- */
@@ -749,7 +814,7 @@ export class AudioEngine {
     return midiToFreq(midi);
   }
 
-  _tone(freq, when, dur, peak, wave, send = 0.5, detune = 0) {
+  _tone(freq, when, dur, peak, wave, send = 0.5, detune = 0, pan = 0) {
     const ctx = this.ctx;
     if (this.voices > 26) return;
     if (!Number.isFinite(freq) || freq <= 0) return;   // 防御：非法频率直接跳过
@@ -763,7 +828,24 @@ export class AudioEngine {
     gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + attack);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + dur);
     osc.connect(gain);
-    gain.connect(this.noteBus);
+
+    /* 微失谐叠层（chorus-lite）：+7 cents 的第二振荡器，给单薄的主旋律加厚 */
+    const osc2 = ctx.createOscillator();
+    osc2.type = wave;
+    osc2.frequency.setValueAtTime(freq, when);
+    osc2.detune.setValueAtTime((detune || 0) + 7, when);
+    const g2 = ctx.createGain();
+    g2.gain.value = 0.55;
+    osc2.connect(g2);
+    g2.connect(gain);
+    osc2.start(when);
+    osc2.stop(when + dur + 0.06);
+
+    /* 声像：旋律默认居中，counter-melody/新生儿由调用方给左右位置 */
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    gain.connect(p);
+    p.connect(this.noteBus);
     if (send > 0) {
       const s = ctx.createGain();
       s.gain.value = send;
@@ -777,6 +859,7 @@ export class AudioEngine {
       this.voices = Math.max(0, this.voices - 1);
       try {
         gain.disconnect();
+        p.disconnect();
       } catch (e) {
         /* noop */
       }
@@ -822,6 +905,7 @@ export class AudioEngine {
   dispose() {
     try {
       for (const d of this.drones) d.osc.stop();
+      for (const a of this.airBed || []) a.src.stop();
       this.lfo.stop();
       this.master.disconnect();
     } catch (e) {
