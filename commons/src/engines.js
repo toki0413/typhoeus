@@ -902,12 +902,12 @@ export function computeMetrics(sim) {
   }
 
   const meta = {
-    stable: ['稳定', 'stable'],
-    periodic: ['周期', 'cyclic'],
-    chaotic: ['混沌', 'chaotic'],
-    endangered: ['濒危', 'endangered'],
-    extinct: ['寂灭', 'extinct'],
-    drifting: ['漂移', 'drifting'],
+    stable: ['安睡', 'stable'],
+    periodic: ['呼吸', 'cyclic'],
+    chaotic: ['灵动', 'chaotic'],
+    endangered: ['需要关爱', 'endangered'],
+    extinct: ['安静休眠', 'extinct'],
+    drifting: ['漫步', 'drifting'],
   };
   metrics.type = type;
   metrics.typeLabel = meta[type][0];

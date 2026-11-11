@@ -4,20 +4,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Commons · 公地 — 人工生命培育与聆听</title>
+    <title>Commons · 公地 🌸 用心聆听生命的声音</title>
     <meta
       name="description"
-      content="Commons 公地：领养、观察、照料生命种子，并聆听生命状态实时合成的声音。"
+      content="Commons 公地：领养、观察、悉心照料一枚小小的生命种子，聆听它用五声音阶为你献上的治愈之歌。"
     />
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%237cffb2' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%237cffb2'/%3E%3C/svg%3E"
-    />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23ff8eb5' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23ff8eb5'/%3E%3C/svg%3E"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -30,21 +24,21 @@
           <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.4" />
           <circle cx="12" cy="12" r="2.6" fill="currentColor" />
         </svg>
-        <span class="brand-word">COMMONS <em>公 地</em></span>
+        <span class="brand-word">COMMONS <em>公 地 🌸</em></span>
       </button>
       <nav class="nav" id="nav">
         <button data-view="cultivate" class="active">培育台</button>
-        <button data-view="commons">公地</button>
-        <button data-view="compare">对比聆听</button>
-        <button data-view="lineage">谱系</button>
+        <button data-view="commons">种子花园</button>
+        <button data-view="compare">双耳聆听</button>
+        <button data-view="lineage">家谱</button>
       </nav>
       <div class="top-actions">
-        <button id="researchBtn" class="ghost tiny" title="匿名科研数据记录（默认关闭）">
-          <span class="dot"></span><span id="researchLabel">匿名数据 · 关</span>
+        <button id="researchBtn" class="ghost tiny" title="匿名分享一些数据帮助我们让公地更美好（默认关闭）">
+          <span class="dot"></span><span id="researchLabel">温柔分享 · 关</span>
         </button>
         <button id="audioBtn" class="sound-btn" aria-pressed="false">
           <span class="eq"><i></i><i></i><i></i><i></i></span>
-          <span id="audioLabel">聆听</span>
+          <span id="audioLabel">♪ 聆听</span>
         </button>
       </div>
     </header>
@@ -54,7 +48,7 @@
         <div class="stage-column">
           <div class="stage-head">
             <div class="species">
-              <div class="eyebrow">CURRENT ORGANISM · 当前生命</div>
+              <div class="eyebrow">CURRENTLY LOVING · 当前小心心</div>
               <h1 id="speciesName">—</h1>
               <div class="species-sub">
                 <span id="speciesLatin">—</span>
@@ -75,70 +69,70 @@
             <div class="stage-bracket br" aria-hidden="true"></div>
 
             <div class="hud hud-tl">
-              <div class="hud-label">STATE</div>
-              <div class="hud-big" id="hudState">观察中</div>
+              <div class="hud-label">状态</div>
+              <div class="hud-big" id="hudState">温柔地活着</div>
               <div class="hud-row"><span>世代</span><b id="hudGen">0000</b></div>
             </div>
 
             <div class="hud hud-tr">
               <canvas id="fingerprintGlyph"></canvas>
-              <div class="hud-label">FINGERPRINT</div>
+              <div class="hud-label">专属指纹</div>
               <div class="fp-code" id="fingerprintCode">0000-0000</div>
             </div>
 
             <div class="hud hud-bl">
-              <div class="hud-label">STRUCTURE · 结构</div>
+              <div class="hud-label">结构 · 它长成了什么样</div>
               <div class="hud-metrics" id="hudMetrics"></div>
             </div>
 
             <div class="hud hud-br">
               <div class="eq big" id="hudEq"><i></i><i></i><i></i><i></i><i></i></div>
-              <div class="hud-label" id="hudSound">静音 · 点击聆听</div>
+              <div class="hud-label" id="hudSound">等待你的聆听 ♪</div>
             </div>
 
             <div class="event-banner" id="eventBanner"></div>
             <div class="listen-prompt" id="listenPrompt">
               <span class="pulse-dot"></span>
-              <span>轻触「聆听」，让结构发出声音</span>
+              <span>轻触「♪ 聆听」，让它为你唱一首歌</span>
             </div>
           </div>
 
           <div class="transport">
             <div class="transport-left">
               <button id="playBtn" class="primary">暂停</button>
-              <button id="stepBtn" class="icon-btn" title="单步推进">▸❙</button>
+              <button id="stepBtn" class="icon-btn" title="单步前进">▸❙</button>
               <label class="speed">
-                <span>速度</span>
+                <span>节奏</span>
                 <input id="speedRange" type="range" min="0.25" max="3" step="0.05" value="1" />
                 <b id="speedVal">1.0×</b>
               </label>
             </div>
             <div class="transport-right">
-              <button data-action="hatch" class="ghost">随机孵化</button>
-              <button data-action="mutate" class="ghost" title="轻微突变当前基因">分裂</button>
-              <button data-action="save" class="primary soft">保存到公地</button>
-              <button data-action="share" class="ghost">分享</button>
-              <button data-action="hybrid" class="ghost">杂交</button>
+              <button data-action="hatch" class="ghost">随机孵化一颗</button>
+              <button data-action="mutate" class="ghost" title="轻轻让它长出新的样子">轻轻分裂</button>
+              <button data-action="save" class="primary soft">存入花园</button>
+              <button data-action="share" class="ghost">分享给朋友</button>
+              <button data-action="hybrid" class="ghost">让它们相爱</button>
             </div>
           </div>
 
           <div class="timeline">
             <div class="timeline-head">
-              <span>生命周期 / LIFECYCLE</span>
-              <span id="timelineCount">0 事件</span>
+              <span>生命的小脚印 ♡</span>
+              <span id="timelineCount">0 个小脚印</span>
             </div>
             <div class="timeline-track" id="timelineTrack">
-              <div class="timeline-empty">尚无事件。稳定、周期、混沌、濒危与繁殖会在此留下痕迹。</div>
+              <div class="timeline-empty">还没有小脚印呢 ♡ 安静、轮回、灵动、需要关爱和新生都会留在这里。</div>
             </div>
           </div>
         </div>
 
         <aside class="rail">
           <div class="rail-tabs" id="railTabs">
-            <button data-tab="rule" class="active">规则</button>
-            <button data-tab="sound">声音</button>
-            <button data-tab="env">环境</button>
-            <button data-tab="struct">结构</button>
+            <button data-tab="rule" class="active">它的配方</button>
+            <button data-tab="sound">♪ 歌声</button>
+            <button data-tab="env">家的环境</button>
+            <button data-tab="struct">它的样子</button>
           </div>
           <div class="rail-body">
             <section class="panel active" id="panel-rule"></section>
@@ -157,24 +151,24 @@
     <main id="view-commons" class="view">
       <header class="view-head">
         <div class="view-title">
-          <div class="eyebrow">THE COMMONS · 生命公地</div>
-          <h2>领养一枚种子，或把此刻留下</h2>
+          <div class="eyebrow">THE GARDEN · 种子花园</div>
+          <h2>领养一颗种子，或把此刻的美好留下</h2>
           <p>
-            公地保存完整配方：生命种子 + 环境 + 随机种子 + 引擎版本，并附结构指纹。
-            同一生命在不同环境下会长出不同表型，发出不同声音。
+            花园里保存着完整的配方：生命种子 + 家的环境 + 随机的小心情 + 引擎版本，
+            还有它独一无二的结构指纹。同一颗种子放进不同家里，会长出不同的模样，唱出不同的歌。
           </p>
         </div>
         <div class="commons-tools">
           <label class="search">
-            <input id="commonsSearch" type="search" placeholder="搜索名字 / 规则 / 世代" />
+            <input id="commonsSearch" type="search" placeholder="搜索名字 / 配方 / 世代" />
           </label>
           <select id="commonsSort" class="select">
-            <option value="new">最近收录</option>
-            <option value="active">最活跃</option>
-            <option value="stable">最稳定</option>
-            <option value="kin">与当前最亲</option>
+            <option value="new">最近收藏</option>
+            <option value="active">最有活力</option>
+            <option value="stable">最安静温柔</option>
+            <option value="kin">和当前最像</option>
           </select>
-          <button id="commonsHatch" class="primary">随机孵化</button>
+          <button id="commonsHatch" class="primary">随机孵一颗 ♡</button>
         </div>
       </header>
       <div class="commons-stats" id="commonsStats"></div>
@@ -182,10 +176,10 @@
       <section class="env-section">
         <div class="env-head">
           <div>
-            <div class="eyebrow">ENVIRONMENT RECIPES · 环境配方</div>
-            <h3>环境也是孵化配方</h3>
+            <div class="eyebrow">HOME ENVIRONMENTS · 家的配方</div>
+            <h3>一个好家，也是孵化配方</h3>
           </div>
-          <p>同一生命种子放进不同环境，会长出不同表型、发出不同声音。领养一个环境，或用它孵化当前种子。</p>
+          <p>同一颗种子放进不同的家里，会长出不同的样子、唱出不同的歌。领养一个家，或用它孵化当前的种子。</p>
         </div>
         <div class="env-grid" id="envGallery"></div>
       </section>
@@ -194,32 +188,32 @@
       <div class="commons-foot">
         <div>
           <span class="dot muted"></span>
-          缩略图默认使用代表性环境下的结构指纹快照。仅高价值种子开放定制封面。
+          缩略图使用温和环境下的结构指纹快照。高价值的种子会有专属封面 ♡
         </div>
-        <button id="clearLocal" class="ghost tiny">清空本地收录</button>
+        <button id="clearLocal" class="ghost tiny">清空我的花园</button>
       </div>
     </main>
 
     <main id="view-compare" class="view">
       <header class="view-head">
         <div class="view-title">
-          <div class="eyebrow">COMPARATIVE LISTENING · 对比聆听</div>
-          <h2>把两只生命放进同一副耳朵</h2>
-          <p>A 在左声道，B 在右声道。系统同步放大结构差异，但最终判断仍交给聆听。</p>
+          <div class="eyebrow">BINAURAL LISTENING · 双耳聆听</div>
+          <h2>把两颗小心心放进同一副耳朵</h2>
+          <p>A 在左耳朵，B 在右耳朵。系统会轻轻放大它们的差异，但最终的感受，交给你的心 ♪</p>
         </div>
         <div class="compare-controls">
           <div class="segmented" id="compareMode">
-            <button data-mode="seed" class="active">同环境 · 异种子</button>
-            <button data-mode="env">同种子 · 异环境</button>
+            <button data-mode="seed" class="active">同家 · 不同种子</button>
+            <button data-mode="env">同种子 · 不同家</button>
           </div>
-          <button id="compareAudio" class="primary">同步聆听</button>
+          <button id="compareAudio" class="primary">♪ 一起聆听</button>
           <button id="comparePlay" class="ghost">暂停</button>
         </div>
       </header>
       <div class="compare-grid">
         <article class="compare-card" data-side="a">
           <div class="compare-top">
-            <div class="side-tag">A · 左声道</div>
+            <div class="side-tag">A · 左耳 ♡</div>
             <select id="compareSeedA" class="select seed-select"></select>
             <select id="compareEnvA" class="select env-select"></select>
           </div>
@@ -231,7 +225,7 @@
         </article>
         <article class="compare-card" data-side="b">
           <div class="compare-top">
-            <div class="side-tag b">B · 右声道</div>
+            <div class="side-tag b">B · 右耳 ♡</div>
             <select id="compareSeedB" class="select seed-select"></select>
             <select id="compareEnvB" class="select env-select"></select>
           </div>
@@ -248,11 +242,11 @@
     <main id="view-lineage" class="view">
       <header class="view-head">
         <div class="view-title">
-          <div class="eyebrow">LINEAGE · 谱系</div>
-          <h2>每一次杂交都留下基因与声音的交叉</h2>
-          <p>谱系记录双亲、世代与配方。你可以回到任一代，继续照料或再次杂交。</p>
+          <div class="eyebrow">FAMILY TREE · 家谱</div>
+          <h2>每一次相爱，都会留下基因与歌声的交叉</h2>
+          <p>家谱记录双亲、世代与配方。你可以回到任何一代，继续疼爱它，或让它再次相爱 ♡</p>
         </div>
-        <button id="lineageHybrid" class="primary">从当前生命开始杂交</button>
+        <button id="lineageHybrid" class="primary">让当前的小心心去相爱</button>
       </header>
       <div class="lineage-summary" id="lineageSummary"></div>
       <div class="lineage-tree" id="lineageTree"></div>
@@ -267,23 +261,23 @@
           <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.2" />
           <circle cx="12" cy="12" r="2.4" fill="currentColor" />
         </svg>
-        <div class="eyebrow">A LIVING COMMONS</div>
+        <div class="eyebrow">A LOVING COMMONS · 一座温柔的花园</div>
         <h2>先听，再看。</h2>
         <p>
-          Commons 是一座人工生命公地。你领养的不是一张图，而是一套会呼吸的规则。
-          它的结构可以被测量，但它真正活着的样子，需要你听。
+          Commons 是一座会呼吸的小心心花园。你领养的不是一张图片，而是一整套温柔的规则。
+          它的结构可以被测量，但它真正活着的样子，需要你用心聆听 ♡
         </p>
         <ol class="intro-steps">
-          <li><b>领养</b><span>从公地取一枚种子，或让系统随机孵化。</span></li>
-          <li><b>聆听</b><span>生命状态实时映射为五声音阶：密度是音量，熵是亮度，活跃度是节奏。</span></li>
-          <li><b>照料</b><span>调整规则、映射与环境，听见它如何改变。</span></li>
-          <li><b>留下</b><span>保存配方与结构指纹，与他人对比、杂交。</span></li>
+          <li><b>领养 ♡</b><span>从花园取一颗种子，或让系统随机孵一颗。</span></li>
+          <li><b>♪ 聆听</b><span>生命状态会实时变成五声音阶的歌：密度是音量，温柔度是亮度，活跃度是节奏。</span></li>
+          <li><b>照料 ✿</b><span>调整配方、歌声和家的环境，听它的歌怎么变。</span></li>
+          <li><b>留下 ✧</b><span>把配方和指纹存入花园，或和朋友让它们相爱。</span></li>
         </ol>
         <div class="intro-actions">
-          <button id="introListen" class="primary">边听边开始</button>
-          <button id="introSilent" class="ghost">先静音观察</button>
+          <button id="introListen" class="primary">♪ 边听边开始</button>
+          <button id="introSilent" class="ghost">先安静看看</button>
         </div>
-        <div class="intro-foot">无需账号 · 配方保存在本地 · 匿名数据默认关闭</div>
+        <div class="intro-foot">无需账号 · 配方保存在本地 · 温柔分享默认关闭</div>
       </div>
     </div>
 

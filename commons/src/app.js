@@ -71,12 +71,12 @@ const TYPE_COLOR = {
 };
 
 const TYPE_EVENT_LABEL = {
-  stable: '进入稳定态',
-  periodic: '周期结构显现',
-  chaotic: '混沌涌现',
-  endangered: '濒危 · 密度告急',
-  extinct: '寂灭 · 生命终止',
-  drifting: '进入漂移态',
+  stable: '进入安睡态 ♡',
+  periodic: '开始轻轻呼吸 ♡',
+  chaotic: '变得灵动起来 ✿',
+  endangered: '需要更多关爱哦 ♡',
+  extinct: '安静地休眠了 ♡',
+  drifting: '开始慢慢漫步',
 };
 
 /* ------------------------------------------------------------------ */
@@ -212,7 +212,7 @@ function ensureAudio() {
   if (state.audioCtx) return state.audioCtx;
   const ctx = createAudioContext();
   if (!ctx) {
-    toast('当前浏览器不支持 Web Audio', 'warn');
+    toast('你的浏览器还不支持唱歌呢，好可惜 ♡', 'warn');
     return null;
   }
   state.audioCtx = ctx;
@@ -270,7 +270,7 @@ function syncAudioForView() {
 function updateSoundLabel() {
   const el = $('#hudSound');
   if (!el) return;
-  el.textContent = state.audioOn ? 'LIVE · 五声音阶' : '静音 · 点击聆听';
+  el.textContent = state.audioOn ? '♪ 正在为你唱歌' : '还在安静等待 ♪';
 }
 
 /* ------------------------------------------------------------------ */
@@ -506,7 +506,7 @@ function updateBadges(m) {
     <span class="badge">引擎 <b>${ENGINE_LABEL[rec.seed.genome.engine]}</b></span>
     <span class="badge">种子世代 <b>${gen}</b></span>
     <span class="badge">亲缘 <b>${kinCount}</b></span>
-    ${state.blind ? '<span class="badge" data-tone="cyclic">盲听</span>' : ''}`;
+    ${state.blind ? '<span class="badge" data-tone="cyclic">♪ 用心听</span>' : ''}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -664,8 +664,8 @@ function renderEnvPanel() {
 
 function renderStructPanel() {
   $('#panel-struct').innerHTML = `
-    <div class="switch-row"><span><b>盲听模式</b><br><span class="hint" style="margin:0">先凭听觉判断，再回来看结构。</span></span><button class="switch ${state.blind ? 'on' : ''}" data-action="blind"></button></div>
-    <div class="blind-note">数值暂时隐去。先听 30 秒，再关闭盲听模式对照结构。</div>
+    <div class="switch-row"><span><b>♪ 用心聆听模式</b><br><span class="hint" style="margin:0">先凭心里的感觉判断，再回来看它的样子。</span></span><button class="switch ${state.blind ? 'on' : ''}" data-action="blind"></button></div>
+    <div class="blind-note">数值暂时藏起来了。先听 30 秒，再打开它看看自己的感受准不准 ♡</div>
     <div class="struct-content">
     <div class="section-label">诊断</div>
     <div class="diagnosis" id="structDiagnosis">—</div>
@@ -716,9 +716,9 @@ function renderStructPanel() {
     </div>
     <div class="blind-stage">
       <div class="blind-sigil"><span></span></div>
-      <p class="blind-title">数值已隐去。</p>
-      <p class="blind-copy">先听 30 秒：它是稳定、周期，还是正在消散？<br>再恢复数值，对照你的判断。</p>
-      <button class="ghost" data-action="blind">恢复数值</button>
+      <p class="blind-title">数值藏起来啦 ♡</p>
+      <p class="blind-copy">先听 30 秒：它是安睡、呼吸，还是灵动？<br>再打开数值，对照一下自己的感受。</p>
+      <button class="ghost" data-action="blind">打开数值看看</button>
     </div>`;
 }
 
@@ -728,7 +728,7 @@ function toggleBlind() {
   renderStructPanel();
   updateStructValues();
   updateHUD(true);
-  toast(state.blind ? '盲听模式：数值已隐去，先听。' : '数值已恢复，回到结构对照。');
+  toast(state.blind ? '♪ 数值藏起来啦，先用心听。' : '数值打开啦，来对照一下感受。');
 }
 
 function updateStructValues() {
@@ -779,20 +779,20 @@ function updateStructValues() {
 function diagnosisText(m) {
   const pct = (m.density * 100).toFixed(1);
   const hints = {
-    stable: '听感趋向持续低音与缓慢脉冲，适合作为参照。',
-    periodic: '听感会形成可辨认的循环节奏，像一颗心跳。',
-    chaotic: '声音更密、更亮、节奏不稳；结构仍在寻找吸引子。',
-    endangered: '声音稀疏，低音拖长，脉冲几乎消失。',
-    extinct: '只剩环境低鸣与尾音。',
-    drifting: '声音随结构缓慢漂移，缺少强节拍。',
+    stable: '歌声温柔持续，像一段慢慢的呼吸，最适合用来做参照。',
+    periodic: '歌声会形成能认出来的循环，像一颗在跳动的小心心 ♪',
+    chaotic: '声音更密、更亮、节奏也更灵动；它还在寻找自己的节奏。',
+    endangered: '声音变得轻轻的，歌声拖长了，节拍也快要消失了。',
+    extinct: '只剩下环境的轻轻哼唱和一点点余音。',
+    drifting: '歌声随着它慢慢漫步，还没有定下来。',
   };
-  let html = `当前为<b>${m.typeLabel}</b>态：密度 ${pct}%，结构熵 ${m.entropy.toFixed(2)}，`;
-  html += m.period ? `周期 ${m.period} 代，` : '未检出短周期，';
-  html += `活跃度 ${m.activity.toFixed(2)}，邻接直径 ${m.diameter} 格，${m.components} 个连通块。<br>${hints[m.type] || ''}`;
+  let html = `它现在是<b>${m.typeLabel}</b>态：密度 ${pct}%，温柔度 ${m.entropy.toFixed(2)}，`;
+  html += m.period ? `呼吸周期 ${m.period} 代，` : '还没有明显的呼吸周期，';
+  html += `活跃度 ${m.activity.toFixed(2)}，邻接范围 ${m.diameter} 格，${m.components} 个连通块。<br>${hints[m.type] || ''}`;
   if (m.type === 'endangered') {
-    html += '<br><b>照料建议</b>：降低扰动或提高约束，增加资源节律，或换用更宽容的规则。';
+    html += '<br><b>轻轻关怀</b>：试试调低扰动、增加温柔的约束，或换个更宽容的家，也许它会好起来 ♡';
   } else if (m.type === 'chaotic' && m.density > 0.24) {
-    html += '<br><b>照料建议</b>：提高约束强度或降低资源注入，可能收缩为周期结构。';
+    html += '<br><b>温柔引导</b>：提高约束或减少一点资源注入，也许它会找到安静的节奏。';
   }
   return html;
 }
@@ -927,7 +927,7 @@ function applyEnvPreset(envId, mode) {
     afterEnvReset();
     renderEnvPanel();
     switchView('cultivate');
-    toast(`环境已切换：${preset.label}`);
+    toast(`家的环境换好啦：${preset.label} ♡`);
     return;
   }
   if (mode === 'hatch') {
@@ -953,7 +953,7 @@ function applyEnvPreset(envId, mode) {
     renderTimeline();
     addLifecycle('hatch', `环境孵化 · ${name.zh}`, state.metrics, { force: true, toast: false });
     switchView('cultivate');
-    toast(`已在「${preset.label}」中孵化子代`);
+    toast(`在「${preset.label}」家里孵出了一颗新种子 ♡`);
     return;
   }
   if (mode === 'share') {
@@ -971,12 +971,12 @@ function applyEnvPreset(envId, mode) {
 
 function diagnosisShort(m) {
   const map = {
-    stable: '稳定重复，像一段持续的呼吸。',
-    periodic: `以 ${m.period || '—'} 代为节奏循环。`,
-    chaotic: '高熵、难预测，声音密集而明亮。',
-    endangered: '密度告急，结构正在消散。',
-    extinct: '已寂灭，只剩环境的回声。',
-    drifting: '缓慢漂移，尚未锁定吸引子。',
+    stable: '安睡中，像一段温柔的呼吸 ♡',
+    periodic: `每 ${m.period || '—'} 代轻轻呼吸一次。`,
+    chaotic: '灵动而充满惊喜，歌声明亮热闹。',
+    endangered: '歌声轻轻的，需要你的关爱 ♡',
+    extinct: '安静地休眠了，只剩一点点余音。',
+    drifting: '慢慢漫步中，还在找自己的节奏。',
   };
   return map[m.type] || '';
 }
@@ -1028,7 +1028,7 @@ function adoptRecipe(rec, opts = {}) {
     toast: opts.toast || false,
   });
   switchView('cultivate');
-  toast(opts.toastText || `已领养「${copy.seed.name}」`);
+  toast(opts.toastText || `领养成功 ♡「${copy.seed.name}」`);
 }
 
 function hatchRandom(opts = {}) {
@@ -1093,7 +1093,7 @@ function hatchRandom(opts = {}) {
   renderTimeline();
   addLifecycle('hatch', `孵化 · ${name.zh}`, state.metrics, { force: true, toast: false });
   switchView('cultivate');
-  toast(`随机孵化「${name.zh}」`, 'ok');
+  toast(`随机孵出了一颗小心心 ♡「${name.zh}」`, 'ok');
 }
 
 const BOUNDARY_LABEL = { torus: '环面', wall: '硬壁' };
@@ -1105,7 +1105,7 @@ const BOUNDARY_LABEL = { torus: '环面', wall: '硬壁' };
 function reseed() {
   rebuildSim();
   addLifecycle('hatch', '按配方重播', state.metrics, { force: true, toast: false });
-  toast('已按当前配方重新播种');
+  toast('按配方重新播种好啦 ♪');
 }
 
 function mutateCurrent() {
@@ -1167,7 +1167,7 @@ function mutateCurrent() {
     toast: false,
     detail: `亲本 ${parent.seed.name}`,
   });
-  toast(`分裂出「${name.zh}」，已记录谱系`, 'ok');
+  toast(`轻轻分裂出了「${name.zh}」，家谱已记录 ♡`, 'ok');
 }
 
 function iterateCurrentSeed() {
@@ -1249,7 +1249,7 @@ function saveCurrent(layer) {
   state.lib.recipes.push(rec);
   saveLibrary(state.lib);
   closeModal();
-  toast(`已保存「${name}」到公地`, 'ok');
+  toast(`「${name}」已存入花园 ♡`, 'ok');
   renderCommons();
   refreshCompareOptions();
 }
@@ -1273,7 +1273,7 @@ function openShareModal() {
         onClick: async (el) => {
           const text = $('#shareText', el)?.value || url;
           const ok = await copyText(text);
-          toast(ok ? '分享链接已复制' : '复制失败，请手动选择链接', ok ? 'ok' : 'warn');
+          toast(ok ? '链接已复制到剪贴板 ✿' : '没能自动复制，来手动选一下吧 ♡', ok ? 'ok' : 'warn');
         },
       },
     ],
@@ -1302,7 +1302,7 @@ async function copyText(text) {
 function openHybridModal(prePartnerId) {
   const partners = allCommons(state.lib).filter((r) => r.id !== state.recipe.id);
   if (!partners.length) {
-    toast('公地暂无其他可杂交的种子', 'warn');
+    toast('花园里还没有其他种子可以一起相爱，先存几颗进来吧 ♡', 'warn');
     return;
   }
   const rows = partners
@@ -1332,7 +1332,7 @@ function openHybridModal(prePartnerId) {
         onClick: (el) => {
           const selected = $('.choice.selected', el)?.dataset.partner;
           if (!selected) {
-            toast('请选择一枚伙伴', 'warn');
+            toast('选一个你喜欢的伙伴吧 ♡', 'warn');
             return;
           }
           doHybrid(selected);
@@ -1362,7 +1362,7 @@ function doHybrid(partnerId) {
     toast: false,
     detail: `亲本 ${state.recipe.seed.name} × ${partner.seed.name}`,
   });
-  toast(`杂交出「${child.seed.name}」，谱系已更新`, 'ok');
+  toast(`它们相爱生出了「${child.seed.name}」，家谱已更新 ♡`, 'ok');
   renderCommons();
   refreshCompareOptions();
 }
@@ -1391,7 +1391,7 @@ function shareRecipeObject(rec) {
         cls: 'primary',
         onClick: async (el) => {
           const ok = await copyText($('#shareText', el)?.value || url);
-          toast(ok ? '链接已复制' : '复制失败', ok ? 'ok' : 'warn');
+          toast(ok ? '链接已复制 ✿' : '没能自动复制，来手动选一下吧 ♡', ok ? 'ok' : 'warn');
         },
       },
     ],
@@ -1721,8 +1721,8 @@ function openResearchModal() {
     updateResearchLabel();
     $('#consentSwitch')?.classList.toggle('on', on);
     const primary = $('#modalLayer .modal-actions .primary');
-    if (primary) primary.textContent = on ? '关闭匿名记录' : '开启匿名记录';
-    toast(on ? '已开启匿名记录（仅保存在本机）' : '已关闭匿名记录', on ? 'ok' : 'warn');
+    if (primary) primary.textContent = on ? '关闭温柔分享' : '开启温柔分享';
+    toast(on ? '温柔分享已开启 ♡ 数据只保存在你本机' : '温柔分享已关闭', on ? 'ok' : 'warn');
   };
   const body = `
     <p>匿名科研数据用于理解生命周期事件与结构指标的分布。它完全可选，默认关闭，且只保存在本机浏览器。</p>
@@ -1749,7 +1749,7 @@ function openResearchModal() {
           `commons-anonymous-${new Date().toISOString().slice(0, 10)}.json`,
           { version: 1, engine: `AL-${ENGINE_VERSION}`, exportedAt: new Date().toISOString(), events: lib.telemetry },
         );
-        toast('已导出匿名数据');
+        toast('温柔分享数据已导出 ✿');
       },
     },
   ];
@@ -1761,7 +1761,7 @@ function openResearchModal() {
         lib.telemetry = [];
         saveLibrary(lib);
         openResearchModal();
-        toast('已清空匿名记录', 'warn');
+        toast('温柔分享记录已清空', 'warn');
       },
     });
   }
@@ -1861,7 +1861,7 @@ function bindUI() {
   $('#stageHost').addEventListener('click', () => {
     if (!state.audioOn) {
       setAudio(true);
-      toast('聆听已开启');
+      toast('♪ 聆听开始啦');
     }
   });
 
@@ -1928,7 +1928,7 @@ function bindUI() {
       if (!state.audioOn) setAudio(true);
       ensureAudio();
       state.audio?.triggerEvent('periodic', 1);
-      toast('试听事件声');
+      toast('听听生命的小脚印 ♪');
     } else if (action === 'goto-compare') switchView('compare');
     else if (action === 'goto-commons') switchView('commons');
     else if (action === 'blind') toggleBlind();
@@ -1939,7 +1939,7 @@ function bindUI() {
     saveLibrary(state.lib);
     $('#intro').classList.add('hidden');
     setAudio(true);
-    toast('欢迎来到公地。先听，再看。');
+    toast('欢迎来到小心心花园 ♡ 先听，再看。');
   });
   $('#introSilent').addEventListener('click', () => {
     state.lib.seenIntro = true;
@@ -2239,7 +2239,7 @@ function openClearModal() {
           closeModal();
           renderCommons();
           refreshCompareOptions();
-          toast('本地收录已清空', 'warn');
+          toast('花园已清空 ♡', 'warn');
         },
       },
     ],
@@ -2365,7 +2365,7 @@ function boot() {
     $('#intro').classList.remove('hidden');
   }
   if (shared) {
-    toast('已通过分享链接领养生命');
+    toast('通过朋友的链接领养了一颗 ♡');
   }
   switchView('cultivate');
   requestAnimationFrame(frame);
