@@ -76,6 +76,8 @@ import {
 } from './scientific.js';
 import { ENGINE_GRID, ENV_DEFAULTS } from './config.js';
 import { runPlayerMC } from './cpm.js';
+/* B3 读回路：众包发现学到的环境默认值（由 physics.js 的 crowdFeedbackBridge 写入） */
+import { getCrowdDefaultEnv } from './physics.js';
 
 export { REACTION_DIFFUSION_PRESETS, SCIENCE_VERSION };
 
@@ -274,13 +276,17 @@ export function applyLeniaPreset(genome, key) {
 }
 
 export function defaultEnv(overrides = {}) {
+  /* 🧬 B3 读回路：crowdFeedbackBridge 学到的环境默认值在这里生效。
+     没有学习记录时 getCrowdDefaultEnv() 返回 null → 回落到代码默认值；
+     显式 overrides（预设环境 / 极端环境 / 随机孵化）永远优先。 */
+  const learned = getCrowdDefaultEnv();
   return {
     pattern: 'soup',
     boundary: 'torus',
-    noise: 0,
+    noise: learned?.noise ?? 0,
     resource: { rate: 0, period: 90 },
-    timeScale: 1,
-    constraint: ENV_DEFAULTS.constraint,
+    timeScale: learned?.timeScale ?? 1,
+    constraint: learned?.constraint ?? ENV_DEFAULTS.constraint,
     ...overrides,
   };
 }

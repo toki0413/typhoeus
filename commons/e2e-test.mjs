@@ -7,10 +7,10 @@
  * 依赖：18 个 src/*.js（不需要 app.js 的 DOM 环境，用 jsdom 模拟）
  */
 
-import { createEngine } from './src/engines.js';
+import { createEngine, defaultEnv } from './src/engines.js';
 import { matchPatternLibrary } from './src/patterns.js';
 import { runParameterScan } from './src/scan.js';
-import { applyExoticPhysics } from './src/physics.js';
+import { applyExoticPhysics, crowdFeedbackBridge, getCrowdDefaultEnv } from './src/physics.js';
 import { PetState } from './src/pet.js';
 import { saveAsDiscovery, loadLeaderboard, rankDiscoveries, buildOpenScienceIssue, clearLeaderboard } from './src/leaderboard.js';
 import { computeAudioChain } from './src/physics.js';
@@ -203,6 +203,54 @@ try {
   loadLeaderboard();
 } catch(e) { threw = true; fail('Null-safety 不应 throw', e.message); }
 if (!threw) pass('缺字段/missing schema Node mjs 环境不 throw', 'safeStorage 包装生效');
+
+// ============================================================
+// T7: B3 众包反馈读回路（crowdFeedbackBridge 写 → defaultEnv 读）
+// ============================================================
+console.log('\n🧬 T7. B3 众包反馈读回路');
+
+const _mem = new Map();
+globalThis.localStorage = {
+  getItem: (k) => (_mem.has(k) ? _mem.get(k) : null),
+  setItem: (k, v) => { _mem.set(k, String(v)); },
+  removeItem: (k) => { _mem.delete(k); },
+};
+
+// 7a: 没有学习记录 → 代码默认值
+const baseEnv = defaultEnv();
+pass('无学习记录 → 代码默认环境',
+     `noise=${baseEnv.noise} constraint=${baseEnv.constraint.toFixed(2)} timeScale=${baseEnv.timeScale}`,
+     baseEnv.noise === 0 && baseEnv.timeScale === 1);
+
+// 7b: 两条发现（权重 similarity² = 1 : 0.25）→ 众包均值
+_mem.set('commons.leaderboard.v1', JSON.stringify([
+  { fingerprint: '0x0000000a', similarity: 100, environment: { noise: 0.30, constraint: 0.50, timeScale: 2.0 } },
+  { fingerprint: '0x0000000b', similarity: 50,  environment: { noise: 0.10, constraint: 0.10, timeScale: 1.0 } },
+]));
+const fb = crowdFeedbackBridge({ fingerprint: '0x0000000a' });
+pass('crowdFeedbackBridge 学习成功', `updated=${fb.updated} seeds=${fb.seedCount}`, fb.updated === true);
+
+// 期望：noise 0.02*0.9 + 0.26*0.1 = 0.044 · constraint 0.15*0.9 + 0.42*0.1 = 0.177 · timeScale 1 + 0.08 = 1.08
+const near = (a, b) => Math.abs(a - b) < 1e-9;
+const learnedEnv = getCrowdDefaultEnv();
+pass('学习值已持久化',
+     `noise=${learnedEnv?.noise?.toFixed(4)} constraint=${learnedEnv?.constraint?.toFixed(4)} timeScale=${learnedEnv?.timeScale?.toFixed(4)}`,
+     learnedEnv && near(learnedEnv.noise, 0.044) && near(learnedEnv.timeScale, 1.08));
+
+const envAfter = defaultEnv();
+pass('defaultEnv 读到众包默认值（读回路闭合）',
+     `noise=${envAfter.noise.toFixed(4)} constraint=${envAfter.constraint.toFixed(4)} timeScale=${envAfter.timeScale.toFixed(4)}`,
+     near(envAfter.noise, 0.044) && near(envAfter.constraint, 0.177) && near(envAfter.timeScale, 1.08));
+pass('显式 overrides 优先于众包默认',
+     `noise=${defaultEnv({ noise: 0.5 }).noise}`,
+     defaultEnv({ noise: 0.5 }).noise === 0.5);
+
+// 7c: 损坏存储（NaN / 字符串 / null）不能污染物理
+_mem.set('commons.crowdFeedback.v1', JSON.stringify({ noise: 'oops', constraint: null, timeScale: NaN }));
+const envBad = defaultEnv();
+pass('损坏存储 → 回落代码默认值',
+     `noise=${envBad.noise} constraint=${envBad.constraint} timeScale=${envBad.timeScale}`,
+     envBad.noise === 0 && Number.isFinite(envBad.constraint) && envBad.timeScale === 1);
 
 // ============================================================
 // 总结

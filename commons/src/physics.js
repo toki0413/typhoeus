@@ -463,12 +463,22 @@ export function crowdFeedbackBridge(newDiscovery) {
   }
 }
 
-/* ---- 读众包默认值（engines.js defaultEnv 会调这个）---- */
+/* ---- 读众包默认值（engines.js defaultEnv 会调这个）----
+ * 这是外部输入（localStorage 可能被手改、旧版本残留），所以只放行
+ * 有限数值并夹到物理合理区间；非法字段返回 undefined，由调用方回落默认值。
+ */
 export function getCrowdDefaultEnv() {
   try {
     const raw = typeof safeStorage !== 'undefined'
       ? safeStorage?.get(CROWD_KEY, null)
       : JSON.parse(localStorage.getItem(CROWD_KEY) || 'null');
-    return raw && typeof raw === 'object' ? raw : null;
+    if (!raw || typeof raw !== 'object') return null;
+    const pick = (v, lo, hi) =>
+      Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : undefined;
+    return {
+      noise:      pick(raw.noise, 0, 1),
+      constraint: pick(raw.constraint, 0, 1),
+      timeScale:  pick(raw.timeScale, 0.05, 5),
+    };
   } catch { return null; }
 }
