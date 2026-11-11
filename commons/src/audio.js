@@ -118,12 +118,33 @@ export class AudioEngine {
 
     /* ---- 音乐性增强（v3）状态 ---- */
     this._heartbeatNext = 0;       // Layer 1: 心跳
+    /* Attention 统一聚合：heartbeatBPM 由 tick() 统一写
+       updateMetrics() 写 _baseHeartbeatBPM（metrics 基准）
+       setAudioChain()  写 _tempoMultiplier（Pet × 星球）
+       tick()           聚合：_heartbeatBPM = _baseHeartbeatBPM × _tempoMultiplier */
     this._heartbeatBPM = AUDIO_CONSTANTS.heartbeat.defaultBPM;
-    this._chordNext = 0;           // Layer 2: 和弦 pad
+    this._baseHeartbeatBPM = AUDIO_CONSTANTS.heartbeat.defaultBPM;
+    this._tempoMultiplier = 1.0;   // 默认没有 Pet/env 修饰
+    /* Attention 统一聚合：strictness 由 tick() 统一写
+       updateMetrics() 写 _baseChaosTemp（Lyapunov 基准）
+       setAudioChain()  写 _petTensionOffset（Pet tension 叠加）
+       tick()           聚合：严格度 = clamp(1 - (_baseChaosTemp + _petTensionOffset) × coef, min, max) */
+    this._baseChaosTemp = 0.2;
+    this._petTensionOffset = 0;
+    /* Attention 统一聚合：delayWet/Fb 由 tick() 统一 setTargetAtTime
+       updateMetrics() 写 _metricsWet/_metricsFb（metrics 基准）
+       setAudioChain()  写 _targetWet/_targetFb（Pet reverb 目标）
+       tick()           加权 */
+    this._metricsWet = AUDIO_CONSTANTS.delay.wet;
+    this._metricsFb  = AUDIO_CONSTANTS.delay.feedback;
+    this._targetWet  = AUDIO_CONSTANTS.delay.wet;
+    this._targetFb   = AUDIO_CONSTANTS.delay.feedback;
+    /* Chord 用拍数，不是秒 —— 让和弦和心跳同频 */
+    this._chordNext = 0;
     this._chordRootDegree = 0;
     this._chordDensity = 'triads';
     this._chordProgIdx = 0;
-    this._chordIntervalSec = 8;
+    this._chordBeatCount = 8;       // 默认 8 拍切换一次（约 6.67 秒 @ 72BPM）
     this._melodyContour = null;    // Layer 3: 主旋律
     this._melodyIdx = 0;
     this._sparkleNext = 0;         // Layer 4: 水晶闪烁
@@ -252,19 +273,16 @@ export class AudioEngine {
     this._audioChain = chain;
     if (!chain) return;
     if (!this.built) return;
-    const now = this.ctx.currentTime;
     const AC = AUDIO_CONSTANTS;
-    const strictC = AC.strictness;
 
-    // 1. finalTempo → heartbeat BPM 覆盖（极端环境心跳自然快慢）
-    //    chain.finalTempo 是倍率 (0.35 ~ 1.40)，乘在 heartbeatBPM 上
+    /* Attention 统一聚合：只写缓存变量，不再直接写最终状态 */
+
+    // 1. finalTempo → 写 _tempoMultiplier（tick() 里 × _baseHeartbeatBPM）
     if (chain.finalTempo !== undefined) {
-      const target = this._heartbeatBPM * chain.finalTempo;
-      /* 平滑过渡：α=0.4 新值 + α=0.6 旧值（config.heartbeat.smoothRatio）*/
-      this._heartbeatBPM = this._heartbeatBPM * AC.heartbeat.smoothRatioOld + target * AC.heartbeat.smoothRatioNew;
+      this._tempoMultiplier = chain.finalTempo;
     }
 
-    // 2. finalWave → 写入 mapping.wave（旋律音 + 心跳音用这个音色）
+    // 2. finalWave → 写入 mapping.wave（tick() 主旋律/心跳音/新生命音全用这个）
     if (chain.finalWave) {
       if (!this.mapping) this.mapping = {};
       this.mapping.wave = chain.finalWave;
@@ -275,26 +293,17 @@ export class AudioEngine {
       this._activeScaleDegrees = chain.finalScaleDegrees;
     }
 
-    // 4. finalReverb → delay wet + delay feedback（Pet sad/sick → 干声；happy → 混响）
+    // 4. finalReverb → 写 _targetWet/_targetFb（tick() 加权 × metrics 基准）
     if (chain.finalReverb !== undefined) {
       const wetR = AC.reverbAndTension.wetRange;
       const fbR  = AC.reverbAndTension.fbRange;
-      const wet = wetR.min + chain.finalReverb * (wetR.max - wetR.min);
-      const fb  = fbR.min  + chain.finalReverb  * (fbR.max  - fbR.min);
-      this.delayWet.gain.setTargetAtTime(wet, now, 0.5);
-      this.delayFb.gain.setTargetAtTime(fb, now, 0.5);
+      this._targetWet = wetR.min + chain.finalReverb * (wetR.max - wetR.min);
+      this._targetFb  = fbR.min  + chain.finalReverb  * (fbR.max  - fbR.min);
     }
 
-    // 5. finalTension → chaos temperature 偏移 → strictness
-    //    Attention 反模式已修：strictness 只在此处算一次（Pet mood + env 是最高优先级的上下文）
-    //    updateMetrics() 里那套 chaosKnob.temperatureK 计算现在不覆盖这里 —— 谁最后执行谁生效，这里保证最后
+    // 5. finalTension → 写 _petTensionOffset（tick() 叠加到 _baseChaosTemp）
     if (chain.finalTension !== undefined) {
-      const baseTemp = this._chaosTemperature ?? 0.2;
-      const effectiveTemp = Math.min(1.0, baseTemp + chain.finalTension * AC.reverbAndTension.tensionChaosCoef);
-      this._chaosTemperature = effectiveTemp;
-      if (this.mapping) {
-        this.mapping.strictness = clamp(1 - effectiveTemp * strictC.chaosCoef, strictC.min, strictC.max);
-      }
+      this._petTensionOffset = Math.min(1.0, chain.finalTension * AC.reverbAndTension.tensionChaosCoef);
     }
 
     // 6. 极端环境日志（仅状态变化时打印，避免刷屏）
@@ -372,11 +381,11 @@ export class AudioEngine {
 
     /* [3] Bell & Gabora 2016: Edge of Chaos creativity knob */
     const chaosKnob = edgeOfChaosKnob(lyapunov);
-    this._chaosTemperature = chaosKnob.temperatureK;
+    /* Attention 统一聚合：只写 _baseChaosTemp，不再直接写 mapping.strictness */
+    this._baseChaosTemp = chaosKnob.temperatureK;
+    this._chaosTemperature = chaosKnob.temperatureK;  // 保留给日志
     this._chaosLevel = chaosKnob.chaosLevel;
-    // chaos temperature 控制 strictness（混沌越高越不严格五声）
-    mapping.strictness = clamp(1 - chaosKnob.temperatureK * 0.55, 0.2, 1.0);
-    // chaos 控制 voice leading maxJump（混沌越高允许跳得越多）
+    /* voice leading maxJump 可以直接写（不冲突）*/
     this._currentMaxJump = chaosKnob.temperatureK < 0.25 ? 2 : chaosKnob.temperatureK < 0.5 ? 7 : 12;
 
     /* [1] Kolic 2022: 节奏 pattern + complexity feedback */
@@ -418,25 +427,17 @@ export class AudioEngine {
     // attractor type → 物理心率范围
     const targetBPM = HEARTBEAT_BPM[attractorType] ?? 72;
     // 加 activity 微调（运动 → 心率稍微上去）
-    const withActivity = targetBPM + activity * 25;
-    // 平滑过渡（α=0.08，让心率不要跳变）
-    this._heartbeatBPM = this._heartbeatBPM * 0.92 + withActivity * 0.08;
+    /* Attention 统一聚合：只写 _baseHeartbeatBPM，不再直接写 _heartbeatBPM */
+    this._baseHeartbeatBPM = targetBPM + activity * 25;
 
     /* ---- Layer 2: Chord Pad ---- */
     const newDensity = CHORD_DENSENESS[attractorType] ?? 'triads';
     if (newDensity !== this._chordDensity) {
       this._chordDensity = newDensity;
     }
-    // chord 替换速率：density 高 → 稳定 → 8秒；density 低 → 活跃 → 2秒
-    const sec = 8 - density * 6;  // 8 → 2
-    this._chordIntervalSec = sec;
-    // 推进 progression（每 update 不一定推进，但给一个基准）
-    if (now > this._chordNext + sec) {
-      this._chordProgIdx = (this._chordProgIdx + 1) % CHORD_PROGRESSION.length;
-      // chordRoot = progression 当前 index 的第一个音
-      this._chordRootDegree = CHORD_PROGRESSION[this._chordProgIdx][0];
-      this._chordNext = now + sec;
-    }
+    /* Attention 统一聚合：用拍数不是秒 —— 让和弦和心跳同频
+       8 拍 @ 72BPM = 6.67秒；8 拍 @ 40BPM = 12秒。不同心跳下和弦速率自适应 */
+    this._chordBeatCount = Math.round(clamp(8 - density * 6, 2, 8));
 
     /* ---- Layer 3: Melody Contour ---- */
     // 每 16 拍（~8 秒）重新生成一段新的旋律轮廓
@@ -462,10 +463,11 @@ export class AudioEngine {
     // LFO 呼吸节奏也用 heartbeat BPM 同步（让呼吸和心跳同频）
     this.lfo.frequency.setTargetAtTime(this._heartbeatBPM / 60 / 4, now, 0.6);  // heartbeat BPM / 4 = LFO Hz
 
-    /* ---- 延迟/合唱层 ---- */
+    /* ---- 延迟/合唱层（metrics 基准，不再直接 setTargetAtTime）---- */
+    /* Attention 统一聚合：只写 _metricsWet/_metricsFb，tick() 加权 Pet reverb */
     const lyaNorm = (lyapunov + 0.3) / 0.6;
-    this.delayWet.gain.setTargetAtTime(0.1 + clamp(m.diameterNorm ?? 0.5, 0, 1) * 0.35, now, 0.8);
-    this.delayFb.gain.setTargetAtTime(0.16 + clamp(1 - (m.stability ?? 0.5), 0, 1) * 0.28 + lyaNorm * 0.1, now, 0.8);
+    this._metricsWet = 0.1 + clamp(m.diameterNorm ?? 0.5, 0, 1) * 0.35;
+    this._metricsFb  = 0.16 + clamp(1 - (m.stability ?? 0.5), 0, 1) * 0.28 + lyaNorm * 0.1;
 
     /* ---- tick() 需要的中间变量 ---- */
     this._beatJitterSec = Math.abs(lyapunov) * 0.15;
@@ -494,11 +496,35 @@ export class AudioEngine {
     const attractorType = m.type || 'stable';
     const scale = SCALES[mapping.scale || 'major'];
     const rootMidi = this._rootMidi();
+    const AC = AUDIO_CONSTANTS;
+
+    /* ================================================================ */
+    /*  Attention 统一聚合（心智模型 1：动态上下文聚合的正确做法）         */
+    /*                                                                  */
+    /*  所有上游信号在此处聚合为最终状态变量                              */
+    /*  updateMetrics() 和 setAudioChain() 只写各自的缓存变量             */
+    /*  tick() 是唯一的最终写入点 —— 没有两套独立计算来源的覆盖冲突         */
+    /* ================================================================ */
+
+    /* 1. heartbeatBPM = metrics 基准 × Pet+星球 tempo modifier          */
+    const rawBPM = this._baseHeartbeatBPM * this._tempoMultiplier;
+    /* 平滑过渡（α=0.4 新值，α=0.6 旧值 —— 让心跳不要跳变但响应够快）*/
+    this._heartbeatBPM = this._heartbeatBPM * AC.heartbeat.smoothRatioOld + rawBPM * AC.heartbeat.smoothRatioNew;
+
+    /* 2. strictness = clamp(1 - (baseChaos + petTensionOffset) × coef, min, max) */
+    const effectiveTemp = Math.min(1.0, this._baseChaosTemp + this._petTensionOffset);
+    mapping.strictness = clamp(1 - effectiveTemp * AC.strictness.chaosCoef, AC.strictness.min, AC.strictness.max);
+
+    /* 3. delayWet/delayFb = 0.4 × metrics基准 + 0.6 × Pet reverb目标（加权混合）*/
+    const nowS = now;
+    const finalWet = 0.4 * this._metricsWet + 0.6 * this._targetWet;
+    const finalFb  = 0.4 * this._metricsFb  + 0.6 * this._targetFb;
+    this.delayWet.gain.setTargetAtTime(finalWet, nowS, 0.5);
+    this.delayFb.gain.setTargetAtTime(finalFb, nowS, 0.5);
 
     /* ================================================================ */
     /*  Layer 1: Heartbeat Bass 心跳节拍                                */
-    /*  用 heartbeat BPM（物理心率），每 beat 触发一次心跳音               */
-    /*  心跳音包络：极短 attack + 缓慢 decay（sine 重低音 16-28Hz）         */
+    /*  用统一聚合后的 heartbeatBPM（已 × Pet+星球 modifier）            */
     /* ================================================================ */
     const beat = 60 / this._heartbeatBPM;  // seconds per heartbeat
     if (this._heartbeatNext === 0) this._heartbeatNext = now + beat * 0.3;
@@ -520,8 +546,10 @@ export class AudioEngine {
 
     /* ================================================================ */
     /*  Layer 2: Chord Pad  和弦支撑（真正的和声转换）                    */
-    /*  chord 替换间隔由 density 决定                                    */
+    /*  chord 替换间隔由 _chordBeatCount 拍 × beat 秒/拍 = 秒            */
+    /*  Attention 修复：用拍不是秒 —— 让和弦和心跳同频                   */
     /* ================================================================ */
+    const chordSec = this._chordBeatCount * beat;
     if (this._chordNext === 0) this._chordNext = now + 0.5;
     if (this._chordNext < now + 0.25) {
       // 推进 progression
@@ -539,9 +567,9 @@ export class AudioEngine {
       // 每个和弦音是一个长音（attack 1.5 秒 slow rise）
       for (const midi of chordMidi) {
         const freq = midiToFreq(midi);
-        this._chordTone(freq, this._chordNext, this._chordIntervalSec * 0.9);
+        this._chordTone(freq, this._chordNext, chordSec * 0.9);
       }
-      this._chordNext += this._chordIntervalSec;
+      this._chordNext += chordSec;
     }
 
     /* ================================================================ */
