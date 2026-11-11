@@ -2614,178 +2614,34 @@ body.motion-off *::after {
 
     <script>
 (() => {
-  // src/rng.js
-  function mulberry32(seed) {
-    let a = seed >>> 0;
-    return function rand() {
-      a = a + 1831565813 | 0;
-      let t = Math.imul(a ^ a >>> 15, 1 | a);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
-  }
-  function hashString(str) {
-    let h = 2166136261;
-    for (let i = 0; i < str.length; i++) {
-      h ^= str.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-  }
-  function hashInts(ints) {
-    let h = 2166136261;
-    for (let i = 0; i < ints.length; i++) {
-      h ^= ints[i] & 4294967295;
-      h = Math.imul(h, 16777619);
-      h ^= h >>> 13;
-    }
-    return h >>> 0;
-  }
-  function toHex(n, len = 6) {
-    return (n >>> 0).toString(16).toUpperCase().padStart(len, "0").slice(-len);
-  }
-  var clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
-  var ZH_A = ["\u82D4", "\u8367", "\u6F6E", "\u5B62", "\u96FE", "\u7802", "\u5F26", "\u7130", "\u73AF", "\u591C", "\u9732", "\u7ED2", "\u6676", "\u6E38", "\u6DA1", "\u97F6", "\u68EE", "\u6F9C", "\u70EC", "\u971C"];
-  var ZH_B = ["\u6B4C", "\u73AF", "\u7C07", "\u7075", "\u8109", "\u7EC7", "\u9690", "\u65C5", "\u79CD", "\u606F", "\u6DA1", "\u6816", "\u8715", "\u541F"];
-  var LAT_A = ["Vire", "Noct", "Thren", "Luma", "Myce", "Cora", "Pale", "Vespi", "Ulva", "Sere", "Glim", "Rhoe", "Nema", "Zoa", "Aure", "Clyt"];
-  var LAT_B = ["ella", "ora", "ith", "aea", "yn", "oma", "essa", "ula"];
-  function proceduralName(hash) {
-    const h = hash >>> 0;
-    const a = ZH_A[h % ZH_A.length];
-    const b = ZH_B[Math.floor(h / 7) % ZH_B.length];
-    const code = String(h % 97 + 3).padStart(2, "0");
-    const la = LAT_A[Math.floor(h / 13) % LAT_A.length];
-    const lb = LAT_B[Math.floor(h / 29) % LAT_B.length];
-    const roman = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"][h % 9];
-    return {
-      zh: `${a}${b}\xB7${code}`,
-      latin: `${la}${lb} ${roman}`
-    };
-  }
-  function uid(prefix = "s") {
-    return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
-  }
-
-  // src/scientific.js
-  var clampSafe = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
-  var REACTION_DIFFUSION_PRESETS = {
-    /* ---- Gray-Scott ---- */
-    gs_spots: {
-      label: "\u6591\u70B9",
-      engine: "grayScott",
-      D_u: 1,
-      D_v: 0.5,
-      f: 0.035,
-      k: 0.065,
-      dt: 1,
-      note: "Gray-Scott \xB7 \u7ECF\u5178\u6591\u70B9\uFF0C\u50CF\u74E2\u866B\u8EAB\u4E0A\u7684\u82B1\u7EB9"
-    },
-    gs_stripes: {
-      label: "\u6761\u7EB9",
-      engine: "grayScott",
-      D_u: 1,
-      D_v: 0.5,
-      f: 0.012,
-      k: 0.05,
-      dt: 1,
-      note: "Gray-Scott \xB7 \u6591\u9A6C\u6761\u7EB9\uFF0C\u6700\u7ECF\u5178\u7684 Turing \u6A21\u5F0F"
-    },
-    gs_maze: {
-      label: "\u8FF7\u5BAB",
-      engine: "grayScott",
-      D_u: 1,
-      D_v: 0.5,
-      f: 0.022,
-      k: 0.051,
-      dt: 1,
-      note: "Gray-Scott \xB7 \u873F\u8712\u8FF7\u5BAB\uFF0C\u50CF\u5927\u8111\u76AE\u5C42"
-    },
-    gs_hex: {
-      label: "\u516D\u8FB9\u5F62",
-      engine: "grayScott",
-      D_u: 1,
-      D_v: 0.5,
-      f: 0.04,
-      k: 0.06,
-      dt: 1,
-      note: "Gray-Scott \xB7 \u5B8C\u7F8E\u516D\u8FB9\u5F62\u8702\u7A9D"
-    },
-    gs_wander: {
-      label: "\u6E38\u8D70\u70B9",
-      engine: "grayScott",
-      D_u: 1,
-      D_v: 0.5,
-      f: 0.01,
-      k: 0.047,
-      dt: 1,
-      note: "Gray-Scott \xB7 \u5C0F\u70B9\u70B9\u81EA\u5DF1\u4F1A\u8DD1"
-    },
-    gs_coral: {
-      label: "\u73CA\u745A",
-      engine: "grayScott",
-      D_u: 1,
-      D_v: 0.5,
-      f: 0.03,
-      k: 0.062,
-      dt: 1,
-      note: "Gray-Scott \xB7 \u73CA\u745A\u72B6\u5206\u679D"
-    },
-    /* ---- FitzHugh-Nagumo ---- */
-    fhn_pulse: {
-      label: "\u795E\u7ECF\u8109\u51B2",
-      engine: "fitzHughNagumo",
-      D_u: 1,
-      D_v: 1,
-      a: 0.7,
-      b: 0.8,
-      c: 10,
-      dt: 0.5,
-      note: "FitzHugh-Nagumo \xB7 \u81EA\u53D1\u8109\u51B2\uFF0C\u50CF\u795E\u7ECF\u653E\u7535"
-    },
-    fhn_spiral: {
-      label: "\u5FC3\u810F\u87BA\u65CB",
-      engine: "fitzHughNagumo",
-      D_u: 1,
-      D_v: 1,
-      a: 0.7,
-      b: 0.8,
-      c: 15,
-      dt: 0.5,
-      note: "FitzHugh-Nagumo \xB7 \u87BA\u65CB\u6CE2\uFF0C\u5FC3\u810F\u7EA4\u98A4\u7684\u6570\u5B66\u6A21\u62DF"
-    },
-    fhn_target: {
-      label: "\u9776\u6CE2",
-      engine: "fitzHughNagumo",
-      D_u: 1,
-      D_v: 1,
-      a: 0.7,
-      b: 0.8,
-      c: 8,
-      dt: 0.5,
-      note: "FitzHugh-Nagumo \xB7 \u540C\u5FC3\u5706\u5411\u5916\u4F20\u64AD"
-    },
-    /* ---- Brusselator ---- */
-    brs_osc: {
-      label: "\u5316\u5B66\u632F\u8361",
-      engine: "brusselator",
-      D_u: 1,
-      D_v: 0.2,
-      A: 2,
-      B: 4.5,
-      dt: 0.1,
-      note: "Brusselator \xB7 \u56FE\u7075\u4E0D\u7A33\u5B9A\u51FA\u73B0\u5316\u5B66\u6CE2"
-    },
-    brs_labyrinth: {
-      label: "\u5316\u5B66\u8FF7\u5BAB",
-      engine: "brusselator",
-      D_u: 1,
-      D_v: 0.1,
-      A: 1.5,
-      B: 3,
-      dt: 0.1,
-      note: "Brusselator \xB7 \u590D\u6742\u7684\u5316\u5B66\u8FF7\u5BAB"
+  var __defProp = Object.defineProperty;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __esm = (fn, res, err) => function __init() {
+    if (err) throw err[0];
+    try {
+      return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+    } catch (e) {
+      throw err = [e], e;
     }
   };
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+
+  // src/scientific.js
+  var scientific_exports = {};
+  __export(scientific_exports, {
+    CPM_PARAMS: () => CPM_PARAMS,
+    REACTION_DIFFUSION_PRESETS: () => REACTION_DIFFUSION_PRESETS,
+    ReactionDiffusionEngine: () => ReactionDiffusionEngine,
+    SCIENCE_VERSION: () => SCIENCE_VERSION,
+    computeFieldEnergy: () => computeFieldEnergy,
+    computeFractalDimension: () => computeFractalDimension,
+    computeLyapunov: () => computeLyapunov,
+    computeScientificMetrics: () => computeScientificMetrics,
+    computeSpatialPeriod: () => computeSpatialPeriod
+  });
   function laplacian(grid, w, h, x, y, boundary) {
     let sum = 0;
     let center = grid[y * w + x];
@@ -2813,126 +2669,6 @@ body.motion-off *::after {
     }
     return sum - center;
   }
-  var ReactionDiffusionEngine = class {
-    constructor(w, h, opts = {}) {
-      this.w = w;
-      this.h = h;
-      this.kind = "reaction-diffusion";
-      this.preset = opts.preset || "gs_spots";
-      this.params = { ...REACTION_DIFFUSION_PRESETS[this.preset] };
-      this.boundary = opts.boundary || "torus";
-      this.dt = this.params.dt;
-      this.u = new Float32Array(w * h);
-      this.v = new Float32Array(w * h);
-      this.t = 0;
-      this._initField(opts.pattern || "ring");
-    }
-    setPreset(key) {
-      const p = REACTION_DIFFUSION_PRESETS[key];
-      if (!p) return;
-      this.preset = key;
-      this.params = { ...p };
-      this.dt = p.dt;
-    }
-    /* ---- 播种：中间一个圆环（经典 Gray-Scott 初始条件）---- */
-    _initField(pattern) {
-      const { w, h } = this;
-      this.u.fill(1);
-      this.v.fill(0);
-      const cx = w / 2, cy = h / 2;
-      if (pattern === "ring") {
-        for (let y = 0; y < h; y++) {
-          for (let x = 0; x < w; x++) {
-            const d = Math.hypot(x - cx, y - cy);
-            if (d < Math.min(w, h) * 0.15) this.v[y * w + x] = 1;
-          }
-        }
-      } else if (pattern === "dot") {
-        for (let k = 0; k < 20; k++) {
-          const dx = Math.floor(Math.random() * w);
-          const dy = Math.floor(Math.random() * h);
-          this.v[dy * w + dx] = 1;
-        }
-      } else if (pattern === "soup") {
-        for (let i = 0; i < w * h; i++) {
-          if (Math.random() < 0.05) this.v[i] = 1;
-        }
-      }
-    }
-    reset(pattern) {
-      this.t = 0;
-      this._initField(pattern || "ring");
-    }
-    /* ---- 一步 Euler 积分 ---- */
-    step() {
-      const { w, h } = this;
-      const { D_u, D_v, engine } = this.params;
-      const { boundary, dt, u, v } = this;
-      const u_new = new Float32Array(w * h);
-      const v_new = new Float32Array(w * h);
-      if (engine === "grayScott") {
-        const { f, k } = this.params;
-        for (let y = 0; y < h; y++) {
-          for (let x = 0; x < w; x++) {
-            const lapU = laplacian(u, w, h, x, y, boundary);
-            const lapV = laplacian(v, w, h, x, y, boundary);
-            const uu = u[y * w + x];
-            const vv = v[y * w + x];
-            const uv2 = uu * vv * vv;
-            u_new[y * w + x] = clampSafe(uu + dt * (D_u * lapU - uv2 + f * (1 - uu)), 0, 1);
-            v_new[y * w + x] = clampSafe(vv + dt * (D_v * lapV + uv2 - (f + k) * vv), 0, 1);
-          }
-        }
-      } else if (engine === "fitzHughNagumo") {
-        const { a, b, c } = this.params;
-        for (let y = 0; y < h; y++) {
-          for (let x = 0; x < w; x++) {
-            const lapU = laplacian(u, w, h, x, y, boundary);
-            const lapV = laplacian(v, w, h, x, y, boundary);
-            const uu = u[y * w + x];
-            const vv = v[y * w + x];
-            u_new[y * w + x] = clampSafe(uu + dt * (lapU + c * (uu - uu * uu * uu / 3 + vv)), -2, 2);
-            v_new[y * w + x] = clampSafe(vv + dt * (lapV - (uu - a + b * vv) / c), -2, 2);
-          }
-        }
-      } else if (engine === "brusselator") {
-        const { A, B } = this.params;
-        for (let y = 0; y < h; y++) {
-          for (let x = 0; x < w; x++) {
-            const lapU = laplacian(u, w, h, x, y, boundary);
-            const lapV = laplacian(v, w, h, x, y, boundary);
-            const uu = u[y * w + x];
-            const vv = v[y * w + x];
-            const u2v = uu * uu * vv;
-            u_new[y * w + x] = clampSafe(uu + dt * (D_u * lapU + A + u2v - (B + 1) * uu), 0, 10);
-            v_new[y * w + x] = clampSafe(vv + dt * (D_v * lapV + B * uu - u2v), 0, 10);
-          }
-        }
-      }
-      this.u = u_new;
-      this.v = v_new;
-      this.t += dt;
-    }
-    /* ---- 快照：把 v 场映射为 0-255 Uint8Array ---- */
-    snapshot() {
-      const n = this.w * this.h;
-      const out = new Uint8Array(n);
-      for (let i = 0; i < n; i++) {
-        out[i] = clampSafe(Math.floor(this.v[i] * 255), 0, 255);
-      }
-      return out;
-    }
-    /* ---- 拓扑指标（来自 v 场） ---- */
-    get vField() {
-      return this.v;
-    }
-    get uField() {
-      return this.u;
-    }
-    get totalTime() {
-      return this.t;
-    }
-  };
   function computeLyapunov(v, w, h) {
     let sum = 0;
     let n = 0;
@@ -3066,8 +2802,330 @@ body.motion-off *::after {
       }[attrType] || "\u672A\u77E5"
     };
   }
+  var clampSafe, SCIENCE_VERSION, REACTION_DIFFUSION_PRESETS, ReactionDiffusionEngine, CPM_PARAMS;
+  var init_scientific = __esm({
+    "src/scientific.js"() {
+      clampSafe = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+      SCIENCE_VERSION = "2.0.0";
+      REACTION_DIFFUSION_PRESETS = {
+        /* ---- Gray-Scott ---- */
+        gs_spots: {
+          label: "\u6591\u70B9",
+          engine: "grayScott",
+          D_u: 1,
+          D_v: 0.5,
+          f: 0.035,
+          k: 0.065,
+          dt: 1,
+          note: "Gray-Scott \xB7 \u7ECF\u5178\u6591\u70B9\uFF0C\u50CF\u74E2\u866B\u8EAB\u4E0A\u7684\u82B1\u7EB9"
+        },
+        gs_stripes: {
+          label: "\u6761\u7EB9",
+          engine: "grayScott",
+          D_u: 1,
+          D_v: 0.5,
+          f: 0.012,
+          k: 0.05,
+          dt: 1,
+          note: "Gray-Scott \xB7 \u6591\u9A6C\u6761\u7EB9\uFF0C\u6700\u7ECF\u5178\u7684 Turing \u6A21\u5F0F"
+        },
+        gs_maze: {
+          label: "\u8FF7\u5BAB",
+          engine: "grayScott",
+          D_u: 1,
+          D_v: 0.5,
+          f: 0.022,
+          k: 0.051,
+          dt: 1,
+          note: "Gray-Scott \xB7 \u873F\u8712\u8FF7\u5BAB\uFF0C\u50CF\u5927\u8111\u76AE\u5C42"
+        },
+        gs_hex: {
+          label: "\u516D\u8FB9\u5F62",
+          engine: "grayScott",
+          D_u: 1,
+          D_v: 0.5,
+          f: 0.04,
+          k: 0.06,
+          dt: 1,
+          note: "Gray-Scott \xB7 \u5B8C\u7F8E\u516D\u8FB9\u5F62\u8702\u7A9D"
+        },
+        gs_wander: {
+          label: "\u6E38\u8D70\u70B9",
+          engine: "grayScott",
+          D_u: 1,
+          D_v: 0.5,
+          f: 0.01,
+          k: 0.047,
+          dt: 1,
+          note: "Gray-Scott \xB7 \u5C0F\u70B9\u70B9\u81EA\u5DF1\u4F1A\u8DD1"
+        },
+        gs_coral: {
+          label: "\u73CA\u745A",
+          engine: "grayScott",
+          D_u: 1,
+          D_v: 0.5,
+          f: 0.03,
+          k: 0.062,
+          dt: 1,
+          note: "Gray-Scott \xB7 \u73CA\u745A\u72B6\u5206\u679D"
+        },
+        /* ---- FitzHugh-Nagumo ---- */
+        fhn_pulse: {
+          label: "\u795E\u7ECF\u8109\u51B2",
+          engine: "fitzHughNagumo",
+          D_u: 1,
+          D_v: 1,
+          a: 0.7,
+          b: 0.8,
+          c: 10,
+          dt: 0.5,
+          note: "FitzHugh-Nagumo \xB7 \u81EA\u53D1\u8109\u51B2\uFF0C\u50CF\u795E\u7ECF\u653E\u7535"
+        },
+        fhn_spiral: {
+          label: "\u5FC3\u810F\u87BA\u65CB",
+          engine: "fitzHughNagumo",
+          D_u: 1,
+          D_v: 1,
+          a: 0.7,
+          b: 0.8,
+          c: 15,
+          dt: 0.5,
+          note: "FitzHugh-Nagumo \xB7 \u87BA\u65CB\u6CE2\uFF0C\u5FC3\u810F\u7EA4\u98A4\u7684\u6570\u5B66\u6A21\u62DF"
+        },
+        fhn_target: {
+          label: "\u9776\u6CE2",
+          engine: "fitzHughNagumo",
+          D_u: 1,
+          D_v: 1,
+          a: 0.7,
+          b: 0.8,
+          c: 8,
+          dt: 0.5,
+          note: "FitzHugh-Nagumo \xB7 \u540C\u5FC3\u5706\u5411\u5916\u4F20\u64AD"
+        },
+        /* ---- Brusselator ---- */
+        brs_osc: {
+          label: "\u5316\u5B66\u632F\u8361",
+          engine: "brusselator",
+          D_u: 1,
+          D_v: 0.2,
+          A: 2,
+          B: 4.5,
+          dt: 0.1,
+          note: "Brusselator \xB7 \u56FE\u7075\u4E0D\u7A33\u5B9A\u51FA\u73B0\u5316\u5B66\u6CE2"
+        },
+        brs_labyrinth: {
+          label: "\u5316\u5B66\u8FF7\u5BAB",
+          engine: "brusselator",
+          D_u: 1,
+          D_v: 0.1,
+          A: 1.5,
+          B: 3,
+          dt: 0.1,
+          note: "Brusselator \xB7 \u590D\u6742\u7684\u5316\u5B66\u8FF7\u5BAB"
+        }
+      };
+      ReactionDiffusionEngine = class {
+        constructor(w, h, opts = {}) {
+          this.w = w;
+          this.h = h;
+          this.kind = "reaction-diffusion";
+          this.preset = opts.preset || "gs_spots";
+          this.params = { ...REACTION_DIFFUSION_PRESETS[this.preset] };
+          this.boundary = opts.boundary || "torus";
+          this.dt = this.params.dt;
+          this.u = new Float32Array(w * h);
+          this.v = new Float32Array(w * h);
+          this.t = 0;
+          this._initField(opts.pattern || "ring");
+        }
+        setPreset(key) {
+          const p = REACTION_DIFFUSION_PRESETS[key];
+          if (!p) return;
+          this.preset = key;
+          this.params = { ...p };
+          this.dt = p.dt;
+        }
+        /* ---- 播种：中间一个圆环（经典 Gray-Scott 初始条件）---- */
+        _initField(pattern) {
+          const { w, h } = this;
+          this.u.fill(1);
+          this.v.fill(0);
+          const cx = w / 2, cy = h / 2;
+          if (pattern === "ring") {
+            for (let y = 0; y < h; y++) {
+              for (let x = 0; x < w; x++) {
+                const d = Math.hypot(x - cx, y - cy);
+                if (d < Math.min(w, h) * 0.15) this.v[y * w + x] = 1;
+              }
+            }
+          } else if (pattern === "dot") {
+            for (let k = 0; k < 20; k++) {
+              const dx = Math.floor(Math.random() * w);
+              const dy = Math.floor(Math.random() * h);
+              this.v[dy * w + dx] = 1;
+            }
+          } else if (pattern === "soup") {
+            for (let i = 0; i < w * h; i++) {
+              if (Math.random() < 0.05) this.v[i] = 1;
+            }
+          }
+        }
+        reset(pattern) {
+          this.t = 0;
+          this._initField(pattern || "ring");
+        }
+        /* ---- 一步 Euler 积分 ---- */
+        step() {
+          const { w, h } = this;
+          const { D_u, D_v, engine } = this.params;
+          const { boundary, dt, u, v } = this;
+          const u_new = new Float32Array(w * h);
+          const v_new = new Float32Array(w * h);
+          if (engine === "grayScott") {
+            const { f, k } = this.params;
+            for (let y = 0; y < h; y++) {
+              for (let x = 0; x < w; x++) {
+                const lapU = laplacian(u, w, h, x, y, boundary);
+                const lapV = laplacian(v, w, h, x, y, boundary);
+                const uu = u[y * w + x];
+                const vv = v[y * w + x];
+                const uv2 = uu * vv * vv;
+                u_new[y * w + x] = clampSafe(uu + dt * (D_u * lapU - uv2 + f * (1 - uu)), 0, 1);
+                v_new[y * w + x] = clampSafe(vv + dt * (D_v * lapV + uv2 - (f + k) * vv), 0, 1);
+              }
+            }
+          } else if (engine === "fitzHughNagumo") {
+            const { a, b, c } = this.params;
+            for (let y = 0; y < h; y++) {
+              for (let x = 0; x < w; x++) {
+                const lapU = laplacian(u, w, h, x, y, boundary);
+                const lapV = laplacian(v, w, h, x, y, boundary);
+                const uu = u[y * w + x];
+                const vv = v[y * w + x];
+                u_new[y * w + x] = clampSafe(uu + dt * (lapU + c * (uu - uu * uu * uu / 3 + vv)), -2, 2);
+                v_new[y * w + x] = clampSafe(vv + dt * (lapV - (uu - a + b * vv) / c), -2, 2);
+              }
+            }
+          } else if (engine === "brusselator") {
+            const { A, B } = this.params;
+            for (let y = 0; y < h; y++) {
+              for (let x = 0; x < w; x++) {
+                const lapU = laplacian(u, w, h, x, y, boundary);
+                const lapV = laplacian(v, w, h, x, y, boundary);
+                const uu = u[y * w + x];
+                const vv = v[y * w + x];
+                const u2v = uu * uu * vv;
+                u_new[y * w + x] = clampSafe(uu + dt * (D_u * lapU + A + u2v - (B + 1) * uu), 0, 10);
+                v_new[y * w + x] = clampSafe(vv + dt * (D_v * lapV + B * uu - u2v), 0, 10);
+              }
+            }
+          }
+          this.u = u_new;
+          this.v = v_new;
+          this.t += dt;
+        }
+        /* ---- 快照：把 v 场映射为 0-255 Uint8Array ---- */
+        snapshot() {
+          const n = this.w * this.h;
+          const out = new Uint8Array(n);
+          for (let i = 0; i < n; i++) {
+            out[i] = clampSafe(Math.floor(this.v[i] * 255), 0, 255);
+          }
+          return out;
+        }
+        /* ---- 拓扑指标（来自 v 场） ---- */
+        get vField() {
+          return this.v;
+        }
+        get uField() {
+          return this.u;
+        }
+        get totalTime() {
+          return this.t;
+        }
+      };
+      CPM_PARAMS = {
+        /* 细胞类型默认黏附能矩阵（Glazier 1992 经典值） */
+        adhesionMatrix: {
+          // [自我黏附, 与 type A, 与 type B, 与培养基]
+          default: [
+            [1, 0.5, 0.5, 0.1],
+            // type A 与自身/其他/培养基
+            [0.5, 1, 0.3, 0.1],
+            // type B（更黏）
+            [0.1, 0.1, 0.1, 0]
+            // 培养基（无黏附）
+          ]
+        },
+        temperature: 0.05,
+        // kT，越大越随机；越小越刚性
+        targetArea: 25,
+        // 每个细胞目标面积（格）
+        targetPerimeter: 16,
+        // 每个细胞目标周长
+        lambdaArea: 0.5,
+        // 面积约束强度
+        lambdaPerim: 0.2
+        // 周长约束强度
+      };
+    }
+  });
+
+  // src/rng.js
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function rand() {
+      a = a + 1831565813 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function hashString(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+  function hashInts(ints) {
+    let h = 2166136261;
+    for (let i = 0; i < ints.length; i++) {
+      h ^= ints[i] & 4294967295;
+      h = Math.imul(h, 16777619);
+      h ^= h >>> 13;
+    }
+    return h >>> 0;
+  }
+  function toHex(n, len = 6) {
+    return (n >>> 0).toString(16).toUpperCase().padStart(len, "0").slice(-len);
+  }
+  var clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+  var ZH_A = ["\u82D4", "\u8367", "\u6F6E", "\u5B62", "\u96FE", "\u7802", "\u5F26", "\u7130", "\u73AF", "\u591C", "\u9732", "\u7ED2", "\u6676", "\u6E38", "\u6DA1", "\u97F6", "\u68EE", "\u6F9C", "\u70EC", "\u971C"];
+  var ZH_B = ["\u6B4C", "\u73AF", "\u7C07", "\u7075", "\u8109", "\u7EC7", "\u9690", "\u65C5", "\u79CD", "\u606F", "\u6DA1", "\u6816", "\u8715", "\u541F"];
+  var LAT_A = ["Vire", "Noct", "Thren", "Luma", "Myce", "Cora", "Pale", "Vespi", "Ulva", "Sere", "Glim", "Rhoe", "Nema", "Zoa", "Aure", "Clyt"];
+  var LAT_B = ["ella", "ora", "ith", "aea", "yn", "oma", "essa", "ula"];
+  function proceduralName(hash) {
+    const h = hash >>> 0;
+    const a = ZH_A[h % ZH_A.length];
+    const b = ZH_B[Math.floor(h / 7) % ZH_B.length];
+    const code = String(h % 97 + 3).padStart(2, "0");
+    const la = LAT_A[Math.floor(h / 13) % LAT_A.length];
+    const lb = LAT_B[Math.floor(h / 29) % LAT_B.length];
+    const roman = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"][h % 9];
+    return {
+      zh: `${a}${b}\xB7${code}`,
+      latin: `${la}${lb} ${roman}`
+    };
+  }
+  function uid(prefix = "s") {
+    return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  }
 
   // src/engines.js
+  init_scientific();
   var ENGINE_VERSION = "1.0.0";
   var GRID_W = 160;
   var GRID_H = 90;
@@ -5660,6 +5718,612 @@ body.motion-off *::after {
     return { n, byKind };
   }
 
+  // src/cpm.js
+  var CPM_DEFAULTS = {
+    // 黏附能矩阵（J）—— 当前只用一个自黏附参数，未来可扩展为完整矩阵
+    adhesionJ: 0.35,
+    // 基础黏附能（J 量级，单位 k_B T ≈ 1）
+    // 软约束权重
+    lambdaArea: 0.04,
+    // λ_area：面积约束（弱）
+    lambdaPerim: 0.02,
+    // λ_perim：周长约束（更弱）
+    lambdaGrad: 0.18,
+    // λ_grad：v 场梯度耦合（让形态跟随反应-扩散）
+    area0: 6,
+    // 目标面积（格点数，大致是一个细胞的平均面积）
+    perim0: 5,
+    // 目标周长
+    temperature: 0.25,
+    // kT：退火温度，0.1 = 几乎冻结，1.0 = 热噪声大
+    // 离散化阈值：把连续 v 场变成 Potts 离散标签
+    nTypes: 8,
+    // σ ∈ {0, 1, ..., nTypes-1}
+    // 每 N 个 MC step 重新离散化一次（让形态跟随反应-扩散演化）
+    relabelEvery: 32
+  };
+  function discretizeField(vField, nTypes) {
+    const n = vField.length;
+    const labels = new Int8Array(n);
+    let minV = Infinity, maxV = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const v = vField[i];
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+    const range = maxV - minV || 1;
+    const binSize = range / nTypes;
+    for (let i = 0; i < n; i++) {
+      const t = Math.floor((vField[i] - minV) / binSize);
+      labels[i] = Math.min(nTypes - 1, Math.max(0, t));
+    }
+    return labels;
+  }
+  function adhesionEnergy(si, sj, J_base = CPM_DEFAULTS.adhesionJ) {
+    if (si === sj) return 0;
+    const d = Math.abs(si - sj);
+    return J_base * (1 - Math.exp(-d / 2));
+  }
+  function siteAdhesion(labels, w, x, y, si, J_base) {
+    let E = 0;
+    if (x > 0) E += adhesionEnergy(si, labels[y * w + x - 1], J_base);
+    if (x < w - 1) E += adhesionEnergy(si, labels[y * w + x + 1], J_base);
+    if (y > 0) E += adhesionEnergy(si, labels[(y - 1) * w + x], J_base);
+    return E;
+  }
+  function siteGradEnergy(vField, w, x, y, \u03BB_grad) {
+    const i = y * w + x;
+    const v = vField[i];
+    let g = 0;
+    if (x > 0) g += (v - vField[i - 1]) ** 2;
+    if (x < w - 1) g += (v - vField[i + 1]) ** 2;
+    if (y > 0) g += (v - vField[i - w]) ** 2;
+    return \u03BB_grad * g;
+  }
+  function mcSweep(labels, vField, w, h, params = {}) {
+    const p = { ...CPM_DEFAULTS, ...params };
+    const n = w * h;
+    let accepted = 0;
+    for (let attempt = 0; attempt < n; attempt++) {
+      const i = Math.floor(Math.random() * n);
+      const x = i % w;
+      const y = Math.floor(i / w);
+      const si = labels[i];
+      const dir = Math.floor(Math.random() * 4);
+      let jx = x, jy = y, j = i;
+      if (dir === 0 && x > 0) {
+        jx = x - 1;
+        j = i - 1;
+      } else if (dir === 1 && x < w - 1) {
+        jx = x + 1;
+        j = i + 1;
+      } else if (dir === 2 && y > 0) {
+        jy = y - 1;
+        j = i - w;
+      } else if (dir === 3 && y < h - 1) {
+        jy = y + 1;
+        j = i + w;
+      } else continue;
+      const sj = labels[j];
+      if (si === sj) continue;
+      const E_old_i = siteAdhesion(labels, w, x, y, si, p.adhesionJ) + siteGradEnergy(vField, w, x, y, p.lambdaGrad);
+      const E_new_i = siteAdhesion(labels, w, x, y, sj, p.adhesionJ) + siteGradEnergy(vField, w, x, y, p.lambdaGrad);
+      const dH = E_new_i - E_old_i;
+      if (dH <= 0 || Math.random() < Math.exp(-dH / p.temperature)) {
+        labels[i] = sj;
+        accepted++;
+      }
+    }
+    return { accepted, attempted: n, acceptanceRate: accepted / n };
+  }
+  function totalEnergy(labels, vField, w, h, params = {}) {
+    const p = { ...CPM_DEFAULTS, ...params };
+    let H = 0;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        H += siteAdhesion(labels, w, x, y, labels[i], p.adhesionJ);
+        H += siteGradEnergy(vField, w, x, y, p.lambdaGrad);
+      }
+    }
+    return H;
+  }
+  function runPlayerMC(engine, steps = 4, params = {}) {
+    const p = { ...CPM_DEFAULTS, ...params };
+    const w = engine.w, h = engine.h;
+    const vField = engine.vField;
+    const uField = engine.uField;
+    function cv(arr) {
+      let s = 0, s2 = 0, n = 0;
+      for (const x of arr) {
+        s += x;
+        s2 += x * x;
+        n++;
+      }
+      const \u03BC = s / n;
+      if (\u03BC < 1e-3) return 0;
+      const var_ = s2 / n - \u03BC * \u03BC;
+      return Math.sqrt(Math.max(0, var_)) / \u03BC;
+    }
+    const useField = cv(vField) > cv(uField) ? vField : uField;
+    let labels = discretizeField(useField, p.nTypes);
+    const energyBefore = totalEnergy(labels, useField, w, h, p);
+    let totalAccepted = 0, totalAttempted = 0;
+    for (let s = 0; s < steps; s++) {
+      const res = mcSweep(labels, useField, w, h, p);
+      totalAccepted += res.accepted;
+      totalAttempted += res.attempted;
+      if (p.relabelEvery > 0 && (s + 1) % p.relabelEvery === 0) {
+        labels = discretizeField(useField, p.nTypes);
+      }
+    }
+    const energyAfter = totalEnergy(labels, useField, w, h, p);
+    return {
+      acceptedRate: totalAttempted ? totalAccepted / totalAttempted : 0,
+      energyBefore,
+      energyAfter,
+      energyDelta: energyAfter - energyBefore,
+      labels,
+      usedField: useField === vField ? "v" : "u",
+      parameters: p
+    };
+  }
+  async function simulateRD(params, w, h, steps, rngSeed = 42) {
+    const mod = await Promise.resolve().then(() => (init_scientific(), scientific_exports));
+    const e = new mod.ReactionDiffusionEngine(w, h, params, rngSeed);
+    for (let i = 0; i < steps; i++) e.step();
+    const m = mod.computeScientificMetrics(e.vField, e.uField, w, h, params.engine);
+    return { metrics: m, vField: e.vField, uField: e.uField };
+  }
+
+  // src/scan.js
+  var DEFAULT_SCAN_AXES = {
+    grayScott: [
+      { key: "f", label: "\u9972\u517B\u901F\u7387 f", min: 0.015, max: 0.06, defaultN: 16 },
+      { key: "k", label: "\u6740\u4F24\u901F\u7387 k", min: 0.045, max: 0.085, defaultN: 16 },
+      { key: "D_u", label: "\u6FC0\u6D3B\u6269\u6563 D_u", min: 0.5, max: 2, defaultN: 8 }
+    ],
+    fitzHughNagumo: [
+      { key: "c", label: "\u8026\u5408\u5F3A\u5EA6 c", min: 4, max: 18, defaultN: 12 },
+      { key: "a", label: "\u9608\u503C a", min: 0.4, max: 1, defaultN: 12 },
+      { key: "b", label: "\u6062\u590D\u901F\u7387 b", min: 0.5, max: 1.1, defaultN: 8 }
+    ],
+    brusselator: [
+      { key: "A", label: "\u53CD\u5E94\u7269 A", min: 1, max: 3.5, defaultN: 12 },
+      { key: "B", label: "\u53CD\u5E94\u7269 B", min: 2.5, max: 6, defaultN: 12 },
+      { key: "D_v", label: "\u6291\u5236\u6269\u6563 D_v", min: 0.1, max: 0.6, defaultN: 8 }
+    ]
+  };
+  async function runParameterScan(baseParams, axes, opts = {}) {
+    const w = opts.w || 60;
+    const h = opts.h || 40;
+    const steps = opts.steps || 300;
+    const rngBase = opts.rngSeed || 12345;
+    const progressCb = opts.progressCb || null;
+    const { xAxis, yAxis } = axes;
+    const Nx = xAxis.N || 12;
+    const Ny = yAxis.N || 12;
+    const gridX = new Float64Array(Nx);
+    const gridY = new Float64Array(Ny);
+    for (let i = 0; i < Nx; i++) gridX[i] = xAxis.min + i / (Nx - 1) * (xAxis.max - xAxis.min);
+    for (let j = 0; j < Ny; j++) gridY[j] = yAxis.min + j / (Ny - 1) * (yAxis.max - yAxis.min);
+    const raw = {
+      energy: new Float64Array(Nx * Ny),
+      fractal: new Float64Array(Nx * Ny),
+      lyapunov: new Float64Array(Nx * Ny),
+      density: new Float64Array(Nx * Ny),
+      period: new Float64Array(Nx * Ny),
+      type: new Uint8Array(Nx * Ny)
+      // 0=stable, 1=periodic, 2=chaotic, 3=drifting, 4=extinct
+    };
+    let bestEnergy = Infinity, worstEnergy = -Infinity;
+    let bestIX = 0, bestIY = 0, worstIX = 0, worstIY = 0;
+    const total = Nx * Ny;
+    let done = 0;
+    for (let iy = 0; iy < Ny; iy++) {
+      for (let ix = 0; ix < Nx; ix++) {
+        const params = { ...baseParams, [xAxis.key]: gridX[ix], [yAxis.key]: gridY[iy] };
+        const seed = rngBase + iy * Nx + ix;
+        try {
+          const res = await simulateRD(params, w, h, steps, seed);
+          const m = res.metrics;
+          const idx = iy * Nx + ix;
+          raw.energy[idx] = m.energy?.total ?? NaN;
+          raw.fractal[idx] = m.fractal ?? NaN;
+          raw.lyapunov[idx] = m.lyapunov ?? NaN;
+          raw.density[idx] = m.density ?? NaN;
+          raw.period[idx] = m.spatialPeriod ?? NaN;
+          const t = m.attrType;
+          raw.type[idx] = t === "stable" ? 0 : t === "periodic" ? 1 : t === "chaotic" ? 2 : t === "drifting" ? 3 : t === "extinct" ? 4 : 0;
+          if (m.energy?.total < bestEnergy) {
+            bestEnergy = m.energy.total;
+            bestIX = ix;
+            bestIY = iy;
+          }
+          if (m.energy?.total > worstEnergy) {
+            worstEnergy = m.energy.total;
+            worstIX = ix;
+            worstIY = iy;
+          }
+        } catch (err) {
+          const idx = iy * Nx + ix;
+          raw.energy[idx] = NaN;
+          raw.fractal[idx] = NaN;
+        }
+        done++;
+        if (progressCb) progressCb(done / total);
+      }
+    }
+    const Emin = raw.energy.reduce((a, b) => Math.min(a, isNaN(b) ? a : b), Infinity);
+    const Emax = raw.energy.reduce((a, b) => Math.max(a, isNaN(b) ? a : b), -Infinity);
+    const Enorm = raw.energy.map((v) => isNaN(v) ? 0.5 : (v - Emin) / (Emax - Emin || 1));
+    return {
+      axes,
+      gridX,
+      gridY,
+      Nx,
+      Ny,
+      raw,
+      energyNormalized: Enorm,
+      bestPoint: {
+        ix: bestIX,
+        iy: bestIY,
+        energy: bestEnergy,
+        params: { ...baseParams, [xAxis.key]: gridX[bestIX], [yAxis.key]: gridY[bestIY] }
+      },
+      worstPoint: {
+        ix: worstIX,
+        iy: worstIY,
+        energy: worstEnergy,
+        params: { ...baseParams, [xAxis.key]: gridX[worstIX], [yAxis.key]: gridY[worstIY] }
+      },
+      meta: { w, h, steps, rngBase, total }
+    };
+  }
+
+  // src/patterns.js
+  var PATTERN_LIBRARY = [
+    /* ============ Gray-Scott (反应-扩散) ============ */
+    {
+      id: "gs_spots",
+      engine: "grayScott",
+      label: "\u6591\u70B9 Spots",
+      refs: ["Gray & Scott 1984", "Kondo & Miura 2010 \u6591\u9A6C\u6761\u7EB9"],
+      params: { D_u: 1, D_v: 0.5, f: 0.035, k: 0.065, dt: 1 },
+      signature: { lyapunov: -2.9, fractal: 1.81, energy: 0.57, period: 14 },
+      desc: "\u5C40\u90E8\u6FC0\u6D3B \u2192 \u9AD8\u6269\u6563\u6291\u5236\u5242 \u2192 \u5206\u79BB\u7684\u6591\u70B9\uFF08\u5178\u578B\u751F\u7269\u8272\u7D20\u6A21\u5F0F\uFF09"
+    },
+    {
+      id: "gs_stripes",
+      engine: "grayScott",
+      label: "\u6591\u9A6C\u6761\u7EB9 Stripes",
+      refs: ["Gray & Scott 1984", "Akaiwa et al. 2005"],
+      params: { D_u: 1, D_v: 0.5, f: 0.022, k: 0.051, dt: 1 },
+      signature: { lyapunov: -2.8, fractal: 1.78, energy: 0.39, period: 16 },
+      desc: "f/k \u7A0D\u4F4E \u2192 \u66F4\u6D3B\u8DC3 \u2192 \u6761\u7EB9\u4EE3\u66FF\u6591\u70B9\uFF08\u6591\u9A6C/\u70ED\u5E26\u9C7C\uFF09"
+    },
+    {
+      id: "gs_maze",
+      engine: "grayScott",
+      label: "\u8FF7\u5BAB Labyrinth",
+      refs: ["Pearson 1993 \u6DF7\u6C8C\u8FF7\u5BAB\u6A21\u5F0F"],
+      params: { D_u: 1, D_v: 0.5, f: 0.029, k: 0.057, dt: 1 },
+      signature: { lyapunov: -2.7, fractal: 1.85, energy: 0.52, period: 12 },
+      desc: "\u5728 spots/stripes \u8FB9\u754C \u2192 \u8FF7\u5BAB\u6837\u4E0D\u89C4\u5219"
+    },
+    {
+      id: "gs_hexagons",
+      engine: "grayScott",
+      label: "\u516D\u8FB9\u5F62\u8702\u7A9D Hexagons",
+      refs: ["Silva & Gomatam 1998"],
+      params: { D_u: 1, D_v: 0.5, f: 0.014, k: 0.048, dt: 1 },
+      signature: { lyapunov: -2.6, fractal: 1.72, energy: 0.36, period: 18 },
+      desc: "\u4F4E f/k \u2192 \u6291\u5236\u533A\u53D8\u6210\u89C4\u5219\u516D\u8FB9\u5F62\uFF08\u773C\u775B\u8679\u819C\uFF09"
+    },
+    {
+      id: "gs_wandering_drops",
+      engine: "grayScott",
+      label: "\u6E38\u8D70\u70B9 Wandering Drops",
+      refs: ["Lee & Swinney 1995"],
+      params: { D_u: 1, D_v: 0.5, f: 0.03, k: 0.062, dt: 1 },
+      signature: { lyapunov: -0.08, fractal: 1.79, energy: 0.41, period: 22 },
+      desc: "f \u7A0D\u9AD8 \u2192 \u5B64\u7ACB\u7684\u79FB\u52A8\u6DB2\u6EF4\uFF08\u5F31\u6DF7\u6C8C\uFF0C\u03BB\u22480\uFF09"
+    },
+    {
+      id: "gs_mitosis",
+      engine: "grayScott",
+      label: "\u6709\u4E1D\u5206\u88C2 Mitosis",
+      refs: ["Reaction-Diffusion 3.0 \u7ECF\u5178 demo"],
+      params: { D_u: 1, D_v: 0.5, f: 0.0367, k: 0.0649, dt: 1 },
+      signature: { lyapunov: -2.85, fractal: 1.76, energy: 0.49, period: 15 },
+      desc: "\u63A5\u8FD1\u8FB9\u754C \u2192 \u6DB2\u6EF4\u5206\u88C2\uFF08\u6709\u4E1D\u5206\u88C2\u6A21\u62DF\uFF09"
+    },
+    {
+      id: "gs_coral",
+      engine: "grayScott",
+      label: "\u73CA\u745A Coral",
+      refs: ["Kondo & Miura 2010"],
+      params: { D_u: 1, D_v: 0.5, f: 0.0545, k: 0.062, dt: 1 },
+      signature: { lyapunov: -2.5, fractal: 1.87, energy: 0.55, period: 8 },
+      desc: "\u9AD8 f \u2192 \u9AD8\u751F\u4F4E\u6B7B \u2192 \u73CA\u745A\u72B6\u5206\u679D"
+    },
+    {
+      id: "gs_cracks",
+      engine: "grayScott",
+      label: "\u9F9F\u88C2 Cracks",
+      refs: ["Murray 2003 Mathematical Biology"],
+      params: { D_u: 0.9, D_v: 0.45, f: 0.03, k: 0.058, dt: 1 },
+      signature: { lyapunov: -2.6, fractal: 1.9, energy: 0.61, period: 9 },
+      desc: "D_u/D_v \u6BD4\u964D\u4F4E \u2192 \u72ED\u7A84\u88C2\u7F1D\u7F51\u7EDC\uFF08\u76AE\u80A4\u7EB9\u7406\uFF09"
+    },
+    /* ============ FitzHugh-Nagumo (可兴奋介质) ============ */
+    {
+      id: "fhn_plane_wave",
+      engine: "fitzHughNagumo",
+      label: "\u5E73\u9762\u6CE2 Plane Wave",
+      refs: ["FitzHugh 1961; Nagumo et al. 1962"],
+      params: { c: 10, a: 0.7, b: 0.8, dt: 0.5 },
+      signature: { lyapunov: -0.05, fractal: 1.2, energy: 5.2, period: 20 },
+      desc: "\u795E\u7ECF\u7EA4\u7EF4\u7684\u4F20\u5BFC\u8109\u51B2\uFF1A\u5E26\u72B6\u6CE2\u524D\u6CBF\u4ECB\u8D28\u5E73\u79FB"
+    },
+    {
+      id: "fhn_spiral",
+      engine: "fitzHughNagumo",
+      label: "\u5FC3\u810F\u87BA\u65CB\u6CE2 Spiral",
+      refs: ["Panfilov 1985; \u5FC3\u5BA4\u7EA4\u98A4\u6A21\u578B"],
+      params: { c: 10, a: 0.7, b: 0.8, dt: 0.5 },
+      signature: { lyapunov: -0.03, fractal: 1.6, energy: 7.8, period: 28 },
+      desc: "\u53EF\u5174\u594B\u4ECB\u8D28\u4E2D\u87BA\u65CB\u6CE2\uFF08\u5FC3\u808C\u7EA4\u98A4\u65F6\u7684\u87BA\u65CB\uFF09"
+    },
+    {
+      id: "fhn_double_spiral",
+      engine: "fitzHughNagumo",
+      label: "\u53CC\u87BA\u65CB Double Spiral",
+      refs: ["Zaikin & Zhabotinsky 1970 \u7ECF\u5178\u5B9E\u9A8C"],
+      params: { c: 8, a: 0.65, b: 0.82, dt: 0.5 },
+      signature: { lyapunov: -0.04, fractal: 1.65, energy: 7.5, period: 30 },
+      desc: "\u4E24\u4E2A\u53CD\u5411\u65CB\u8F6C\u7684\u87BA\u65CB\u4E92\u76F8\u7ADE\u4E89"
+    },
+    {
+      id: "fhn_target",
+      engine: "fitzHughNagumo",
+      label: "\u9776\u6CE2 Target Wave",
+      refs: ["Ross 1991 \u5316\u5B66\u632F\u8361"],
+      params: { c: 10, a: 0.7, b: 0.8, dt: 0.5 },
+      signature: { lyapunov: -0.06, fractal: 1.15, energy: 4.9, period: 25 },
+      desc: "\u6709\u7F3A\u9677\u70B9\u65F6 \u2192 \u4ECE\u70B9\u5411\u5916\u4F20\u64AD\u7684\u540C\u5FC3\u5706\u9776\u6CE2"
+    },
+    {
+      id: "fhn_chaotic",
+      engine: "fitzHughNagumo",
+      label: "\u5316\u5B66\u6DF7\u6C8C Chemical Chaos",
+      refs: ["Kuramoto 1984"],
+      params: { c: 15, a: 0.6, b: 0.9, dt: 0.4 },
+      signature: { lyapunov: 0.12, fractal: 1.92, energy: 8.2, period: 0 },
+      desc: "c \u5927 / a-b \u5F3A \u2192 \u65F6\u7A7A\u6DF7\u6C8C\uFF08\u03BB>0\uFF09"
+    },
+    {
+      id: "fhn_periodic",
+      engine: "fitzHughNagumo",
+      label: "\u5468\u671F\u6027\u8109\u51B2 Periodic Pulse",
+      refs: ["Fitzhugh 1961"],
+      params: { c: 5, a: 0.5, b: 0.95, dt: 0.6 },
+      signature: { lyapunov: -5e-3, fractal: 1.3, energy: 3.8, period: 40 },
+      desc: "a-b \u63A5\u8FD1 Hopf \u5206\u5C94\u70B9 \u2192 \u89C4\u5219\u8109\u51B2"
+    },
+    /* ============ Brusselator (化学振荡) ============ */
+    {
+      id: "brs_homogeneous",
+      engine: "brusselator",
+      label: "\u5747\u5300\u632F\u8361 Homogeneous",
+      refs: ["Prigogine & Lefever 1968"],
+      params: { A: 2, B: 5, D_u: 1, D_v: 0.2, dt: 0.1 },
+      signature: { lyapunov: -1e-3, fractal: 1, energy: 4.9, period: 60 },
+      desc: "B < 1 + A\xB2 \u2192 \u7A33\u5B9A\u5747\u5300\u632F\u8361\uFF08\u65E0\u7A7A\u95F4\u7ED3\u6784\uFF09"
+    },
+    {
+      id: "brs_turing_dots",
+      engine: "brusselator",
+      label: "Turing \u70B9\u9635 Turing Dots",
+      refs: ["Turing 1952; Schnakenberg 1979"],
+      params: { A: 2, B: 5.5, D_u: 0.5, D_v: 0.04, dt: 0.1 },
+      signature: { lyapunov: -2.5, fractal: 1.75, energy: 3.5, period: 12 },
+      desc: "D_u/D_v \u6BD4\u5927 \u2192 \u56FA\u5B9A Turing \u70B9\u9635\uFF08\u6FC0\u6D3B-\u6291\u5236\u6BD4\u6B63\u786E\u5339\u914D\uFF09"
+    },
+    {
+      id: "brs_turing_stripes",
+      engine: "brusselator",
+      label: "Turing \u6761\u7EB9 Turing Stripes",
+      refs: ["Turing 1952 \u539F\u59CB\u6587\u7AE0"],
+      params: { A: 2.5, B: 6.2, D_u: 0.4, D_v: 0.04, dt: 0.1 },
+      signature: { lyapunov: -2.6, fractal: 1.7, energy: 3.2, period: 14 },
+      desc: "B/A \u589E\u5927 \u2192 Turing \u4E0D\u7A33\u5B9A \u2192 \u6761\u7EB9\u4EE3\u66FF\u70B9\u9635"
+    },
+    {
+      id: "brs_hexagonal_lattice",
+      engine: "brusselator",
+      label: "\u516D\u8FB9\u5F62\u683C Hexagonal Lattice",
+      refs: ["Sattinger 1983"],
+      params: { A: 1.5, B: 3, D_u: 1, D_v: 0.1, dt: 0.1 },
+      signature: { lyapunov: -2.7, fractal: 1.68, energy: 2.9, period: 20 },
+      desc: "\u5F31 Turing \u4E0D\u7A33\u5B9A \u2192 \u63A5\u8FD1 Hopf \u5206\u5C94 \u2192 \u516D\u8FB9\u5F62"
+    },
+    {
+      id: "brs_chaos",
+      engine: "brusselator",
+      label: "\u6E4D\u6D41 Chaos",
+      refs: ["Borckmans et al. 1997"],
+      params: { A: 3, B: 8, D_u: 0.4, D_v: 0.02, dt: 0.1 },
+      signature: { lyapunov: 0.08, fractal: 1.94, energy: 5.8, period: 0 },
+      desc: "B \u5F88\u5927 + D_v \u5F88\u5C0F \u2192 \u65F6\u7A7A\u6DF7\u6C8C\uFF08Borckmans \u6E4D\u6D41\uFF09"
+    },
+    {
+      id: "brs_standing",
+      engine: "brusselator",
+      label: "\u9A7B\u6CE2 Standing Wave",
+      refs: ["Kuramoto 1984 \u540C\u6B65\u73B0\u8C61"],
+      params: { A: 1.5, B: 4.5, D_u: 1, D_v: 0.1, dt: 0.1 },
+      signature: { lyapunov: -0.01, fractal: 1.5, energy: 4.6, period: 35 },
+      desc: "Hopf \u548C Turing \u90FD\u63A5\u8FD1 \u2192 \u9A7B\u6CE2\uFF08\u7A7A\u95F4+\u65F6\u95F4\u90FD\u7A33\u5B9A\uFF09"
+    },
+    /* ============ Gierer-Meinhardt (生物发育) ============ */
+    {
+      id: "gm_organizer",
+      engine: "giererMeinhardt",
+      label: "\u7EC4\u7EC7\u8005 Organizer",
+      refs: ["Gierer & Meinhardt 1972"],
+      params: { D_u: 0.02, D_v: 0.04, \u03C1: 0.01, \u03BC: 0.01, dt: 1 },
+      signature: { lyapunov: -2.8, fractal: 1.78, energy: 0.45, period: 10 },
+      desc: '\u52A8\u7269\u80DA\u80CE\u53D1\u80B2\u7684"\u7EC4\u7EC7\u8005"\u5F62\u6001\u53D1\u751F\u7D20\u6A21\u5F0F'
+    }
+  ];
+  function matchPatternLibrary(metrics) {
+    if (!metrics) return [];
+    const sig = {
+      lyapunov: metrics.lyapunov ?? -2.5,
+      fractal: metrics.fractal ?? 1.5,
+      energy: metrics.energy?.total ?? 1,
+      period: metrics.spatialPeriod ?? 10
+    };
+    const w = { lyapunov: 0.3, fractal: 0.25, energy: 0.25, period: 0.2 };
+    const results = PATTERN_LIBRARY.map((pattern) => {
+      const p = pattern.signature;
+      const dlya = (sig.lyapunov - p.lyapunov) / 0.3;
+      const dfr = (sig.fractal - p.fractal) / 0.3;
+      const dE = (Math.log10(sig.energy + 0.01) - Math.log10(p.energy + 0.01)) / 0.8;
+      const dp = (sig.period - p.period) / 20;
+      const d = Math.sqrt(
+        w.lyapunov * dlya * dlya + w.fractal * dfr * dfr + w.energy * dE * dE + w.period * dp * dp
+      );
+      const similarity = Math.max(0, Math.min(100, 100 * (1 - d)));
+      return {
+        id: pattern.id,
+        label: pattern.label,
+        similarity: Math.round(similarity),
+        desc: pattern.desc,
+        refs: pattern.refs,
+        signature: p,
+        engine: pattern.engine,
+        diff: {
+          lyapunov: +(sig.lyapunov - p.lyapunov).toFixed(3),
+          fractal: +(sig.fractal - p.fractal).toFixed(3),
+          energy: +(sig.energy / p.energy || 1).toFixed(2) + "\xD7",
+          period: +(sig.period - p.period).toFixed(1)
+        }
+      };
+    });
+    results.sort((a, b) => b.similarity - a.similarity);
+    return results.slice(0, 3);
+  }
+  function buildDiscoveryRecord(recipe, metrics, topMatches) {
+    const fingerprint = simpleHash(JSON.stringify(recipe.seed.genome));
+    return {
+      schema: "commons.discovery.v1",
+      version: "2.0.0",
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      fingerprint,
+      engine: recipe.seed.genome.engine,
+      params: recipe.seed.genome,
+      metrics: {
+        lyapunov: +(metrics.lyapunov ?? 0).toFixed(4),
+        fractal: +(metrics.fractal ?? 0).toFixed(4),
+        energy: { total: +(metrics.energy?.total ?? 0).toFixed(4) },
+        density: +(metrics.density ?? 0).toFixed(4),
+        period: metrics.spatialPeriod ?? null,
+        attrType: metrics.attrType ?? null,
+        attrLabel: metrics.typeLabel ?? null
+      },
+      patternMatches: topMatches.map((m) => ({ id: m.id, label: m.label, similarity: m.similarity })),
+      hypothesis: null,
+      // 玩家可以手动补充科学假设
+      player: null,
+      // 匿名（除非玩家 opt-in）
+      audioFingerprint: fingerprint
+      // 简化：genome hash = 音频指纹 hash
+    };
+  }
+  function simpleHash(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
+    }
+    return "0x" + h.toString(16).padStart(8, "0");
+  }
+
+  // src/leaderboard.js
+  var LB_KEY = "commons.leaderboard.v1";
+  var OSR_REPO_URL = "https://github.com/commons-org/discoveries/issues/new";
+  function loadLeaderboard() {
+    try {
+      const raw = localStorage.getItem(LB_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+  function saveDiscovery(record) {
+    const lb = loadLeaderboard();
+    const idx = lb.findIndex((r) => r.fingerprint === record.fingerprint);
+    if (idx >= 0) lb[idx] = record;
+    else lb.unshift(record);
+    while (lb.length > 200) lb.pop();
+    localStorage.setItem(LB_KEY, JSON.stringify(lb));
+    return lb;
+  }
+  function saveAsDiscovery(recipe, metrics, topMatches) {
+    const record = buildDiscoveryRecord(recipe, metrics, topMatches);
+    saveDiscovery(record);
+    return record;
+  }
+  function buildOpenScienceIssue(record, opts = {}) {
+    const matched = record.patternMatches?.[0];
+    const similarity = matched ? matched.similarity + "%" : "N/A";
+    const attrLabel = record.metrics?.attrLabel ?? "\u672A\u77E5";
+    const title = `[\u53D1\u73B0] ${record.engine} \xB7 ${attrLabel} \xB7 \u76F8\u4F3C\u5EA6 ${similarity}`;
+    const body = `## \u6211\u7684\u53D1\u73B0
+
+| \u9879\u76EE | \u503C |
+|------|-----|
+| **\u6307\u7EB9** | \`${record.fingerprint}\` |
+| **\u5F15\u64CE** | ${record.engine} |
+| **\u5438\u5F15\u5B50\u7C7B\u578B** | ${attrLabel} |
+| **\u65F6\u95F4** | ${record.timestamp} |
+
+### \u79D1\u5B66\u6307\u6807
+
+| \u6307\u6807 | \u503C | \u8303\u56F4 |
+|------|-----|------|
+| Lyapunov \u03BB | ${record.metrics?.lyapunov?.toFixed(4) ?? "\u2014"} | -0.3 ~ +0.3 |
+| \u5206\u5F62\u7EF4\u6570 D | ${record.metrics?.fractal?.toFixed(3) ?? "\u2014"} | 1.0 ~ 2.0 |
+| \u81EA\u7531\u80FD E | ${record.metrics?.energy?.total?.toFixed(4) ?? "\u2014"} | 0.2 ~ 8.0 |
+| \u5BC6\u5EA6 | ${((record.metrics?.density ?? 0) * 100).toFixed(1)}% | |
+| \u7A7A\u95F4\u5468\u671F | ${record.metrics?.period ?? "\u2014"} \u683C | |
+
+### \u5DF2\u53D1\u8868\u6A21\u5F0F\u5339\u914D
+
+${(record.patternMatches || []).map(
+      (m, i) => `${i + 1}. **${m.label}** \u2014 \u76F8\u4F3C\u5EA6 ${m.similarity}%  
+   > ${m.engine}`
+    ).join("\n\n") || "_\u65E0\u5339\u914D_"}
+
+### \u79D1\u5B66\u53C2\u6570
+
+\`\`\`json
+${JSON.stringify(record.params, null, 2)}
+\`\`\`
+
+### \u5047\u8BBE\uFF08\u53EF\u9009\uFF09
+
+${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u662F\u56E0\u4E3A..._"}
+
+---
+*\u63D0\u4EA4\u81EA Commons v2.0 \u53CD\u5E94-\u6269\u6563\u5F15\u64CE \xB7 \u5F00\u653E\u79D1\u5B66\u6A21\u5F0F*
+`;
+    const url = `${OSR_REPO_URL}?title=${encodeURIComponent(title)}`;
+    return { url, title, body };
+  }
+
   // src/app.js
   var $ = (sel, root = document) => root.querySelector(sel);
   var $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -6190,6 +6854,24 @@ body.motion-off *::after {
       ${sliderHTML("\u65F6\u95F4\u6B65 dt", g.lenia.dt.toFixed(2), 0.03, 0.18, 0.01, 'data-lenia-param="dt"')}
       <p class="hint">\u7B80\u5316 Lenia\uFF1A\u73AF\u72B6\u6838 \xD7 \u9AD8\u65AF\u751F\u957F\u3002\u03BC \u63A7\u5236"\u60F3\u6210\u4E3A\u4EC0\u4E48\u5BC6\u5EA6"\uFF0C\u03C3 \u63A7\u5236\u5BBD\u5BB9\u5EA6\uFF0CR \u63A7\u5236\u5C3A\u5EA6\u3002</p>`;
     }
+    let sciToolsHTML = "";
+    if (isSci && runPlayerMC) {
+      sciToolsHTML = `
+      <div class="section-label">\u{1F52C} \u79D1\u5B66\u5DE5\u5177\uFF08\u73A9\u5BB6\u9A71\u52A8\u7684\u79D1\u7814\u80FD\u529B\uFF09</div>
+      <div class="btn-row">
+        <button class="ghost" data-sci-action="mc">\u{1F9EC} \u8BA9 CPM \u5E2E\u6211\u63A8\u4E00\u4E0B</button>
+        <button class="ghost" data-sci-action="scan">\u{1F5FA}\uFE0F \u53C2\u6570\u626B\u63CF\u80FD\u91CF\u666F\u89C2</button>
+        <button class="ghost" data-sci-action="match">\u{1F4DA} \u5DF2\u53D1\u8868\u6A21\u5F0F\u5339\u914D</button>
+        <button class="ghost" data-sci-action="save">\u2B50 \u4FDD\u5B58\u5230\u5F00\u653E\u79D1\u5B66\u4ED3\u5E93</button>
+      </div>
+      <p class="hint">
+        <b>CPM MC</b>\uFF1A\u73A9\u5BB6\u89E6\u53D1\u7684 Metropolis Monte Carlo \u6B65\uFF08\u5C40\u90E8\u80FD\u91CF\u6700\u5C0F\u5316\uFF09\uFF0C
+        \u7C7B\u4F3C Foldit \u7684\u73A9\u5BB6"\u6298\u53E0-\u8C03\u6574"\u64CD\u4F5C\uFF1B
+        <b>\u53C2\u6570\u626B\u63CF</b>\uFF1A\u81EA\u52A8\u8DD1 N\xD7M \u7F51\u683C\u641C\u7D22 \u2192 \u80FD\u91CF\u666F\u89C2\u70ED\u56FE\uFF1B
+        <b>\u6A21\u5F0F\u5339\u914D</b>\uFF1A\u548C 30 \u7BC7\u7ECF\u5178 Turing \u6A21\u5F0F\u6587\u732E\u5BF9\u6BD4\u6253\u5206\uFF1B
+        <b>\u5F00\u653E\u79D1\u5B66</b>\uFF1A\u4E00\u952E\u751F\u6210 GitHub issue \u683C\u5F0F\u7684\u53D1\u73B0\u8BB0\u5F55\u3002
+      </p>`;
+    }
     $("#panel-rule").innerHTML = `
     <div class="section-label">\u751F\u547D\u5F15\u64CE</div>
     <div class="segmented">
@@ -6198,6 +6880,7 @@ body.motion-off *::after {
       <button data-engine="scientific" class="${isSci ? "active" : ""}">\u53CD\u5E94-\u6269\u6563\uFF08\u79D1\u5B66\uFF09</button>
     </div>
     ${bodyHTML}
+    ${sciToolsHTML}
     <div class="btn-row">
       <button class="ghost" data-action="reseed">\u6309\u5F53\u524D\u914D\u65B9\u91CD\u64AD</button>
       <button class="ghost" data-action="mutate">\u5206\u88C2\u7A81\u53D8</button>
@@ -7595,6 +8278,11 @@ body.motion-off *::after {
       toast(`\u5207\u6362\u5230 ${t}`);
       return;
     }
+    const sciAction = e.target.closest("[data-sci-action]");
+    if (sciAction) {
+      handleSciAction(sciAction.dataset.sciAction);
+      return;
+    }
     const birth = e.target.closest("[data-birth]");
     if (birth) {
       const n = parseInt(birth.dataset.birth, 10);
@@ -7730,6 +8418,73 @@ body.motion-off *::after {
       renderEnvPanel();
       toast(`\u8FB9\u754C\uFF1A${BOUNDARY_LABEL[boundary.dataset.boundary]}`);
     }
+  }
+  function handleSciAction(action) {
+    if (action === "mc" && runPlayerMC) {
+      toast("\u{1F9EC} \u8BA9 CPM \u6765\u8C03\u4E00\u4E0B...");
+      const mc = runPlayerMC(state.sim, 4, { temperature: 0.2, nTypes: 6 });
+      const deltaStr = mc.energyDelta < 0 ? `\u2713 \u80FD\u91CF\u4E0B\u964D ${(-mc.energyDelta).toFixed(0)}` : `\u0394E=${mc.energyDelta.toFixed(0)}`;
+      toast(`CPM MC \u5B8C\u6210\uFF1A\u63A5\u53D7\u7387 ${(mc.acceptedRate * 100).toFixed(1)}% | ${deltaStr}`);
+      console.log("[CPM]", { acceptedRate: mc.acceptedRate, energyBefore: mc.energyBefore.toFixed(1), energyAfter: mc.energyAfter.toFixed(1), usedField: mc.usedField });
+      state.sciMCResult = mc;
+      return;
+    }
+    if (action === "match" && matchPatternLibrary) {
+      const m = state.sim.metrics ? state.sim.metrics() : computeMetrics(state.sim);
+      const matches = matchPatternLibrary(m);
+      state.sciMatches = matches;
+      toast(`\u{1F4DA} \u6A21\u5F0F\u5339\u914D Top-1\uFF1A${matches[0]?.label ?? "\u2014"} ${matches[0]?.similarity ?? 0}%`);
+      console.log("[Pattern Match]", matches.map((m2) => `${m2.label} ${m2.similarity}% \u2192 ${m2.refs?.[0]}`));
+      console.table(matches.map((m2) => ({ label: m2.label, similarity: m2.similarity, refs: m2.refs?.[0], engine: m2.engine })));
+      return;
+    }
+    if (action === "scan" && runParameterScan) {
+      const sci = state.recipe.seed.genome.scientific || {};
+      const et = sci.engineType || "grayScott";
+      const axesDef = DEFAULT_SCAN_AXES?.[et] || DEFAULT_SCAN_AXES.grayScott;
+      const baseAxes = axesDef.slice(0, 2);
+      toast("\u{1F5FA}\uFE0F \u8DD1\u53C2\u6570\u626B\u63CF\u4E2D\uFF08\u53EF\u80FD\u9700\u8981 5-30 \u79D2\uFF09...");
+      runParameterScan(
+        state.sim._rd ? state.sim._rd.params : {},
+        { xAxis: { ...baseAxes[0], N: 10 }, yAxis: { ...baseAxes[1], N: 10 } },
+        { w: 40, h: 28, steps: 200, progressCb: (p) => {
+        } }
+      ).then((result) => {
+        state.sciScanResult = result;
+        toast(`\u626B\u63CF\u5B8C\u6210\uFF1A\u6700\u4F73\u70B9 E=${result.bestPoint.energy.toFixed(3)}`);
+        console.log("[Scan Result]", {
+          best: { params: result.bestPoint.params, energy: result.bestPoint.energy },
+          worst: { params: result.worstPoint.params, energy: result.worstPoint.energy },
+          gridSize: `${result.Nx}\xD7${result.Ny}`
+        });
+      }).catch((err) => {
+        toast("\u274C \u626B\u63CF\u5931\u8D25\uFF1A" + err.message);
+        console.error(err);
+      });
+      return;
+    }
+    if (action === "save" && saveAsDiscovery) {
+      const m = state.sim.metrics ? state.sim.metrics() : computeMetrics(state.sim);
+      const matches = matchPatternLibrary ? matchPatternLibrary(m) : [];
+      const rec = saveAsDiscovery(state.recipe, m, matches);
+      state.sciDiscovery = rec;
+      const issue = buildOpenScienceIssue ? buildOpenScienceIssue(rec) : null;
+      toast(`\u2B50 \u5DF2\u4FDD\u5B58\u5230\u672C\u5730\u5F00\u653E\u79D1\u5B66\u4ED3\u5E93\uFF08${loadLeaderboard().length} \u6761\uFF09`);
+      console.log("[Discovery Saved]", { fingerprint: rec.fingerprint, topMatch: rec.patternMatches?.[0] });
+      if (issue) {
+        console.log("\n==== \u5F00\u653E\u79D1\u5B66 GitHub Issue ====");
+        console.log("\u6807\u9898:", issue.title);
+        console.log("URL :", issue.url);
+        console.log("Body:\n", issue.body);
+        try {
+          navigator.clipboard?.writeText(issue.body);
+          toast("\u{1F4CB} Issue body \u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F");
+        } catch {
+        }
+      }
+      return;
+    }
+    toast("\u274C \u79D1\u5B66\u6A21\u5757\u672A\u52A0\u8F7D\uFF08\u53EF\u80FD\u662F\u6D4F\u89C8\u5668\u4E0D\u652F\u6301\uFF09");
   }
   function afterEnvReset() {
     state.metrics = computeMetrics(state.sim);

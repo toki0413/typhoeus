@@ -46,6 +46,12 @@ import {
 } from './store.js';
 import { clamp, hashString, mulberry32, proceduralName, toHex, uid } from './rng.js';
 
+/* ---- 科学工具模块（静态 import + 运行时降级） ---- */
+import { runPlayerMC, discretizeField, CPM_DEFAULTS } from './cpm.js';
+import { runParameterScan, renderHeatmap, DEFAULT_SCAN_AXES, SCAN_METRICS } from './scan.js';
+import { matchPatternLibrary, PATTERN_LIBRARY, buildDiscoveryRecord } from './patterns.js';
+import { saveAsDiscovery, buildOpenScienceIssue, loadLeaderboard, rankDiscoveries, clearLeaderboard, exportLeaderboard, importDiscoveries } from './leaderboard.js';
+
 /* ------------------------------------------------------------------ */
 /* Constants                                                          */
 /* ------------------------------------------------------------------ */
@@ -650,6 +656,26 @@ function renderRulePanel() {
       <p class="hint">简化 Lenia：环状核 × 高斯生长。μ 控制"想成为什么密度"，σ 控制宽容度，R 控制尺度。</p>`;
   }
 
+  // 科学引擎专属：额外工具按钮区
+  let sciToolsHTML = '';
+  if (isSci && runPlayerMC) {
+    sciToolsHTML = `
+      <div class="section-label">🔬 科学工具（玩家驱动的科研能力）</div>
+      <div class="btn-row">
+        <button class="ghost" data-sci-action="mc">🧬 让 CPM 帮我推一下</button>
+        <button class="ghost" data-sci-action="scan">🗺️ 参数扫描能量景观</button>
+        <button class="ghost" data-sci-action="match">📚 已发表模式匹配</button>
+        <button class="ghost" data-sci-action="save">⭐ 保存到开放科学仓库</button>
+      </div>
+      <p class="hint">
+        <b>CPM MC</b>：玩家触发的 Metropolis Monte Carlo 步（局部能量最小化），
+        类似 Foldit 的玩家"折叠-调整"操作；
+        <b>参数扫描</b>：自动跑 N×M 网格搜索 → 能量景观热图；
+        <b>模式匹配</b>：和 30 篇经典 Turing 模式文献对比打分；
+        <b>开放科学</b>：一键生成 GitHub issue 格式的发现记录。
+      </p>`;
+  }
+
   $('#panel-rule').innerHTML = `
     <div class="section-label">生命引擎</div>
     <div class="segmented">
@@ -658,6 +684,7 @@ function renderRulePanel() {
       <button data-engine="scientific" class="${isSci ? 'active' : ''}">反应-扩散（科学）</button>
     </div>
     ${bodyHTML}
+    ${sciToolsHTML}
     <div class="btn-row">
       <button class="ghost" data-action="reseed">按当前配方重播</button>
       <button class="ghost" data-action="mutate">分裂突变</button>
@@ -2210,6 +2237,13 @@ function onRuleClick(e) {
     toast(`切换到 ${t}`);
     return;
   }
+
+  /* ---- 玩家驱动的科学工具按钮 ---- */
+  const sciAction = e.target.closest('[data-sci-action]');
+  if (sciAction) {
+    handleSciAction(sciAction.dataset.sciAction);
+    return;
+  }
   const birth = e.target.closest('[data-birth]');
   if (birth) {
     const n = parseInt(birth.dataset.birth, 10);
@@ -2353,6 +2387,72 @@ function onEnvClick(e) {
     renderEnvPanel();
     toast(`边界：${BOUNDARY_LABEL[boundary.dataset.boundary]}`);
   }
+}
+
+/* ================================================================ */
+/*  科学工具：玩家驱动的科研能力                                     */
+/* ================================================================ */
+function handleSciAction(action) {
+  if (action === 'mc' && runPlayerMC) {
+    toast('🧬 让 CPM 来调一下...');
+    const mc = runPlayerMC(state.sim, 4, { temperature: 0.2, nTypes: 6 });
+    const deltaStr = mc.energyDelta < 0 ? `✓ 能量下降 ${(-mc.energyDelta).toFixed(0)}` : `ΔE=${mc.energyDelta.toFixed(0)}`;
+    toast(`CPM MC 完成：接受率 ${(mc.acceptedRate*100).toFixed(1)}% | ${deltaStr}`);
+    console.log('[CPM]', { acceptedRate: mc.acceptedRate, energyBefore: mc.energyBefore.toFixed(1), energyAfter: mc.energyAfter.toFixed(1), usedField: mc.usedField });
+    state.sciMCResult = mc;
+    return;
+  }
+  if (action === 'match' && matchPatternLibrary) {
+    const m = state.sim.metrics ? state.sim.metrics() : computeMetrics(state.sim);
+    const matches = matchPatternLibrary(m);
+    state.sciMatches = matches;
+    toast(`📚 模式匹配 Top-1：${matches[0]?.label ?? '—'} ${matches[0]?.similarity ?? 0}%`);
+    console.log('[Pattern Match]', matches.map(m => `${m.label} ${m.similarity}% → ${m.refs?.[0]}`));
+    // 在控制台打印详细匹配，方便玩家复制
+    console.table(matches.map(m => ({ label: m.label, similarity: m.similarity, refs: m.refs?.[0], engine: m.engine })));
+    return;
+  }
+  if (action === 'scan' && runParameterScan) {
+    // 选引擎对应的默认扫描轴
+    const sci = state.recipe.seed.genome.scientific || {};
+    const et = sci.engineType || 'grayScott';
+    const axesDef = DEFAULT_SCAN_AXES?.[et] || DEFAULT_SCAN_AXES.grayScott;
+    const baseAxes = axesDef.slice(0, 2);
+    toast('🗺️ 跑参数扫描中（可能需要 5-30 秒）...');
+    runParameterScan(
+      state.sim._rd ? state.sim._rd.params : {},
+      { xAxis: { ...baseAxes[0], N: 10 }, yAxis: { ...baseAxes[1], N: 10 } },
+      { w: 40, h: 28, steps: 200, progressCb: (p) => { /* console.log 不刷屏 */ } }
+    ).then(result => {
+      state.sciScanResult = result;
+      toast(`扫描完成：最佳点 E=${result.bestPoint.energy.toFixed(3)}`);
+      console.log('[Scan Result]', {
+        best: { params: result.bestPoint.params, energy: result.bestPoint.energy },
+        worst: { params: result.worstPoint.params, energy: result.worstPoint.energy },
+        gridSize: `${result.Nx}×${result.Ny}`,
+      });
+    }).catch(err => { toast('❌ 扫描失败：' + err.message); console.error(err); });
+    return;
+  }
+  if (action === 'save' && saveAsDiscovery) {
+    const m = state.sim.metrics ? state.sim.metrics() : computeMetrics(state.sim);
+    const matches = matchPatternLibrary ? matchPatternLibrary(m) : [];
+    const rec = saveAsDiscovery(state.recipe, m, matches);
+    state.sciDiscovery = rec;
+    const issue = buildOpenScienceIssue ? buildOpenScienceIssue(rec) : null;
+    toast(`⭐ 已保存到本地开放科学仓库（${loadLeaderboard().length} 条）`);
+    console.log('[Discovery Saved]', { fingerprint: rec.fingerprint, topMatch: rec.patternMatches?.[0] });
+    if (issue) {
+      // 把 body 写入剪贴板（如果可能）并打印
+      console.log('\n==== 开放科学 GitHub Issue ====');
+      console.log('标题:', issue.title);
+      console.log('URL :', issue.url);
+      console.log('Body:\n', issue.body);
+      try { navigator.clipboard?.writeText(issue.body); toast('📋 Issue body 已复制到剪贴板'); } catch {}
+    }
+    return;
+  }
+  toast('❌ 科学模块未加载（可能是浏览器不支持）');
 }
 
 function afterEnvReset() {
