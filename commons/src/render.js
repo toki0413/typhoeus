@@ -198,8 +198,22 @@ export class StageRenderer {
     const m = this.metrics;
     const activity = m ? clamp(m.activity, 0, 1) : 0.2;
 
-    // 芳文社：用 TINT 背景色做 trail fade（不是黑色），
-    // 这样残留是柔和的粉紫色，不会污染明亮的舞台。
+    /* ====== 芳文社核心：径向渐变背景（不是纯色） ======
+       空气感来源——中心亮粉白，边缘稍暗粉紫 */
+    const cx = W / 2;
+    const cy = H / 2;
+    const grad = ctx.createRadialGradient(
+      cx, cy, Math.min(W, H) * 0.1,
+      cx, cy, Math.max(W, H) * 0.8
+    );
+    grad.addColorStop(0, `rgb(${t.bg[0] + 12},${t.bg[1] + 12},${t.bg[2] + 8})`);   // 中心最亮
+    grad.addColorStop(0.6, `rgb(${t.bg[0]},${t.bg[1]},${t.bg[2]})`);              // 中间
+    grad.addColorStop(1, `rgb(${Math.max(0, t.bg[0] - 28)},${Math.max(0, t.bg[1] - 22)},${Math.max(0, t.bg[2] - 18)})`); // 边缘稍暗
+    ctx.fillStyle = grad;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillRect(0, 0, W, H);
+
+    /* ====== trail fade：用 TINT 背景色，让残留是柔和的粉紫残影 ====== */
     const fade = sim.kind === 'lenia' ? 0.16 : 0.30;
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = `rgba(${t.bg[0]},${t.bg[1]},${t.bg[2]},${fade})`;
@@ -209,26 +223,34 @@ export class StageRenderer {
     const ox = (W - sim.w * scale) / 2;
     const oy = (H - sim.h * scale) / 2;
 
-    if (sim.kind === 'lenia') this._drawLenia(scale, ox, oy, activity);
-    else this._drawLife(scale, ox, oy, activity);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
-    // subtle rule grid
+    if (sim.kind === 'lenia') this._drawLenia(scale, ox, oy, activity);
+    else this._drawLife(scale, ox, oy, activity, now);
+
+    /* ====== 芳文社：极淡的虚线网格（几乎看不见） ====== */
     if (!this.compact) this._drawGrid(scale, ox, oy, W, H);
 
-    // event signature + scanline
+    /* ====== 事件脉冲签名 ====== */
     this._drawPulse(now, W, H);
     if (!this.compact) this._drawScan(now, W, H);
     this.flash *= 0.9;
   }
 
-  _drawLife(scale, ox, oy, activity) {
+  /* ============================================================== */
+  /* 芳文社 _drawLife：圆点细胞 + 三层水彩晕染 + 高光 + 呼吸感      */
+  /* ============================================================== */
+  _drawLife(scale, ox, oy, activity, now) {
     const { ctx, sim } = this;
     const t = this.tint;
     const w = sim.w;
     const h = sim.h;
     const { grid, age } = sim;
     const cell = scale;
-    const gap = Math.max(0.5, cell * 0.2);
+    const time = now || performance.now();
+
+    // 按年龄桶收集坐标（算法层不动）
     const buckets = AGE_BUCKETS.map(() => [[], []]);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
@@ -236,61 +258,103 @@ export class StageRenderer {
         if (!grid[i]) continue;
         let b = 0;
         for (let k = 0; k < AGE_BUCKETS.length; k++) {
-          if (age[i] <= AGE_BUCKETS[k].max) {
-            b = k;
-            break;
-          }
+          if (age[i] <= AGE_BUCKETS[k].max) { b = k; break; }
         }
         buckets[b][(x + y) & 1].push(x, y);
       }
     }
 
-    // glow pass — soft bioluminescence, strongest on newborns
+    /* ====================================================== */
+    /* Layer 1: 超大柔和光晕（lighter 叠加，淡色）           */
+    /* 新生儿 = cell * 2.8 半径 · 最亮                       */
+    /* 老年 = cell * 1.4 半径 · 几乎消失                     */
+    /* ====================================================== */
     ctx.globalCompositeOperation = 'lighter';
-    for (let b = 0; b < buckets.length; b++) {
-      if (b >= 5) continue;
-      const info = ageBucket(b === 0 ? 0 : b === 1 ? 1 : b === 2 ? 2 : b < 5 ? 4 : b < 6 ? 9 : 20, activity);
-      const glow = b === 0 ? 0.2 : 0.05;
-      const gs = cell * (b === 0 ? 2.7 : 1.9);
-      const off = (gs - cell) / 2;
+    for (let b = 0; b < Math.min(buckets.length, 5); b++) {
+      const fakeAge = b === 0 ? 0 : b === 1 ? 1 : b === 2 ? 2 : b < 5 ? 4 : 20;
+      const info = ageBucket(fakeAge, activity);
+      // 光晕半径随年龄缩小：新生儿最大光晕 → 老细胞光晕消失
+      const glowRadius = cell * (b === 0 ? 2.8 : b === 1 ? 2.2 : b === 2 ? 1.8 : 1.5);
+      const glowAlpha = b === 0 ? 0.35 : b === 1 ? 0.18 : b === 2 ? 0.10 : 0.05;
       for (let p = 0; p < 2; p++) {
         const arr = buckets[b][p];
         if (!arr.length) continue;
-        ctx.fillStyle = `hsla(${t.hue + b * 4 - p * 7}, ${info.s}%, ${Math.min(76, info.l + 6)}%, ${glow})`;
+        // 光晕色相偏暖一点（新生儿偏粉，老细胞偏紫）
+        const hue = t.hue + b * 3 + (p ? -5 : 5);
+        ctx.fillStyle = `hsla(${hue}, ${info.s}%, ${Math.min(85, info.l + 10)}%, ${glowAlpha})`;
+        // 画一团：把每段 bucket 的坐标先连起来画一团大圆，比逐个画更像水彩晕染
+        // 但为了确定性，还是逐个画 —— 不过加一点点随机抖动让边缘更松散
+        ctx.beginPath();
         for (let k = 0; k < arr.length; k += 2) {
-          ctx.fillRect(ox + arr[k] * cell - off, oy + arr[k + 1] * cell - off, gs, gs);
+          const px = ox + arr[k] * cell + cell / 2;
+          const py = oy + arr[k + 1] * cell + cell / 2;
+          // 新生儿：呼吸抖动 ±cell*0.12（让它们"在呼吸"）
+          const breath = b === 0
+            ? Math.sin(time * 0.004 + (arr[k] * 13 + arr[k + 1] * 7) % 100 / 10) * cell * 0.08
+            : 0;
+          const r = glowRadius + breath;
+          ctx.moveTo(px + r, py);
+          ctx.arc(px, py, r, 0, Math.PI * 2);
         }
+        ctx.fill();
       }
     }
 
-    // body pass — two micro-hue variants keep it organic
+    /* ====================================================== */
+    /* Layer 2: 中层半透明实体圆（lighter 叠加）              */
+    /* 年龄影响半径：新生儿 cell*0.55 → 老年 cell*0.30      */
+    /* ====================================================== */
+    const hueShift = activity * 6;
+    for (let b = 0; b < buckets.length; b++) {
+      const fakeAge = b === 0 ? 0 : b === 1 ? 1 : b === 2 ? 2 : b < 5 ? 4 : b < 6 ? 9 : 20;
+      const info = ageBucket(fakeAge, activity);
+      // 实体半径：新生儿最大 → 老年缩小
+      const bodyRadius = cell * (b === 0 ? 0.55 : b === 1 ? 0.48 : b === 2 ? 0.44 : b < 5 ? 0.38 : 0.30);
+      const alpha = info.a;
+      for (let p = 0; p < 2; p++) {
+        const arr = buckets[b][p];
+        if (!arr.length) continue;
+        const hue = t.hue + b * 3 + hueShift + (p ? 4 : -4);
+        ctx.fillStyle = `hsla(${hue}, ${info.s}%, ${info.l}%, ${alpha})`;
+        ctx.beginPath();
+        for (let k = 0; k < arr.length; k += 2) {
+          const px = ox + arr[k] * cell + cell / 2;
+          const py = oy + arr[k + 1] * cell + cell / 2;
+          const breath = b === 0
+            ? Math.sin(time * 0.004 + (arr[k] * 13 + arr[k + 1] * 7) % 100 / 10) * cell * 0.04
+            : 0;
+          ctx.moveTo(px + bodyRadius + breath, py);
+          ctx.arc(px, py, bodyRadius + breath, 0, Math.PI * 2);
+        }
+        ctx.fill();
+      }
+    }
+
+    /* ====================================================== */
+    /* Layer 3: 小高光点（source-over，白色/淡粉白色）        */
+    /* 只给新生儿和青年细胞，老细胞没有高光                   */
+    /* 位置在圆的左上 30% 处（像日系插画的眼神光）            */
+    /* ====================================================== */
     ctx.globalCompositeOperation = 'source-over';
-    const hueShift = activity * 8;
-    for (let b = 0; b < buckets.length; b++) {
-      const info = ageBucket(b === 0 ? 0 : b === 1 ? 1 : b === 2 ? 2 : b < 5 ? 4 : b < 6 ? 9 : 20, activity);
-      const size = cell - gap;
+    for (let b = 0; b < Math.min(buckets.length, 3); b++) {
+      const bodyRadius = cell * (b === 0 ? 0.55 : b === 1 ? 0.48 : 0.44);
+      const hlRadius = bodyRadius * 0.32;            // 高光点大小 = 实体圆的 32%
+      const hlOffset = bodyRadius * 0.35;            // 高光点偏移：左上 35%
+      const hlAlpha = b === 0 ? 0.85 : b === 1 ? 0.65 : 0.45;
       for (let p = 0; p < 2; p++) {
         const arr = buckets[b][p];
         if (!arr.length) continue;
-        const hue = (b === 0 ? t.hue + 4 : t.hue + b * 4 + hueShift) + (p ? 4 : -3);
-        ctx.fillStyle = `hsla(${hue}, ${info.s}%, ${info.l}%, ${info.a})`;
+        ctx.fillStyle = `rgba(255, 248, 251, ${hlAlpha})`;
         for (let k = 0; k < arr.length; k += 2) {
-          ctx.fillRect(ox + arr[k] * cell + gap / 2, oy + arr[k + 1] * cell + gap / 2, size, size);
+          const px = ox + arr[k] * cell + cell / 2 - hlOffset;    // 左上
+          const py = oy + arr[k + 1] * cell + cell / 2 - hlOffset;
+          ctx.beginPath();
+          ctx.arc(px, py, hlRadius, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
     }
 
-    // 芳文社：新生儿 sparkle 改为樱花粉白色，更治愈
-    ctx.globalCompositeOperation = 'lighter';
-    const newborns = buckets[0];
-    ctx.fillStyle = `rgba(255, 230, 240, ${0.28 + activity * 0.22})`;
-    const s = Math.max(1, cell * 0.5);
-    for (let p = 0; p < 2; p++) {
-      const arr = newborns[p];
-      for (let k = 0; k < arr.length; k += 2) {
-        ctx.fillRect(ox + arr[k] * cell + (cell - s) / 2, oy + arr[k + 1] * cell + (cell - s) / 2, s, s);
-      }
-    }
     ctx.globalCompositeOperation = 'source-over';
   }
 
@@ -337,11 +401,12 @@ export class StageRenderer {
 
   _drawGrid(scale, ox, oy, W, H) {
     const { ctx, sim } = this;
-    // 芳文社：网格线改为粉紫色虚线，更可爱，不扎眼
-    ctx.strokeStyle = 'rgba(255, 142, 181, 0.08)';
+    // 芳文社：极淡的粉紫色虚线网格（几乎看不见，只留空气感）
+    ctx.strokeStyle = 'rgba(255, 142, 181, 0.09)';
     ctx.lineWidth = 1;
-    const step = Math.max(8, Math.round(sim.w / 15) * scale);
+    ctx.setLineDash([2, 4]);          // 虚线：2px 线 + 4px 空隙
     ctx.beginPath();
+    const step = Math.max(8, Math.round(sim.w / 15) * scale);
     for (let x = ox; x <= ox + sim.w * scale; x += step) {
       ctx.moveTo(x, oy);
       ctx.lineTo(x, oy + sim.h * scale);
@@ -351,6 +416,7 @@ export class StageRenderer {
       ctx.lineTo(ox + sim.w * scale, y);
     }
     ctx.stroke();
+    ctx.setLineDash([]);              // 恢复
     void W;
     void H;
   }

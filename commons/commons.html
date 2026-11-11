@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Commons · 公地 🌸 用心聆听生命的声音（单文件版）</title>
+    <title>Commons · 公地 🌸 用心聆听生命的声音（芳文社版）</title>
     <meta
       name="description"
       content="Commons 公地：领养、观察、悉心照料一枚小小的生命种子，聆听它用五声音阶为你献上的治愈之歌。"
@@ -4156,6 +4156,22 @@ body.blind-listen .hud-tr {
       const H = canvas.height;
       const m = this.metrics;
       const activity = m ? clamp(m.activity, 0, 1) : 0.2;
+      const cx = W / 2;
+      const cy = H / 2;
+      const grad = ctx.createRadialGradient(
+        cx,
+        cy,
+        Math.min(W, H) * 0.1,
+        cx,
+        cy,
+        Math.max(W, H) * 0.8
+      );
+      grad.addColorStop(0, `rgb(${t.bg[0] + 12},${t.bg[1] + 12},${t.bg[2] + 8})`);
+      grad.addColorStop(0.6, `rgb(${t.bg[0]},${t.bg[1]},${t.bg[2]})`);
+      grad.addColorStop(1, `rgb(${Math.max(0, t.bg[0] - 28)},${Math.max(0, t.bg[1] - 22)},${Math.max(0, t.bg[2] - 18)})`);
+      ctx.fillStyle = grad;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillRect(0, 0, W, H);
       const fade = sim.kind === "lenia" ? 0.16 : 0.3;
       ctx.globalCompositeOperation = "source-over";
       ctx.fillStyle = `rgba(${t.bg[0]},${t.bg[1]},${t.bg[2]},${fade})`;
@@ -4163,21 +4179,26 @@ body.blind-listen .hud-tr {
       const scale = Math.min(W / sim.w, H / sim.h);
       const ox = (W - sim.w * scale) / 2;
       const oy = (H - sim.h * scale) / 2;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       if (sim.kind === "lenia") this._drawLenia(scale, ox, oy, activity);
-      else this._drawLife(scale, ox, oy, activity);
+      else this._drawLife(scale, ox, oy, activity, now);
       if (!this.compact) this._drawGrid(scale, ox, oy, W, H);
       this._drawPulse(now, W, H);
       if (!this.compact) this._drawScan(now, W, H);
       this.flash *= 0.9;
     }
-    _drawLife(scale, ox, oy, activity) {
+    /* ============================================================== */
+    /* 芳文社 _drawLife：圆点细胞 + 三层水彩晕染 + 高光 + 呼吸感      */
+    /* ============================================================== */
+    _drawLife(scale, ox, oy, activity, now) {
       const { ctx, sim } = this;
       const t = this.tint;
       const w = sim.w;
       const h = sim.h;
       const { grid, age } = sim;
       const cell = scale;
-      const gap = Math.max(0.5, cell * 0.2);
+      const time = now || performance.now();
       const buckets = AGE_BUCKETS.map(() => [[], []]);
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
@@ -4194,44 +4215,67 @@ body.blind-listen .hud-tr {
         }
       }
       ctx.globalCompositeOperation = "lighter";
-      for (let b = 0; b < buckets.length; b++) {
-        if (b >= 5) continue;
-        const info = ageBucket(b === 0 ? 0 : b === 1 ? 1 : b === 2 ? 2 : b < 5 ? 4 : b < 6 ? 9 : 20, activity);
-        const glow = b === 0 ? 0.2 : 0.05;
-        const gs = cell * (b === 0 ? 2.7 : 1.9);
-        const off = (gs - cell) / 2;
+      for (let b = 0; b < Math.min(buckets.length, 5); b++) {
+        const fakeAge = b === 0 ? 0 : b === 1 ? 1 : b === 2 ? 2 : b < 5 ? 4 : 20;
+        const info = ageBucket(fakeAge, activity);
+        const glowRadius = cell * (b === 0 ? 2.8 : b === 1 ? 2.2 : b === 2 ? 1.8 : 1.5);
+        const glowAlpha = b === 0 ? 0.35 : b === 1 ? 0.18 : b === 2 ? 0.1 : 0.05;
         for (let p = 0; p < 2; p++) {
           const arr = buckets[b][p];
           if (!arr.length) continue;
-          ctx.fillStyle = `hsla(${t.hue + b * 4 - p * 7}, ${info.s}%, ${Math.min(76, info.l + 6)}%, ${glow})`;
+          const hue = t.hue + b * 3 + (p ? -5 : 5);
+          ctx.fillStyle = `hsla(${hue}, ${info.s}%, ${Math.min(85, info.l + 10)}%, ${glowAlpha})`;
+          ctx.beginPath();
           for (let k = 0; k < arr.length; k += 2) {
-            ctx.fillRect(ox + arr[k] * cell - off, oy + arr[k + 1] * cell - off, gs, gs);
+            const px = ox + arr[k] * cell + cell / 2;
+            const py = oy + arr[k + 1] * cell + cell / 2;
+            const breath = b === 0 ? Math.sin(time * 4e-3 + (arr[k] * 13 + arr[k + 1] * 7) % 100 / 10) * cell * 0.08 : 0;
+            const r = glowRadius + breath;
+            ctx.moveTo(px + r, py);
+            ctx.arc(px, py, r, 0, Math.PI * 2);
           }
+          ctx.fill();
+        }
+      }
+      const hueShift = activity * 6;
+      for (let b = 0; b < buckets.length; b++) {
+        const fakeAge = b === 0 ? 0 : b === 1 ? 1 : b === 2 ? 2 : b < 5 ? 4 : b < 6 ? 9 : 20;
+        const info = ageBucket(fakeAge, activity);
+        const bodyRadius = cell * (b === 0 ? 0.55 : b === 1 ? 0.48 : b === 2 ? 0.44 : b < 5 ? 0.38 : 0.3);
+        const alpha = info.a;
+        for (let p = 0; p < 2; p++) {
+          const arr = buckets[b][p];
+          if (!arr.length) continue;
+          const hue = t.hue + b * 3 + hueShift + (p ? 4 : -4);
+          ctx.fillStyle = `hsla(${hue}, ${info.s}%, ${info.l}%, ${alpha})`;
+          ctx.beginPath();
+          for (let k = 0; k < arr.length; k += 2) {
+            const px = ox + arr[k] * cell + cell / 2;
+            const py = oy + arr[k + 1] * cell + cell / 2;
+            const breath = b === 0 ? Math.sin(time * 4e-3 + (arr[k] * 13 + arr[k + 1] * 7) % 100 / 10) * cell * 0.04 : 0;
+            ctx.moveTo(px + bodyRadius + breath, py);
+            ctx.arc(px, py, bodyRadius + breath, 0, Math.PI * 2);
+          }
+          ctx.fill();
         }
       }
       ctx.globalCompositeOperation = "source-over";
-      const hueShift = activity * 8;
-      for (let b = 0; b < buckets.length; b++) {
-        const info = ageBucket(b === 0 ? 0 : b === 1 ? 1 : b === 2 ? 2 : b < 5 ? 4 : b < 6 ? 9 : 20, activity);
-        const size = cell - gap;
+      for (let b = 0; b < Math.min(buckets.length, 3); b++) {
+        const bodyRadius = cell * (b === 0 ? 0.55 : b === 1 ? 0.48 : 0.44);
+        const hlRadius = bodyRadius * 0.32;
+        const hlOffset = bodyRadius * 0.35;
+        const hlAlpha = b === 0 ? 0.85 : b === 1 ? 0.65 : 0.45;
         for (let p = 0; p < 2; p++) {
           const arr = buckets[b][p];
           if (!arr.length) continue;
-          const hue = (b === 0 ? t.hue + 4 : t.hue + b * 4 + hueShift) + (p ? 4 : -3);
-          ctx.fillStyle = `hsla(${hue}, ${info.s}%, ${info.l}%, ${info.a})`;
+          ctx.fillStyle = `rgba(255, 248, 251, ${hlAlpha})`;
           for (let k = 0; k < arr.length; k += 2) {
-            ctx.fillRect(ox + arr[k] * cell + gap / 2, oy + arr[k + 1] * cell + gap / 2, size, size);
+            const px = ox + arr[k] * cell + cell / 2 - hlOffset;
+            const py = oy + arr[k + 1] * cell + cell / 2 - hlOffset;
+            ctx.beginPath();
+            ctx.arc(px, py, hlRadius, 0, Math.PI * 2);
+            ctx.fill();
           }
-        }
-      }
-      ctx.globalCompositeOperation = "lighter";
-      const newborns = buckets[0];
-      ctx.fillStyle = `rgba(255, 230, 240, ${0.28 + activity * 0.22})`;
-      const s = Math.max(1, cell * 0.5);
-      for (let p = 0; p < 2; p++) {
-        const arr = newborns[p];
-        for (let k = 0; k < arr.length; k += 2) {
-          ctx.fillRect(ox + arr[k] * cell + (cell - s) / 2, oy + arr[k + 1] * cell + (cell - s) / 2, s, s);
         }
       }
       ctx.globalCompositeOperation = "source-over";
@@ -4276,10 +4320,11 @@ body.blind-listen .hud-tr {
     }
     _drawGrid(scale, ox, oy, W, H) {
       const { ctx, sim } = this;
-      ctx.strokeStyle = "rgba(255, 142, 181, 0.08)";
+      ctx.strokeStyle = "rgba(255, 142, 181, 0.09)";
       ctx.lineWidth = 1;
-      const step = Math.max(8, Math.round(sim.w / 15) * scale);
+      ctx.setLineDash([2, 4]);
       ctx.beginPath();
+      const step = Math.max(8, Math.round(sim.w / 15) * scale);
       for (let x = ox; x <= ox + sim.w * scale; x += step) {
         ctx.moveTo(x, oy);
         ctx.lineTo(x, oy + sim.h * scale);
@@ -4289,6 +4334,7 @@ body.blind-listen .hud-tr {
         ctx.lineTo(ox + sim.w * scale, y);
       }
       ctx.stroke();
+      ctx.setLineDash([]);
       void W;
       void H;
     }
