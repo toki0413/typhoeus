@@ -55,7 +55,7 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const ENGINE_LABEL = { life: 'Conway 系', lenia: 'Lenia 简化' };
+const ENGINE_LABEL = { life: 'Conway 系', lenia: 'Lenia 简化', scientific: '反应-扩散（科学）' };
 
 const ENV_PRESETS = [
   { id: 'torus-soup', label: '环面 · 随机汤', env: defaultEnv({ pattern: 'soup', boundary: 'torus', noise: 0 }) },
@@ -551,12 +551,16 @@ function sliderHTML(label, value, min, max, step, dataAttr, unit = '') {
 function renderRulePanel() {
   const g = state.recipe.seed.genome;
   const isLife = g.engine === 'life';
-  const presets = isLife ? LIFE_PRESETS : LENIA_PRESETS;
+  const isLenia = g.engine === 'lenia';
+  const isSci = g.engine === 'scientific';
+  const presets = isLife ? LIFE_PRESETS : isLenia ? LENIA_PRESETS : REACTION_DIFFUSION_PRESETS;
   const presetHTML = Object.entries(presets)
     .map(([key, p]) => {
-      const active = (isLife ? g.life.preset : g.lenia.preset) === key;
-      return `<button class="preset ${active ? 'active' : ''}" ${isLife ? 'data-life-preset' : 'data-lenia-preset'}="${key}">
-        <b>${p.label}</b><span>${p.note}</span></button>`;
+      const curPreset = isLife ? g.life.preset : isLenia ? g.lenia.preset : g.scientific?.preset;
+      const active = curPreset === key;
+      const dataAttr = isLife ? 'data-life-preset' : isLenia ? 'data-lenia-preset' : 'data-sci-preset';
+      return `<button class="preset ${active ? 'active' : ''}" ${dataAttr}="${key}">
+        <b>${p.label}</b><span>${p.note || ''}</span></button>`;
     })
     .join('');
 
@@ -587,7 +591,54 @@ function renderRulePanel() {
         ${Object.entries(NEIGHBORHOODS).map(([n, info]) => `<button data-neighborhood="${n}" class="${g.life.neighborhood === parseInt(n) ? 'active' : ''}">${info.label.split('·')[0].trim()}</button>`).join('')}
       </div>
       <p class="hint">规则集在运行中即时生效。<b>Moore 8</b> 最经典，<b>Hex 6</b> 细腻，<b>von Neumann 4</b> 范围小但精致。</p>`;
+  } else if (isSci) {
+    const st = g.scientific || {};
+    const sciParams = {
+      grayScott: { label: 'Gray-Scott · 斑马条纹基础',
+        sliders: [
+          ['扩散系数 D_u（激活）',  st.D_u ?? 1.0,   0.2, 3.0, 0.05, 'D_u'],
+          ['扩散系数 D_v（抑制）',  st.D_v ?? 0.5,   0.1, 2.0, 0.05, 'D_v'],
+          ['饲养速率 f',           st.f   ?? 0.035, 0.005, 0.08, 0.001, 'f'],
+          ['杀伤速率 k',           st.k   ?? 0.065, 0.03, 0.09, 0.001, 'k'],
+          ['时间步 dt',            st.dt  ?? 1.0,   0.3, 2.0, 0.05, 'dt'],
+        ]},
+      fitzHughNagumo: { label: 'FitzHugh-Nagumo · 心脏神经冲动',
+        sliders: [
+          ['耦合强度 c',            st.c  ?? 10.0, 2.0, 20.0, 0.5, 'c'],
+          ['阈值 a',                st.a  ?? 0.7,  0.3, 1.2, 0.02, 'a'],
+          ['恢复速率 b',            st.b  ?? 0.8,  0.3, 1.2, 0.02, 'b'],
+          ['时间步 dt',             st.dt ?? 0.5,  0.1, 1.0, 0.02, 'dt'],
+        ]},
+      brusselator: { label: 'Brusselator · 化学振荡',
+        sliders: [
+          ['反应物 A',              st.A   ?? 2.0, 0.5, 4.0, 0.05, 'A'],
+          ['反应物 B',              st.B   ?? 4.5, 1.0, 8.0, 0.05, 'B'],
+          ['扩散系数 D_u',          st.D_u ?? 1.0, 0.2, 2.0, 0.05, 'D_u'],
+          ['扩散系数 D_v',          st.D_v ?? 0.2, 0.05, 1.0, 0.02, 'D_v'],
+          ['时间步 dt',             st.dt  ?? 0.1, 0.01, 0.3, 0.01, 'dt'],
+        ]},
+    };
+    const curType = st.engineType || 'grayScott';
+    const curSci = sciParams[curType];
+    bodyHTML = `
+      <div class="section-label">反应-扩散引擎（Turing 1952）</div>
+      <div class="preset-grid">${presetHTML}</div>
+      <div class="section-label">子类型</div>
+      <div class="segmented">
+        ${Object.keys(sciParams).map(k => `<button data-sci-type="${k}" class="${curType === k ? 'active' : ''}">${sciParams[k].label.split('·')[0].trim()}</button>`).join('')}
+      </div>
+      <p class="hint">${curSci.label.split('·')[1]?.trim() || ''} — 真实物理参数，在运行中即时生效。</p>
+      <div class="section-label">物理参数</div>
+      ${curSci.sliders.map(([lbl, v, mn, mx, step, key]) => sliderHTML(lbl, typeof v === 'number' ? v.toFixed(3) : v, mn, mx, step, `data-sci-param="${key}"`)).join('')}
+      <p class="hint">
+        <b>D_u / D_v</b> 扩散系数：越大越容易在空间传播；
+        <b>f / k</b> Gray-Scott 里是"出生"和"死亡"的速率；
+        <b>a / b / c</b> FHN 里是阈值和恢复；
+        <b>A / B</b> Brusselator 里是反应物浓度。
+        所有都是真正的方程参数，不是游戏常量。
+      </p>`;
   } else {
+    // Lenia
     bodyHTML = `
       <div class="section-label">规则集</div>
       <div class="preset-grid">${presetHTML}</div>
@@ -596,14 +647,15 @@ function renderRulePanel() {
       ${sliderHTML('生长宽度 σ', g.lenia.sigma.toFixed(3), 0.006, 0.05, 0.001, 'data-lenia-param="sigma"')}
       ${sliderHTML('核半径 R', g.lenia.radius, 2, 6, 1, 'data-lenia-param="radius"')}
       ${sliderHTML('时间步 dt', g.lenia.dt.toFixed(2), 0.03, 0.18, 0.01, 'data-lenia-param="dt"')}
-      <p class="hint">简化 Lenia：环状核 × 高斯生长。μ 控制“想成为什么密度”，σ 控制宽容度，R 控制尺度。</p>`;
+      <p class="hint">简化 Lenia：环状核 × 高斯生长。μ 控制"想成为什么密度"，σ 控制宽容度，R 控制尺度。</p>`;
   }
 
   $('#panel-rule').innerHTML = `
     <div class="section-label">生命引擎</div>
     <div class="segmented">
       <button data-engine="life" class="${isLife ? 'active' : ''}">Conway 系</button>
-      <button data-engine="lenia" class="${!isLife ? 'active' : ''}">Lenia</button>
+      <button data-engine="lenia" class="${isLenia ? 'active' : ''}">Lenia</button>
+      <button data-engine="scientific" class="${isSci ? 'active' : ''}">反应-扩散（科学）</button>
     </div>
     ${bodyHTML}
     <div class="btn-row">
@@ -2083,6 +2135,16 @@ function onRuleClick(e) {
     if (engine !== state.recipe.seed.genome.engine) {
       state.recipe.seed.genome.engine = engine;
       if (engine === 'life' && !state.recipe.seed.genome.life.preset) state.recipe.seed.genome.life.preset = 'conway';
+      if (engine === 'lenia' && !state.recipe.seed.genome.lenia.preset) state.recipe.seed.genome.lenia.preset = 'bloom';
+      if (engine === 'scientific') {
+        // 切到科学引擎时初始化默认 Gray-Scott 斑点
+        const sci = state.recipe.seed.genome.scientific = state.recipe.seed.genome.scientific || {};
+        if (!sci.preset || sci.preset === 'custom') {
+          const def = REACTION_DIFFUSION_PRESETS.gs_spots;
+          sci.preset = 'gs_spots'; sci.engineType = def.engine;
+          sci.D_u = def.D_u; sci.D_v = def.D_v; sci.f = def.f; sci.k = def.k; sci.dt = def.dt;
+        }
+      }
       rebuildSim();
       renderRulePanel();
       renderStructPanel();
@@ -2109,6 +2171,43 @@ function onRuleClick(e) {
     renderRulePanel();
     refreshMainMetrics();
     toast(`规则：${LENIA_PRESETS[leniaPreset.dataset.leniaPreset].label}`);
+    return;
+  }
+  const sciPreset = e.target.closest('[data-sci-preset]');
+  if (sciPreset) {
+    const key = sciPreset.dataset.sciPreset;
+    const p = REACTION_DIFFUSION_PRESETS[key];
+    if (!state.recipe.seed.genome.scientific) state.recipe.seed.genome.scientific = {};
+    // 把所有参数都写入 genome.scientific，让 UI 和引擎用同一套值
+    const sci = state.recipe.seed.genome.scientific;
+    sci.preset = key;
+    sci.engineType = p.engine;
+    sci.D_u = p.D_u; sci.D_v = p.D_v; sci.dt = p.dt;
+    if (p.f !== undefined) sci.f = p.f;
+    if (p.k !== undefined) sci.k = p.k;
+    if (p.a !== undefined) sci.a = p.a;
+    if (p.b !== undefined) sci.b = p.b;
+    if (p.c !== undefined) sci.c = p.c;
+    if (p.A !== undefined) sci.A = p.A;
+    if (p.B !== undefined) sci.B = p.B;
+    state.sim.applyGenome(state.recipe.seed.genome);
+    markGenomeChanged();
+    renderRulePanel();
+    refreshMainMetrics();
+    toast(`科学引擎：${p.label}（${p.engine}）`);
+    return;
+  }
+  const sciType = e.target.closest('[data-sci-type]');
+  if (sciType) {
+    const t = sciType.dataset.sciType;
+    if (!state.recipe.seed.genome.scientific) state.recipe.seed.genome.scientific = {};
+    state.recipe.seed.genome.scientific.engineType = t;
+    state.sim.applyGenome(state.recipe.seed.genome);
+    state.sim.reset();
+    markGenomeChanged();
+    renderRulePanel();
+    refreshMainMetrics();
+    toast(`切换到 ${t}`);
     return;
   }
   const birth = e.target.closest('[data-birth]');
@@ -2150,18 +2249,34 @@ function onRuleClick(e) {
 }
 
 function onRuleInput(e) {
-  const key = e.target.dataset.leniaParam;
-  if (!key) return;
+  const leniaKey = e.target.dataset.leniaParam;
+  const sciKey = e.target.dataset.sciParam;
   const v = parseFloat(e.target.value);
   const g = state.recipe.seed.genome;
-  if (key === 'radius') g.lenia.radius = Math.round(v);
-  else g.lenia[key] = v;
-  g.lenia.preset = 'custom';
-  state.sim.applyGenome(g);
-  markGenomeChanged();
-  const head = e.target.closest('.field')?.querySelector('.val');
-  if (head) head.textContent = key === 'radius' ? String(g.lenia.radius) : v.toFixed(key === 'dt' ? 2 : 3);
-  refreshMainMetrics();
+
+  if (sciKey) {
+    // 科学引擎物理参数热更新（每帧仿真就用新值，不需要 reset）
+    if (!g.scientific) g.scientific = {};
+    g.scientific[sciKey] = v;
+    g.scientific.preset = 'custom';
+    state.sim.applyGenome(g);
+    markGenomeChanged();
+    const head = e.target.closest('.field')?.querySelector('.val');
+    if (head) head.textContent = v.toFixed(sciKey === 'dt' ? 2 : 3);
+    refreshMainMetrics();
+    return;
+  }
+
+  if (leniaKey) {
+    if (leniaKey === 'radius') g.lenia.radius = Math.round(v);
+    else g.lenia[leniaKey] = v;
+    g.lenia.preset = 'custom';
+    state.sim.applyGenome(g);
+    markGenomeChanged();
+    const head = e.target.closest('.field')?.querySelector('.val');
+    if (head) head.textContent = leniaKey === 'radius' ? String(g.lenia.radius) : v.toFixed(leniaKey === 'dt' ? 2 : 3);
+    refreshMainMetrics();
+  }
 }
 
 function onSoundClick(e) {

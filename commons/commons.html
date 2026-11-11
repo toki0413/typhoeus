@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Commons · 科学引擎版 🌸 Turing 反应-扩散 + CPM</title>
+    <title>Commons · 公地 🌸 用心聆听生命的声音</title>
     <meta
       name="description"
       content="Commons 公地：领养、观察、悉心照料一枚小小的生命种子，聆听它用五声音阶为你献上的治愈之歌。"
@@ -3918,7 +3918,21 @@ body.motion-off *::after {
     }
     applyGenome(genome) {
       this.genome = genome;
-      if (genome.scientific?.preset) this._rd.setPreset(genome.scientific.preset);
+      const sci = genome.scientific || {};
+      if (sci.preset && sci.preset !== "custom") {
+        const p = REACTION_DIFFUSION_PRESETS[sci.preset];
+        if (p) {
+          this._rd.params = { ...p };
+          this._rd.dt = p.dt;
+        }
+      } else {
+        const engineType = sci.engineType || this._rd.params.engine;
+        this._rd.params.engine = engineType;
+        for (const key of ["D_u", "D_v", "f", "k", "a", "b", "c", "A", "B", "dt"]) {
+          if (sci[key] !== void 0) this._rd.params[key] = sci[key];
+        }
+        this._rd.dt = this._rd.params.dt;
+      }
     }
     snapshot() {
       return this._rd.snapshot();
@@ -4322,6 +4336,28 @@ body.motion-off *::after {
         this.master.gain.setTargetAtTime(1e-4, now, 0.18);
       }
     }
+    /* ============================================================== */
+    /* updateMetrics: 把结构指标 + 科学指标映射到声音参数               */
+    /*                                                                */
+    /* 原有映射（拓扑/视觉指标）：                                     */
+    /*   density  → drone 音量 + LFO 速度                              */
+    /*   entropy  → 滤波中心（音色亮度）                                */
+    /*   activity → 滤波中心微调                                        */
+    /*                                                                */
+    /* 新增映射（真正的科学指标，来自 Reaction-DiffusionEngine）：      */
+    /*   lyapunov → beat 不规则度 + 音高抖动                           */
+    /*     λ > 0.1 混沌 → beat 抖动 ±25ms                              */
+    /*     λ ≈ 0   周期 → beat 稳如钟表                                */
+    /*     λ < -0.05 稳定 → beat 稍慢、柔和                            */
+    /*                                                                */
+    /*   fractal → 和弦密度 + bright scale 比例                        */
+    /*     D > 1.7 高度复杂 → 五声音阶 × bright 装饰音                 */
+    /*     D ≈ 1.2 简单 → 单音 + drone                                 */
+    /*                                                                */
+    /*   energy → reverb 深度 + 低音 drone 频率                         */
+    /*     E < 0.5 松弛吸引子 → drone 低频（200Hz）+ 深 reverb        */
+    /*     E > 3.0 活跃吸引子 → drone 偏高（340Hz）+ 浅 reverb        */
+    /* ============================================================== */
     updateMetrics(m) {
       this.metrics = m;
       if (!this.built || !this.enabled) return;
@@ -4331,18 +4367,27 @@ body.motion-off *::after {
       const entropy = clamp(m.entropy, 0, 1);
       const activity = clamp(m.activity, 0, 1);
       this.tempoSmoothed = this.tempoSmoothed * 0.92 + (mapping.tempo ?? 0.5) * 0.08;
-      const brightness = mapping.brightness ?? 0.55;
+      const lyapunov = m.lyapunov !== void 0 ? clamp(m.lyapunov, -0.3, 0.3) : 0;
+      const fractal = m.fractal !== void 0 ? clamp(m.fractal, 0.5, 2) : 1;
+      const energyTotal = m.energy?.total ?? 1;
+      const energyNorm = clamp(Math.log10(energyTotal + 0.01) / 1, 0, 1);
       const droneLevel = 0.012 + density * 0.32;
+      const energyShift = (0.5 - energyNorm) * 140;
       this.droneGain.gain.setTargetAtTime(mapping.drone === false ? 1e-4 : droneLevel, now, 0.5);
       this.droneFilter.frequency.setTargetAtTime(
-        260 + entropy * 2600 * (0.35 + brightness) + activity * 500,
+        260 + entropy * 2600 * (0.35 + (mapping.brightness ?? 0.55)) + activity * 500 + energyShift,
+        // ← 科学指标介入
         now,
         0.4
       );
       this.lfo.frequency.setTargetAtTime(0.06 + density * 0.5, now, 0.6);
-      this.delayWet.gain.setTargetAtTime(0.1 + clamp(m.diameterNorm, 0, 1) * 0.35, now, 0.8);
-      this.delayFb.gain.setTargetAtTime(0.16 + clamp(1 - m.stability, 0, 1) * 0.28, now, 0.8);
-      this.level = clamp(density * 0.5 + activity * 0.35 + entropy * 0.15, 0, 1);
+      const lyaNorm = (lyapunov + 0.3) / 0.6;
+      this.delayWet.gain.setTargetAtTime(0.1 + clamp(m.diameterNorm ?? 0.5, 0, 1) * 0.35, now, 0.8);
+      this.delayFb.gain.setTargetAtTime(0.16 + clamp(1 - (m.stability ?? 0.5), 0, 1) * 0.28 + lyaNorm * 0.1, now, 0.8);
+      this._beatJitterSec = Math.abs(lyapunov) * 0.15;
+      this._chordality = clamp((fractal - 0.5) / 1.5, 0, 1);
+      this._energyNorm = energyNorm;
+      this.level = clamp(density * 0.5 + activity * 0.35 + entropy * 0.15 + this._chordality * 0.15, 0, 1);
     }
     pushBirths(births, w, h) {
       if (!births || !births.length) return;
@@ -5619,7 +5664,7 @@ body.motion-off *::after {
   var $ = (sel, root = document) => root.querySelector(sel);
   var $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
   var esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  var ENGINE_LABEL = { life: "Conway \u7CFB", lenia: "Lenia \u7B80\u5316" };
+  var ENGINE_LABEL = { life: "Conway \u7CFB", lenia: "Lenia \u7B80\u5316", scientific: "\u53CD\u5E94-\u6269\u6563\uFF08\u79D1\u5B66\uFF09" };
   var ENV_PRESETS = [
     { id: "torus-soup", label: "\u73AF\u9762 \xB7 \u968F\u673A\u6C64", env: defaultEnv({ pattern: "soup", boundary: "torus", noise: 0 }) },
     { id: "wall-sparse", label: "\u786C\u58C1 \xB7 \u7A00\u758F", env: defaultEnv({ pattern: "sparse", boundary: "wall", noise: 0.01 }) },
@@ -6045,11 +6090,15 @@ body.motion-off *::after {
   function renderRulePanel() {
     const g = state.recipe.seed.genome;
     const isLife = g.engine === "life";
-    const presets = isLife ? LIFE_PRESETS : LENIA_PRESETS;
+    const isLenia = g.engine === "lenia";
+    const isSci = g.engine === "scientific";
+    const presets = isLife ? LIFE_PRESETS : isLenia ? LENIA_PRESETS : REACTION_DIFFUSION_PRESETS;
     const presetHTML = Object.entries(presets).map(([key, p]) => {
-      const active = (isLife ? g.life.preset : g.lenia.preset) === key;
-      return `<button class="preset ${active ? "active" : ""}" ${isLife ? "data-life-preset" : "data-lenia-preset"}="${key}">
-        <b>${p.label}</b><span>${p.note}</span></button>`;
+      const curPreset = isLife ? g.life.preset : isLenia ? g.lenia.preset : g.scientific?.preset;
+      const active = curPreset === key;
+      const dataAttr = isLife ? "data-life-preset" : isLenia ? "data-lenia-preset" : "data-sci-preset";
+      return `<button class="preset ${active ? "active" : ""}" ${dataAttr}="${key}">
+        <b>${p.label}</b><span>${p.note || ""}</span></button>`;
     }).join("");
     let bodyHTML = "";
     if (isLife) {
@@ -6078,6 +6127,58 @@ body.motion-off *::after {
         ${Object.entries(NEIGHBORHOODS).map(([n, info]) => `<button data-neighborhood="${n}" class="${g.life.neighborhood === parseInt(n) ? "active" : ""}">${info.label.split("\xB7")[0].trim()}</button>`).join("")}
       </div>
       <p class="hint">\u89C4\u5219\u96C6\u5728\u8FD0\u884C\u4E2D\u5373\u65F6\u751F\u6548\u3002<b>Moore 8</b> \u6700\u7ECF\u5178\uFF0C<b>Hex 6</b> \u7EC6\u817B\uFF0C<b>von Neumann 4</b> \u8303\u56F4\u5C0F\u4F46\u7CBE\u81F4\u3002</p>`;
+    } else if (isSci) {
+      const st = g.scientific || {};
+      const sciParams = {
+        grayScott: {
+          label: "Gray-Scott \xB7 \u6591\u9A6C\u6761\u7EB9\u57FA\u7840",
+          sliders: [
+            ["\u6269\u6563\u7CFB\u6570 D_u\uFF08\u6FC0\u6D3B\uFF09", st.D_u ?? 1, 0.2, 3, 0.05, "D_u"],
+            ["\u6269\u6563\u7CFB\u6570 D_v\uFF08\u6291\u5236\uFF09", st.D_v ?? 0.5, 0.1, 2, 0.05, "D_v"],
+            ["\u9972\u517B\u901F\u7387 f", st.f ?? 0.035, 5e-3, 0.08, 1e-3, "f"],
+            ["\u6740\u4F24\u901F\u7387 k", st.k ?? 0.065, 0.03, 0.09, 1e-3, "k"],
+            ["\u65F6\u95F4\u6B65 dt", st.dt ?? 1, 0.3, 2, 0.05, "dt"]
+          ]
+        },
+        fitzHughNagumo: {
+          label: "FitzHugh-Nagumo \xB7 \u5FC3\u810F\u795E\u7ECF\u51B2\u52A8",
+          sliders: [
+            ["\u8026\u5408\u5F3A\u5EA6 c", st.c ?? 10, 2, 20, 0.5, "c"],
+            ["\u9608\u503C a", st.a ?? 0.7, 0.3, 1.2, 0.02, "a"],
+            ["\u6062\u590D\u901F\u7387 b", st.b ?? 0.8, 0.3, 1.2, 0.02, "b"],
+            ["\u65F6\u95F4\u6B65 dt", st.dt ?? 0.5, 0.1, 1, 0.02, "dt"]
+          ]
+        },
+        brusselator: {
+          label: "Brusselator \xB7 \u5316\u5B66\u632F\u8361",
+          sliders: [
+            ["\u53CD\u5E94\u7269 A", st.A ?? 2, 0.5, 4, 0.05, "A"],
+            ["\u53CD\u5E94\u7269 B", st.B ?? 4.5, 1, 8, 0.05, "B"],
+            ["\u6269\u6563\u7CFB\u6570 D_u", st.D_u ?? 1, 0.2, 2, 0.05, "D_u"],
+            ["\u6269\u6563\u7CFB\u6570 D_v", st.D_v ?? 0.2, 0.05, 1, 0.02, "D_v"],
+            ["\u65F6\u95F4\u6B65 dt", st.dt ?? 0.1, 0.01, 0.3, 0.01, "dt"]
+          ]
+        }
+      };
+      const curType = st.engineType || "grayScott";
+      const curSci = sciParams[curType];
+      bodyHTML = `
+      <div class="section-label">\u53CD\u5E94-\u6269\u6563\u5F15\u64CE\uFF08Turing 1952\uFF09</div>
+      <div class="preset-grid">${presetHTML}</div>
+      <div class="section-label">\u5B50\u7C7B\u578B</div>
+      <div class="segmented">
+        ${Object.keys(sciParams).map((k) => `<button data-sci-type="${k}" class="${curType === k ? "active" : ""}">${sciParams[k].label.split("\xB7")[0].trim()}</button>`).join("")}
+      </div>
+      <p class="hint">${curSci.label.split("\xB7")[1]?.trim() || ""} \u2014 \u771F\u5B9E\u7269\u7406\u53C2\u6570\uFF0C\u5728\u8FD0\u884C\u4E2D\u5373\u65F6\u751F\u6548\u3002</p>
+      <div class="section-label">\u7269\u7406\u53C2\u6570</div>
+      ${curSci.sliders.map(([lbl, v, mn, mx, step, key]) => sliderHTML(lbl, typeof v === "number" ? v.toFixed(3) : v, mn, mx, step, `data-sci-param="${key}"`)).join("")}
+      <p class="hint">
+        <b>D_u / D_v</b> \u6269\u6563\u7CFB\u6570\uFF1A\u8D8A\u5927\u8D8A\u5BB9\u6613\u5728\u7A7A\u95F4\u4F20\u64AD\uFF1B
+        <b>f / k</b> Gray-Scott \u91CC\u662F"\u51FA\u751F"\u548C"\u6B7B\u4EA1"\u7684\u901F\u7387\uFF1B
+        <b>a / b / c</b> FHN \u91CC\u662F\u9608\u503C\u548C\u6062\u590D\uFF1B
+        <b>A / B</b> Brusselator \u91CC\u662F\u53CD\u5E94\u7269\u6D53\u5EA6\u3002
+        \u6240\u6709\u90FD\u662F\u771F\u6B63\u7684\u65B9\u7A0B\u53C2\u6570\uFF0C\u4E0D\u662F\u6E38\u620F\u5E38\u91CF\u3002
+      </p>`;
     } else {
       bodyHTML = `
       <div class="section-label">\u89C4\u5219\u96C6</div>
@@ -6087,13 +6188,14 @@ body.motion-off *::after {
       ${sliderHTML("\u751F\u957F\u5BBD\u5EA6 \u03C3", g.lenia.sigma.toFixed(3), 6e-3, 0.05, 1e-3, 'data-lenia-param="sigma"')}
       ${sliderHTML("\u6838\u534A\u5F84 R", g.lenia.radius, 2, 6, 1, 'data-lenia-param="radius"')}
       ${sliderHTML("\u65F6\u95F4\u6B65 dt", g.lenia.dt.toFixed(2), 0.03, 0.18, 0.01, 'data-lenia-param="dt"')}
-      <p class="hint">\u7B80\u5316 Lenia\uFF1A\u73AF\u72B6\u6838 \xD7 \u9AD8\u65AF\u751F\u957F\u3002\u03BC \u63A7\u5236\u201C\u60F3\u6210\u4E3A\u4EC0\u4E48\u5BC6\u5EA6\u201D\uFF0C\u03C3 \u63A7\u5236\u5BBD\u5BB9\u5EA6\uFF0CR \u63A7\u5236\u5C3A\u5EA6\u3002</p>`;
+      <p class="hint">\u7B80\u5316 Lenia\uFF1A\u73AF\u72B6\u6838 \xD7 \u9AD8\u65AF\u751F\u957F\u3002\u03BC \u63A7\u5236"\u60F3\u6210\u4E3A\u4EC0\u4E48\u5BC6\u5EA6"\uFF0C\u03C3 \u63A7\u5236\u5BBD\u5BB9\u5EA6\uFF0CR \u63A7\u5236\u5C3A\u5EA6\u3002</p>`;
     }
     $("#panel-rule").innerHTML = `
     <div class="section-label">\u751F\u547D\u5F15\u64CE</div>
     <div class="segmented">
       <button data-engine="life" class="${isLife ? "active" : ""}">Conway \u7CFB</button>
-      <button data-engine="lenia" class="${!isLife ? "active" : ""}">Lenia</button>
+      <button data-engine="lenia" class="${isLenia ? "active" : ""}">Lenia</button>
+      <button data-engine="scientific" class="${isSci ? "active" : ""}">\u53CD\u5E94-\u6269\u6563\uFF08\u79D1\u5B66\uFF09</button>
     </div>
     ${bodyHTML}
     <div class="btn-row">
@@ -7413,6 +7515,20 @@ body.motion-off *::after {
       if (engine !== state.recipe.seed.genome.engine) {
         state.recipe.seed.genome.engine = engine;
         if (engine === "life" && !state.recipe.seed.genome.life.preset) state.recipe.seed.genome.life.preset = "conway";
+        if (engine === "lenia" && !state.recipe.seed.genome.lenia.preset) state.recipe.seed.genome.lenia.preset = "bloom";
+        if (engine === "scientific") {
+          const sci = state.recipe.seed.genome.scientific = state.recipe.seed.genome.scientific || {};
+          if (!sci.preset || sci.preset === "custom") {
+            const def = REACTION_DIFFUSION_PRESETS.gs_spots;
+            sci.preset = "gs_spots";
+            sci.engineType = def.engine;
+            sci.D_u = def.D_u;
+            sci.D_v = def.D_v;
+            sci.f = def.f;
+            sci.k = def.k;
+            sci.dt = def.dt;
+          }
+        }
         rebuildSim();
         renderRulePanel();
         renderStructPanel();
@@ -7439,6 +7555,44 @@ body.motion-off *::after {
       renderRulePanel();
       refreshMainMetrics();
       toast(`\u89C4\u5219\uFF1A${LENIA_PRESETS[leniaPreset.dataset.leniaPreset].label}`);
+      return;
+    }
+    const sciPreset = e.target.closest("[data-sci-preset]");
+    if (sciPreset) {
+      const key = sciPreset.dataset.sciPreset;
+      const p = REACTION_DIFFUSION_PRESETS[key];
+      if (!state.recipe.seed.genome.scientific) state.recipe.seed.genome.scientific = {};
+      const sci = state.recipe.seed.genome.scientific;
+      sci.preset = key;
+      sci.engineType = p.engine;
+      sci.D_u = p.D_u;
+      sci.D_v = p.D_v;
+      sci.dt = p.dt;
+      if (p.f !== void 0) sci.f = p.f;
+      if (p.k !== void 0) sci.k = p.k;
+      if (p.a !== void 0) sci.a = p.a;
+      if (p.b !== void 0) sci.b = p.b;
+      if (p.c !== void 0) sci.c = p.c;
+      if (p.A !== void 0) sci.A = p.A;
+      if (p.B !== void 0) sci.B = p.B;
+      state.sim.applyGenome(state.recipe.seed.genome);
+      markGenomeChanged();
+      renderRulePanel();
+      refreshMainMetrics();
+      toast(`\u79D1\u5B66\u5F15\u64CE\uFF1A${p.label}\uFF08${p.engine}\uFF09`);
+      return;
+    }
+    const sciType = e.target.closest("[data-sci-type]");
+    if (sciType) {
+      const t = sciType.dataset.sciType;
+      if (!state.recipe.seed.genome.scientific) state.recipe.seed.genome.scientific = {};
+      state.recipe.seed.genome.scientific.engineType = t;
+      state.sim.applyGenome(state.recipe.seed.genome);
+      state.sim.reset();
+      markGenomeChanged();
+      renderRulePanel();
+      refreshMainMetrics();
+      toast(`\u5207\u6362\u5230 ${t}`);
       return;
     }
     const birth = e.target.closest("[data-birth]");
@@ -7479,18 +7633,31 @@ body.motion-off *::after {
     }
   }
   function onRuleInput(e) {
-    const key = e.target.dataset.leniaParam;
-    if (!key) return;
+    const leniaKey = e.target.dataset.leniaParam;
+    const sciKey = e.target.dataset.sciParam;
     const v = parseFloat(e.target.value);
     const g = state.recipe.seed.genome;
-    if (key === "radius") g.lenia.radius = Math.round(v);
-    else g.lenia[key] = v;
-    g.lenia.preset = "custom";
-    state.sim.applyGenome(g);
-    markGenomeChanged();
-    const head = e.target.closest(".field")?.querySelector(".val");
-    if (head) head.textContent = key === "radius" ? String(g.lenia.radius) : v.toFixed(key === "dt" ? 2 : 3);
-    refreshMainMetrics();
+    if (sciKey) {
+      if (!g.scientific) g.scientific = {};
+      g.scientific[sciKey] = v;
+      g.scientific.preset = "custom";
+      state.sim.applyGenome(g);
+      markGenomeChanged();
+      const head = e.target.closest(".field")?.querySelector(".val");
+      if (head) head.textContent = v.toFixed(sciKey === "dt" ? 2 : 3);
+      refreshMainMetrics();
+      return;
+    }
+    if (leniaKey) {
+      if (leniaKey === "radius") g.lenia.radius = Math.round(v);
+      else g.lenia[leniaKey] = v;
+      g.lenia.preset = "custom";
+      state.sim.applyGenome(g);
+      markGenomeChanged();
+      const head = e.target.closest(".field")?.querySelector(".val");
+      if (head) head.textContent = leniaKey === "radius" ? String(g.lenia.radius) : v.toFixed(leniaKey === "dt" ? 2 : 3);
+      refreshMainMetrics();
+    }
   }
   function onSoundClick(e) {
     const scale = e.target.closest("[data-scale]");

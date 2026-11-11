@@ -917,7 +917,25 @@ export class ScientificEngine {
   setEnv(env) { this.env = env; }
   applyGenome(genome) {
     this.genome = genome;
-    if (genome.scientific?.preset) this._rd.setPreset(genome.scientific.preset);
+    const sci = genome.scientific || {};
+    // 先同步 preset（有完整默认值）
+    if (sci.preset && sci.preset !== 'custom') {
+      const p = REACTION_DIFFUSION_PRESETS[sci.preset];
+      if (p) {
+        this._rd.params = { ...p };
+        this._rd.dt = p.dt;
+      }
+    } else {
+      // custom 模式：把 genome.scientific 里的所有参数写入运行时 params
+      // engineType 决定了使用哪个引擎，但所有物理参数都来自 genome
+      const engineType = sci.engineType || this._rd.params.engine;
+      this._rd.params.engine = engineType;
+      // 逐项覆盖（undefined 保留原值）
+      for (const key of ['D_u','D_v','f','k','a','b','c','A','B','dt']) {
+        if (sci[key] !== undefined) this._rd.params[key] = sci[key];
+      }
+      this._rd.dt = this._rd.params.dt;
+    }
   }
 
   snapshot() { return this._rd.snapshot(); }

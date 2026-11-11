@@ -220,6 +220,28 @@ export class AudioEngine {
     }
   }
 
+  /* ============================================================== */
+  /* updateMetrics: 把结构指标 + 科学指标映射到声音参数               */
+  /*                                                                */
+  /* 原有映射（拓扑/视觉指标）：                                     */
+  /*   density  → drone 音量 + LFO 速度                              */
+  /*   entropy  → 滤波中心（音色亮度）                                */
+  /*   activity → 滤波中心微调                                        */
+  /*                                                                */
+  /* 新增映射（真正的科学指标，来自 Reaction-DiffusionEngine）：      */
+  /*   lyapunov → beat 不规则度 + 音高抖动                           */
+  /*     λ > 0.1 混沌 → beat 抖动 ±25ms                              */
+  /*     λ ≈ 0   周期 → beat 稳如钟表                                */
+  /*     λ < -0.05 稳定 → beat 稍慢、柔和                            */
+  /*                                                                */
+  /*   fractal → 和弦密度 + bright scale 比例                        */
+  /*     D > 1.7 高度复杂 → 五声音阶 × bright 装饰音                 */
+  /*     D ≈ 1.2 简单 → 单音 + drone                                 */
+  /*                                                                */
+  /*   energy → reverb 深度 + 低音 drone 频率                         */
+  /*     E < 0.5 松弛吸引子 → drone 低频（200Hz）+ 深 reverb        */
+  /*     E > 3.0 活跃吸引子 → drone 偏高（340Hz）+ 浅 reverb        */
+  /* ============================================================== */
   updateMetrics(m) {
     this.metrics = m;
     if (!this.built || !this.enabled) return;
@@ -230,18 +252,38 @@ export class AudioEngine {
     const activity = clamp(m.activity, 0, 1);
     this.tempoSmoothed = this.tempoSmoothed * 0.92 + (mapping.tempo ?? 0.5) * 0.08;
 
-    const brightness = mapping.brightness ?? 0.55;
+    /* ---- 科学指标（如果有的话，用它们；否则回退到拓扑映射）---- */
+    const lyapunov = m.lyapunov !== undefined ? clamp(m.lyapunov, -0.3, 0.3) : 0;
+    const fractal = m.fractal !== undefined ? clamp(m.fractal, 0.5, 2.0) : 1.0;
+    const energyTotal = m.energy?.total ?? 1.0;
+    // energy total 通常 0.2 ~ 8.0，归一化到 0~1：低=松弛，高=活跃
+    const energyNorm = clamp(Math.log10(energyTotal + 0.01) / 1.0, 0, 1);
+
+    /* ---- drone 层 ---- */
     const droneLevel = 0.012 + density * 0.32;
+    // 科学引擎时，energy 控制 drone 频率：低能量→厚低音，高能量→明亮高音
+    const energyShift = (0.5 - energyNorm) * 140;  // ±70Hz
     this.droneGain.gain.setTargetAtTime(mapping.drone === false ? 0.0001 : droneLevel, now, 0.5);
     this.droneFilter.frequency.setTargetAtTime(
-      260 + entropy * 2600 * (0.35 + brightness) + activity * 500,
-      now,
-      0.4,
+      (260 + entropy * 2600 * (0.35 + (mapping.brightness ?? 0.55)) + activity * 500)
+      + energyShift,  // ← 科学指标介入
+      now, 0.4,
     );
     this.lfo.frequency.setTargetAtTime(0.06 + density * 0.5, now, 0.6);
-    this.delayWet.gain.setTargetAtTime(0.1 + clamp(m.diameterNorm, 0, 1) * 0.35, now, 0.8);
-    this.delayFb.gain.setTargetAtTime(0.16 + clamp(1 - m.stability, 0, 1) * 0.28, now, 0.8);
-    this.level = clamp(density * 0.5 + activity * 0.35 + entropy * 0.15, 0, 1);
+
+    /* ---- 延迟/合唱层 ---- */
+    // 科学引擎时，lyapunov 控制延迟反馈的"漂移感"
+    const lyaNorm = (lyapunov + 0.3) / 0.6;  // -0.3~0.3 → 0~1
+    this.delayWet.gain.setTargetAtTime(0.1 + clamp(m.diameterNorm ?? 0.5, 0, 1) * 0.35, now, 0.8);
+    this.delayFb.gain.setTargetAtTime(0.16 + clamp(1 - (m.stability ?? 0.5), 0, 1) * 0.28 + lyaNorm * 0.1, now, 0.8);
+
+    /* ---- 保存给 tick() 的 beat 不规则度 ---- */
+    // Lyapunov → beat 抖动幅度（秒），fractal → 和弦装饰音密度
+    this._beatJitterSec = Math.abs(lyapunov) * 0.15;  // 最大 ±45ms 抖动
+    this._chordality = clamp((fractal - 0.5) / 1.5, 0, 1);  // 0=单音, 1=和弦
+    this._energyNorm = energyNorm;
+
+    this.level = clamp(density * 0.5 + activity * 0.35 + entropy * 0.15 + this._chordality * 0.15, 0, 1);
   }
 
   pushBirths(births, w, h) {
