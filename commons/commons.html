@@ -6946,6 +6946,147 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
     };
   }
 
+  // src/pet.js
+  var PET_MOOD = {
+    HAPPY: "happy",
+    // 平衡 + 活跃 + 能量充足
+    CONTENT: "content",
+    // 平衡 + 稳定但能量一般
+    WAITING: "waiting",
+    // 某一项偏低 → 在等玩家
+    SAD: "sad",
+    // 两项以上偏低
+    SICK: "sick"
+    // 三项以上偏低 → 需要干预
+  };
+  var PET_MOOD_LABEL = {
+    happy: "\u2661 \u597D\u5F00\u5FC3\u5440",
+    content: "\u2661 \u4ECA\u5929\u5F88\u5B89\u7A33",
+    waiting: "\u2026 \u597D\u50CF\u5DEE\u70B9\u4EC0\u4E48",
+    sad: "\u2661 \u6709\u70B9\u6CAE\u4E27",
+    sick: "\u2661 \u9700\u8981\u7167\u987E\u4E00\u4E0B"
+  };
+  var PET_MOOD_EMOJI = {
+    happy: "(\u2267\u2207\u2266)",
+    content: "( \u2022\u1D17\u2022 )",
+    waiting: "( \xB4\uFF65_\uFF65` )",
+    sad: "(\u2565\uFE4F\u2565)",
+    sick: "(\xD7_\xD7)"
+  };
+  var PetState = class {
+    constructor(initial = {}) {
+      this.balance = initial.balance ?? 0.65;
+      this.uniform = initial.uniform ?? 0.65;
+      this.energy = initial.energy ?? 0.65;
+      this.activity = initial.activity ?? 0.65;
+      this.mood = PET_MOOD.CONTENT;
+      this.decayRate = initial.decayRate ?? 6e-4;
+      this.marginalFactor = initial.marginalFactor ?? 1;
+      this._lowCount = { balance: 0, uniform: 0, energy: 0, activity: 0 };
+      this._step = 0;
+    }
+    /**
+     * 真实引擎 metrics → 物理状态（QQ 宠物的状态"计算"）
+     * 每次仿真 step 后调用
+     */
+    updateFromMetrics(metrics, envTimeScale = 1) {
+      const { lyapunov, fractal, energy, density, attrType } = metrics;
+      const d = fractal ?? 1.5;
+      const targetD = 1.5;
+      const rawBalance = clamp01(1 - Math.abs(d - targetD) * 3);
+      const densDeviation = Math.abs((density ?? 0.5) - 0.5) * 2;
+      const rawUniform = clamp01(1 - densDeviation * 1.5);
+      const E = energy?.total ?? 1;
+      const logE = Math.log10(E + 0.01);
+      const rawEnergy = clamp01(1 - Math.abs(logE + 0.5) * 1.5);
+      const lam = lyapunov ?? -2.5;
+      const rawActivity = clamp01(Math.min(1, Math.abs(lam) / 0.3));
+      const decay = this.decayRate * envTimeScale;
+      const marginal = this.marginalFactor;
+      this.balance = decayMarginal(this.balance, rawBalance, decay * 1.2, marginal);
+      this.uniform = decayMarginal(this.uniform, rawUniform, decay * 0.9, marginal);
+      this.energy = decayMarginal(this.energy, rawEnergy, decay * 1.5, marginal);
+      this.activity = decayMarginal(this.activity, rawActivity, decay * 0.7, marginal);
+      const LOW = 0.35;
+      if (this.balance < LOW) this._lowCount.balance++;
+      else this._lowCount.balance = Math.max(0, this._lowCount.balance - 1);
+      if (this.uniform < LOW) this._lowCount.uniform++;
+      else this._lowCount.uniform = Math.max(0, this._lowCount.uniform - 1);
+      if (this.energy < LOW) this._lowCount.energy++;
+      else this._lowCount.energy = Math.max(0, this._lowCount.energy - 1);
+      if (this.activity < LOW) this._lowCount.activity++;
+      else this._lowCount.activity = Math.max(0, this._lowCount.activity - 1);
+      this._step++;
+      this._computeMood();
+      return this.mood;
+    }
+    /**
+     * 玩家互动（类比 QQ 宠物的"点嘴/肚子/头"）
+     * QQ 宠物：点嘴 +饱食，点肚子 +清洁，点头 +心情
+     * Commons：paint/noise/nucleate/push → 映射到四状态
+     */
+    interact(action, \u90E8\u4F4D) {
+      const baseBonus = 0.25;
+      const conditionFactor = (current) => {
+        if (current < 0.3) return 2;
+        if (current > 0.7) return 0.4;
+        return 1;
+      };
+      let feedback = { action, \u90E8\u4F4D, bonuses: {} };
+      switch (action) {
+        case "paint":
+          feedback.bonuses.energy = baseBonus * conditionFactor(this.energy);
+          feedback.bonuses.uniform = 0.05;
+          break;
+        case "noise":
+          feedback.bonuses.uniform = baseBonus * conditionFactor(this.uniform);
+          feedback.bonuses.balance = 0.08;
+          break;
+        case "nucleate":
+          feedback.bonuses.balance = baseBonus * conditionFactor(this.balance);
+          feedback.bonuses.energy = 0.06;
+          break;
+        case "field_push":
+          feedback.bonuses.activity = baseBonus * conditionFactor(this.activity);
+          break;
+      }
+      for (const [k, v] of Object.entries(feedback.bonuses)) {
+        if (typeof this[k] === "number") this[k] = clamp01(this[k] + v);
+      }
+      this._computeMood();
+      return feedback;
+    }
+    _computeMood() {
+      const { balance, uniform, energy, activity } = this;
+      const LOW = 0.35;
+      const count = [balance < LOW, uniform < LOW, energy < LOW, activity < LOW].filter(Boolean).length;
+      if (count >= 3) this.mood = PET_MOOD.SICK;
+      else if (count === 2) this.mood = PET_MOOD.SAD;
+      else if (count === 1) this.mood = PET_MOOD.WAITING;
+      else if (balance > 0.75 && activity > 0.6) this.mood = PET_MOOD.HAPPY;
+      else this.mood = PET_MOOD.CONTENT;
+    }
+    snapshot() {
+      return {
+        balance: this.balance.toFixed(3),
+        uniform: this.uniform.toFixed(3),
+        energy: this.energy.toFixed(3),
+        activity: this.activity.toFixed(3),
+        mood: this.mood,
+        step: this._step
+      };
+    }
+  };
+  function decayMarginal(current, target, rate, marginalFactor) {
+    const sign = Math.sign(target - current);
+    const dist = Math.abs(target - current);
+    const step = rate * marginalFactor * Math.max(0.1, dist);
+    return clamp01(current + sign * step);
+  }
+  function clamp01(x) {
+    return Math.max(0, Math.min(1, x));
+  }
+
   // src/app.js
   var $ = (sel, root = document) => root.querySelector(sel);
   var $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -7049,7 +7190,15 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
       accB: 0,
       stepA: 0,
       stepB: 0
-    }
+    },
+    /* ---- QQ 宠物式养成层：虚拟生命情绪 × 真实物理指标 ---- */
+    pet: {
+      state: null,
+      // PetState 实例，仿真启动时创建
+      visible: true
+    },
+    lastPetMood: null
+    // 用于检测 mood 变化 → console 反馈
   };
   function deepClone(o) {
     return JSON.parse(JSON.stringify(o));
@@ -7251,6 +7400,8 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
     state.renderer.setMetrics(state.metrics);
     state.renderer.clear();
     if (state.audio) state.audio.setGenome(state.recipe.seed.genome);
+    state.pet.state = new PetState();
+    state.lastPetMood = null;
     renderRulePanel();
     renderSoundPanel();
     renderEnvPanel();
@@ -7306,6 +7457,14 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
     state.lastDensity = m.density;
     state.forceMetrics = false;
     state.lastMetricsAt = performance.now();
+    if (state.pet.state) {
+      const newMood = state.pet.state.updateFromMetrics(m, state.recipe.env.timeScale || 1);
+      if (newMood !== state.lastPetMood) {
+        state.lastPetMood = newMood;
+        console.log(`\u{1F43E} Pet mood \u2192 ${newMood} ${PET_MOOD_EMOJI[newMood]} | snapshot:`, state.pet.state.snapshot());
+        toast(`\u{1F43E} ${PET_MOOD_LABEL[newMood]} ${PET_MOOD_EMOJI[newMood]}`, 1600);
+      }
+    }
     updateHUD();
     updateStructValues();
   }

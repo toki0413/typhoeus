@@ -53,6 +53,7 @@ import { matchPatternLibrary, PATTERN_LIBRARY, buildDiscoveryRecord } from './pa
 import { saveAsDiscovery, buildOpenScienceIssue, loadLeaderboard, rankDiscoveries, clearLeaderboard, exportLeaderboard, importDiscoveries } from './leaderboard.js';
 /* ---- Commons-JEPA：形态嵌入空间里的预测（超越 Foldit 的核心武器）---- */
 import { PlayerPredictor, toMorphoEmbedding, jepaSoundFeedback, morphoDistance } from './jepa.js';
+import { PetState, PET_MOOD, PET_MOOD_EMOJI, PET_MOOD_LABEL, petMoodToOverlay } from './pet.js';
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                          */
@@ -174,6 +175,12 @@ const state = {
     stepA: 0,
     stepB: 0,
   },
+  /* ---- QQ 宠物式养成层：虚拟生命情绪 × 真实物理指标 ---- */
+  pet: {
+    state: null,   // PetState 实例，仿真启动时创建
+    visible: true,
+  },
+  lastPetMood: null,  // 用于检测 mood 变化 → console 反馈
 };
 
 /* ------------------------------------------------------------------ */
@@ -417,6 +424,9 @@ function attachRecipe(recipe, opts = {}) {
   state.renderer.setMetrics(state.metrics);
   state.renderer.clear();
   if (state.audio) state.audio.setGenome(state.recipe.seed.genome);
+  /* ---- 初始化 QQ 宠物式养成层 ---- */
+  state.pet.state = new PetState();
+  state.lastPetMood = null;
   renderRulePanel();
   renderSoundPanel();
   renderEnvPanel();
@@ -475,6 +485,15 @@ function refreshMainMetrics() {
   state.lastDensity = m.density;
   state.forceMetrics = false;
   state.lastMetricsAt = performance.now();
+  /* ---- QQ 宠物式养成层：用真实物理指标更新情绪 ---- */
+  if (state.pet.state) {
+    const newMood = state.pet.state.updateFromMetrics(m, state.recipe.env.timeScale || 1);
+    if (newMood !== state.lastPetMood) {
+      state.lastPetMood = newMood;
+      console.log(`🐾 Pet mood → ${newMood} ${PET_MOOD_EMOJI[newMood]} | snapshot:`, state.pet.state.snapshot());
+      toast(`🐾 ${PET_MOOD_LABEL[newMood]} ${PET_MOOD_EMOJI[newMood]}`, 1600);
+    }
+  }
   updateHUD();
   updateStructValues();
 }
