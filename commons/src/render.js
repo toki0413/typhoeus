@@ -79,8 +79,29 @@ function hashNoise(a, b) {
   return t - Math.floor(t);  // 0..1
 }
 
-/* 呼吸计算：time(ms) + cellHash + attractor 签名 → ±radius % */
+/* ============================================================== */
+/* 动效全局开关（无障碍）                                          */
+/*                                                                */
+/* 默认 true。app.js 会根据：                                      */
+/*   1. prefers-reduced-motion 媒体查询（系统级）                  */
+/*   2. 用户手动覆盖（localStorage）                                */
+/* 来调用 setMotionEnabled() 覆盖。                                */
+/*                                                                */
+/* 当 motion 关闭时：                                              */
+/*   - computeBreath() 直接返回 0（所有半径都是 baseRadius）       */
+/*   - 主舞台无呼吸动效                                            */
+/*   - Gallery 缩略图 rAF 循环会被取消                              */
+/*   - 零性能开销                                                  */
+/* ============================================================== */
+let _MOTION_ENABLED = true;
+
+export function setMotionEnabled(enabled) { _MOTION_ENABLED = !!enabled; }
+export function isMotionEnabled() { return _MOTION_ENABLED; }
+
+/* 呼吸计算：time(ms) + cellHash + attractor 签名 → ±radius %    */
+/* 无障碍短路：motion 关闭时直接返回 0，零开销                      */
 function computeBreath(time, cellHash, aSig, ageFactor = 1) {
+  if (!_MOTION_ENABLED) return 0;
   if (aSig.amp <= 0) return 0;
   const periodMs = aSig.period * 1000;
   const phase = (time / periodMs + cellHash) * Math.PI * 2;

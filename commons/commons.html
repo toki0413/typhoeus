@@ -2334,6 +2334,16 @@ body.blind-listen .hud-tr {
   }
 }
 
+/* 用户手动关闭动效：兜底禁用所有 DOM 层面的 transition/animation */
+body.motion-off,
+body.motion-off *,
+body.motion-off *::before,
+body.motion-off *::after {
+  animation-duration: 0.001s !important;
+  transition-duration: 0.001s !important;
+  animation-iteration-count: 0 !important;
+}
+
     </style>
   </head>
   <body>
@@ -4004,7 +4014,12 @@ body.blind-listen .hud-tr {
     const t = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
     return t - Math.floor(t);
   }
+  var _MOTION_ENABLED = true;
+  function setMotionEnabled(enabled) {
+    _MOTION_ENABLED = !!enabled;
+  }
   function computeBreath(time, cellHash, aSig, ageFactor = 1) {
+    if (!_MOTION_ENABLED) return 0;
     if (aSig.amp <= 0) return 0;
     const periodMs = aSig.period * 1e3;
     const phase = (time / periodMs + cellHash) * Math.PI * 2;
@@ -5154,6 +5169,18 @@ body.blind-listen .hud-tr {
   };
   var _galleryBreathRafId = null;
   var _galleryLastTick = 0;
+  function resolveMotionDefault() {
+    try {
+      const saved = localStorage.getItem("commons.motion.v1");
+      if (saved === "on") return true;
+      if (saved === "off") return false;
+    } catch (_) {
+    }
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return false;
+    }
+    return true;
+  }
   var state = {
     lib: loadLibrary(),
     view: "cultivate",
@@ -5167,6 +5194,8 @@ body.blind-listen .hud-tr {
     speed: 1,
     audioOn: false,
     blind: false,
+    motion: resolveMotionDefault(),
+    // 呼吸/动效开关
     audioCtx: null,
     audio: null,
     lastType: null,
@@ -5661,9 +5690,12 @@ body.blind-listen .hud-tr {
     </p>`;
   }
   function renderStructPanel() {
+    const sysPrefersReduced = !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    const motionHint = sysPrefersReduced ? '\u5DF2\u81EA\u52A8\u8DDF\u968F\u7CFB\u7EDF\u7684"\u51CF\u5C11\u52A8\u6548"\u8BBE\u7F6E\u3002' : "\u5173\u6389\u5B83\u4E4B\u540E\uFF0C\u6240\u6709\u547C\u5438\u548C\u95EA\u70C1\u4F1A\u505C\u4F4F\uFF0C\u753B\u9762\u66F4\u7A33\u5B9A\u3002";
     $("#panel-struct").innerHTML = `
     <div class="switch-row"><span><b>\u266A \u7528\u5FC3\u8046\u542C\u6A21\u5F0F</b><br><span class="hint" style="margin:0">\u5148\u51ED\u5FC3\u91CC\u7684\u611F\u89C9\u5224\u65AD\uFF0C\u518D\u56DE\u6765\u770B\u5B83\u7684\u6837\u5B50\u3002</span></span><button class="switch ${state.blind ? "on" : ""}" data-action="blind"></button></div>
     <div class="blind-note">\u6570\u503C\u6682\u65F6\u85CF\u8D77\u6765\u4E86\u3002\u5148\u542C 30 \u79D2\uFF0C\u518D\u6253\u5F00\u5B83\u770B\u770B\u81EA\u5DF1\u7684\u611F\u53D7\u51C6\u4E0D\u51C6 \u2661</div>
+    <div class="switch-row" style="margin-top:12px"><span><b>\u{1F33F} \u751F\u547D\u547C\u5438\u52A8\u6548</b><br><span class="hint" style="margin:0">${motionHint}</span></span><button class="switch ${state.motion ? "on" : ""}" data-action="motion"></button></div>
     <div class="struct-content">
     <div class="section-label">\u8BCA\u65AD</div>
     <div class="diagnosis" id="structDiagnosis">\u2014</div>
@@ -5726,6 +5758,23 @@ body.blind-listen .hud-tr {
     updateStructValues();
     updateHUD(true);
     toast(state.blind ? "\u266A \u6570\u503C\u85CF\u8D77\u6765\u5566\uFF0C\u5148\u7528\u5FC3\u542C\u3002" : "\u6570\u503C\u6253\u5F00\u5566\uFF0C\u6765\u5BF9\u7167\u4E00\u4E0B\u611F\u53D7\u3002");
+  }
+  function toggleMotion() {
+    state.motion = !state.motion;
+    try {
+      localStorage.setItem("commons.motion.v1", state.motion ? "on" : "off");
+    } catch (_) {
+    }
+    setMotionEnabled(state.motion);
+    document.body.classList.toggle("motion-off", !state.motion);
+    renderStructPanel();
+    if (!state.motion && _galleryBreathRafId) {
+      cancelAnimationFrame(_galleryBreathRafId);
+      _galleryBreathRafId = null;
+      if (state.view === "commons") renderCommons();
+    } else if (state.motion && state.view === "commons") {
+    }
+    toast(state.motion ? "\u{1F33F} \u751F\u547D\u7684\u547C\u5438\u56DE\u6765\u5566 \u2661" : "\u547C\u5438\u505C\u4F4F\u4E86\uFF0C\u753B\u9762\u66F4\u5B89\u9759\u3002");
   }
   function updateStructValues() {
     const m = state.metrics;
@@ -5844,31 +5893,45 @@ body.blind-listen .hud-tr {
         </div>
       </article>`;
     }).join("");
-    if (_galleryBreathRafId) cancelAnimationFrame(_galleryBreathRafId);
-    const _breathTick = () => {
-      if (state.view !== "commons") {
-        _galleryBreathRafId = null;
-        return;
+    if (_galleryBreathRafId) {
+      cancelAnimationFrame(_galleryBreathRafId);
+      _galleryBreathRafId = null;
+    }
+    const paintOnce = (now) => {
+      for (const r of list) {
+        const canvas = grid.querySelector(`canvas[data-thumb="${CSS.escape(r.id)}"]`);
+        if (!canvas) continue;
+        const snap = decodeSnapshot(r.snapshot);
+        drawSnapshot(canvas, snap || placeholderSnapshot(r), "a", {
+          ...now ? { now } : {},
+          attrType: r.metrics ? r.metrics.type : "stable",
+          metrics: r.metrics
+        });
       }
-      const grid2 = $("#commonsGrid");
-      if (!grid2) return;
-      if (!_galleryLastTick || performance.now() - _galleryLastTick >= 33) {
-        _galleryLastTick = performance.now();
-        const now = _galleryLastTick;
-        for (const r of list) {
-          const canvas = grid2.querySelector(`canvas[data-thumb="${CSS.escape(r.id)}"]`);
-          if (!canvas) continue;
-          const snap = decodeSnapshot(r.snapshot);
-          drawSnapshot(canvas, snap || placeholderSnapshot(r), "a", {
-            now,
-            attrType: r.metrics ? r.metrics.type : "stable",
-            metrics: r.metrics
-          });
-        }
-      }
-      _galleryBreathRafId = requestAnimationFrame(_breathTick);
     };
-    _galleryBreathRafId = requestAnimationFrame(_breathTick);
+    if (!state.motion) {
+      requestAnimationFrame(() => paintOnce(null));
+    } else {
+      const _breathTick = () => {
+        if (state.view !== "commons") {
+          _galleryBreathRafId = null;
+          return;
+        }
+        if (!state.motion) {
+          _galleryBreathRafId = null;
+          requestAnimationFrame(() => paintOnce(null));
+          return;
+        }
+        const grid2 = $("#commonsGrid");
+        if (!grid2) return;
+        if (!_galleryLastTick || performance.now() - _galleryLastTick >= 33) {
+          _galleryLastTick = performance.now();
+          paintOnce(_galleryLastTick);
+        }
+        _galleryBreathRafId = requestAnimationFrame(_breathTick);
+      };
+      _galleryBreathRafId = requestAnimationFrame(_breathTick);
+    }
     const user = state.lib.recipes.length;
     const hybrids = state.lib.recipes.filter((r) => r.auto).length;
     const profiled = list.filter((r) => r.metrics).length;
@@ -6825,6 +6888,7 @@ body.blind-listen .hud-tr {
       } else if (action === "goto-compare") switchView("compare");
       else if (action === "goto-commons") switchView("commons");
       else if (action === "blind") toggleBlind();
+      else if (action === "motion") toggleMotion();
     });
     $("#introListen").addEventListener("click", () => {
       state.lib.seenIntro = true;
@@ -7186,6 +7250,19 @@ body.blind-listen .hud-tr {
     return null;
   }
   function boot() {
+    setMotionEnabled(state.motion);
+    document.body.classList.toggle("motion-off", !state.motion);
+    try {
+      const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      mq.addEventListener?.("change", (e) => {
+        const saved = localStorage.getItem("commons.motion.v1");
+        if (saved) return;
+        state.motion = !e.matches;
+        setMotionEnabled(state.motion);
+        document.body.classList.toggle("motion-off", !state.motion);
+      });
+    } catch (_) {
+    }
     state.renderer = new StageRenderer($("#stageCanvas"), { tint: "a" });
     const c = state.compare;
     c.rendererA = new StageRenderer($("#compareCanvasA"), { tint: "a" });

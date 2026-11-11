@@ -2317,3 +2317,13 @@ body.blind-listen .hud-tr {
     transition-duration: 0.001s !important;
   }
 }
+
+/* 用户手动关闭动效：兜底禁用所有 DOM 层面的 transition/animation */
+body.motion-off,
+body.motion-off *,
+body.motion-off *::before,
+body.motion-off *::after {
+  animation-duration: 0.001s !important;
+  transition-duration: 0.001s !important;
+  animation-iteration-count: 0 !important;
+}

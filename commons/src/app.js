@@ -25,6 +25,8 @@ import {
   drawFingerprintGlyph,
   drawSnapshot,
   drawSparkline,
+  setMotionEnabled,
+  isMotionEnabled,
 } from './render.js';
 import {
   allCommons,
@@ -89,6 +91,23 @@ const TYPE_EVENT_LABEL = {
 let _galleryBreathRafId = null;
 let _galleryLastTick = 0;
 
+/* ============================================================== */
+/* 无障碍：动效开关初始化                                          */
+/* 优先级：localStorage 用户覆盖 > prefers-reduced-motion 系统设置 */
+/* ============================================================== */
+function resolveMotionDefault() {
+  try {
+    const saved = localStorage.getItem('commons.motion.v1');
+    if (saved === 'on') return true;
+    if (saved === 'off') return false;
+  } catch (_) {}
+  // 无用户覆盖 → 尊重系统设置
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return false;
+  }
+  return true;
+}
+
 const state = {
   lib: loadLibrary(),
   view: 'cultivate',
@@ -102,6 +121,7 @@ const state = {
   speed: 1,
   audioOn: false,
   blind: false,
+  motion: resolveMotionDefault(),  // 呼吸/动效开关
   audioCtx: null,
   audio: null,
   lastType: null,
@@ -671,9 +691,14 @@ function renderEnvPanel() {
 /* ------------------------------------------------------------------ */
 
 function renderStructPanel() {
+  const sysPrefersReduced = !!(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+  const motionHint = sysPrefersReduced
+    ? '已自动跟随系统的"减少动效"设置。'
+    : '关掉它之后，所有呼吸和闪烁会停住，画面更稳定。';
   $('#panel-struct').innerHTML = `
     <div class="switch-row"><span><b>♪ 用心聆听模式</b><br><span class="hint" style="margin:0">先凭心里的感觉判断，再回来看它的样子。</span></span><button class="switch ${state.blind ? 'on' : ''}" data-action="blind"></button></div>
     <div class="blind-note">数值暂时藏起来了。先听 30 秒，再打开它看看自己的感受准不准 ♡</div>
+    <div class="switch-row" style="margin-top:12px"><span><b>🌿 生命呼吸动效</b><br><span class="hint" style="margin:0">${motionHint}</span></span><button class="switch ${state.motion ? 'on' : ''}" data-action="motion"></button></div>
     <div class="struct-content">
     <div class="section-label">诊断</div>
     <div class="diagnosis" id="structDiagnosis">—</div>
@@ -737,6 +762,27 @@ function toggleBlind() {
   updateStructValues();
   updateHUD(true);
   toast(state.blind ? '♪ 数值藏起来啦，先用心听。' : '数值打开啦，来对照一下感受。');
+}
+
+function toggleMotion() {
+  state.motion = !state.motion;
+  // 用户手动覆盖后写入 localStorage，后续系统设置变化不再自动跟随
+  try {
+    localStorage.setItem('commons.motion.v1', state.motion ? 'on' : 'off');
+  } catch (_) {}
+  setMotionEnabled(state.motion);
+  document.body.classList.toggle('motion-off', !state.motion);
+  renderStructPanel();
+  // 如果当前在 commons 视图，motion 关掉时立即取消 rAF 以省电
+  if (!state.motion && _galleryBreathRafId) {
+    cancelAnimationFrame(_galleryBreathRafId);
+    _galleryBreathRafId = null;
+    // 画一次静态缩略图替代 rAF 循环
+    if (state.view === 'commons') renderCommons();
+  } else if (state.motion && state.view === 'commons') {
+    // 重新进入 commons 时会由 renderCommons 自己启动 rAF
+  }
+  toast(state.motion ? '🌿 生命的呼吸回来啦 ♡' : '呼吸停住了，画面更安静。');
 }
 
 function updateStructValues() {
@@ -881,30 +927,40 @@ function renderCommons() {
     })
     .join('');
 
-  // thumbnails — 持续呼吸动画（30fps，省电且平滑）
-  if (_galleryBreathRafId) cancelAnimationFrame(_galleryBreathRafId);
-  const _breathTick = () => {
-    if (state.view !== 'commons') { _galleryBreathRafId = null; return; }
-    const grid = $('#commonsGrid');
-    if (!grid) return;
-    // throttle 到 ~30fps（每帧至少等 33ms）
-    if (!_galleryLastTick || performance.now() - _galleryLastTick >= 33) {
-      _galleryLastTick = performance.now();
-      const now = _galleryLastTick;
-      for (const r of list) {
-        const canvas = grid.querySelector(`canvas[data-thumb="${CSS.escape(r.id)}"]`);
-        if (!canvas) continue;
-        const snap = decodeSnapshot(r.snapshot);
-        drawSnapshot(canvas, snap || placeholderSnapshot(r), 'a', {
-          now,
-          attrType: r.metrics ? r.metrics.type : 'stable',
-          metrics: r.metrics,
-        });
-      }
+  // thumbnails — 动效开启时持续呼吸动画（30fps），关闭时只画一次静态
+  if (_galleryBreathRafId) { cancelAnimationFrame(_galleryBreathRafId); _galleryBreathRafId = null; }
+
+  const paintOnce = (now) => {
+    for (const r of list) {
+      const canvas = grid.querySelector(`canvas[data-thumb="${CSS.escape(r.id)}"]`);
+      if (!canvas) continue;
+      const snap = decodeSnapshot(r.snapshot);
+      drawSnapshot(canvas, snap || placeholderSnapshot(r), 'a', {
+        ...(now ? { now } : {}),
+        attrType: r.metrics ? r.metrics.type : 'stable',
+        metrics: r.metrics,
+      });
     }
-    _galleryBreathRafId = requestAnimationFrame(_breathTick);
   };
-  _galleryBreathRafId = requestAnimationFrame(_breathTick);
+
+  if (!state.motion) {
+    // 动效关闭：只画一次静态，不跑 rAF 循环（零开销）
+    requestAnimationFrame(() => paintOnce(null));
+  } else {
+    // 动效开启：30fps 节流的持续呼吸循环
+    const _breathTick = () => {
+      if (state.view !== 'commons') { _galleryBreathRafId = null; return; }
+      if (!state.motion) { _galleryBreathRafId = null; requestAnimationFrame(() => paintOnce(null)); return; }
+      const grid = $('#commonsGrid');
+      if (!grid) return;
+      if (!_galleryLastTick || performance.now() - _galleryLastTick >= 33) {
+        _galleryLastTick = performance.now();
+        paintOnce(_galleryLastTick);
+      }
+      _galleryBreathRafId = requestAnimationFrame(_breathTick);
+    };
+    _galleryBreathRafId = requestAnimationFrame(_breathTick);
+  }
 
   const user = state.lib.recipes.length;
   const hybrids = state.lib.recipes.filter((r) => r.auto).length;
@@ -1969,6 +2025,7 @@ function bindUI() {
     } else if (action === 'goto-compare') switchView('compare');
     else if (action === 'goto-commons') switchView('commons');
     else if (action === 'blind') toggleBlind();
+    else if (action === 'motion') toggleMotion();
   });
 
   $('#introListen').addEventListener('click', () => {
@@ -2366,6 +2423,21 @@ function initialRecipe() {
 }
 
 function boot() {
+  /* ---- 无障碍：动效开关初始化 ---- */
+  setMotionEnabled(state.motion);
+  document.body.classList.toggle('motion-off', !state.motion);
+  // 监听系统设置变化（仅在用户没手动覆盖时自动跟随）
+  try {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    mq.addEventListener?.('change', (e) => {
+      const saved = localStorage.getItem('commons.motion.v1');
+      if (saved) return;  // 用户已手动覆盖，不自动跟
+      state.motion = !e.matches;
+      setMotionEnabled(state.motion);
+      document.body.classList.toggle('motion-off', !state.motion);
+    });
+  } catch (_) {}
+
   state.renderer = new StageRenderer($('#stageCanvas'), { tint: 'a' });
   const c = state.compare;
   c.rendererA = new StageRenderer($('#compareCanvasA'), { tint: 'a' });
