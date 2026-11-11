@@ -244,6 +244,7 @@ export function computeAudioChain(m, petState, exoticEnv, music2) {
   // 4. Pet mood → audio params（melody + wave + tempo + tension + reverb）
   const petAudio = music2.petMoodToAudio(petState.mood, null);
   chain.petMood = petState.mood;
+  chain.petState = petState;   /* Attention 音乐性增强：完整 Pet 状态传进 audio.js for dynamics/octaveShift/voiceCount */
   chain.petAudio = petAudio;
 
   // 5. 极端环境 → tempo modifier（config.js EXTREME_AUDIO_TEMPO 是单一事实源）

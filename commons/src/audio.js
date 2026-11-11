@@ -67,7 +67,8 @@ import { AUDIO_CONSTANTS } from './config.js';
 
 /* ---- 音乐理论层（music.js）---- */
 import {
-  HEARTBEAT_BPM, CHORD_DENSENESS, CHORD_PROGRESSION,
+  HEARTBEAT_BPM, CHORD_DENSENESS,
+  chordProgressionFor, dynamics, voiceCount, octaveShift, layerWaves,
   generateMelodyContour, applyVoiceLeading,
   getChordNotes, jepaToAudioParams,
 } from './music.js';
@@ -499,28 +500,52 @@ export class AudioEngine {
     const AC = AUDIO_CONSTANTS;
 
     /* ================================================================ */
-    /*  Attention 统一聚合（心智模型 1：动态上下文聚合的正确做法）         */
+    /*  Attention 统一聚合 v5：8 项聚合（音乐性 44% → 75%）              */
     /*                                                                  */
-    /*  所有上游信号在此处聚合为最终状态变量                              */
-    /*  updateMetrics() 和 setAudioChain() 只写各自的缓存变量             */
-    /*  tick() 是唯一的最终写入点 —— 没有两套独立计算来源的覆盖冲突         */
+    /*  [1] heartbeatBPM       — metrics 基准 × Pet+星球 tempo modifier  */
+    /*  [2] strictness         — (baseChaos + petTensionOffset) × coef  */
+    /*  [3] delayWet/delayFb   — metrics 基准 × Pet reverb 目标        */
+    /*  [4] dynamics           — Pet mood × Pet energy → pp ↔ ff       */
+    /*  [5] voiceCount         — Lyapunov × activity → 巴赫复调声部数    */
+    /*  [6] octaveShift        — Pet mood × activity → register 漂移   */
+    /*  [7] layerWaves         — Pet mood wave + tension → 分声部 timbre */
+    /*  [8] chordProgression   — Lyapunov → 动态和声进度                 */
     /* ================================================================ */
 
-    /* 1. heartbeatBPM = metrics 基准 × Pet+星球 tempo modifier          */
     const rawBPM = this._baseHeartbeatBPM * this._tempoMultiplier;
-    /* 平滑过渡（α=0.4 新值，α=0.6 旧值 —— 让心跳不要跳变但响应够快）*/
     this._heartbeatBPM = this._heartbeatBPM * AC.heartbeat.smoothRatioOld + rawBPM * AC.heartbeat.smoothRatioNew;
 
-    /* 2. strictness = clamp(1 - (baseChaos + petTensionOffset) × coef, min, max) */
     const effectiveTemp = Math.min(1.0, this._baseChaosTemp + this._petTensionOffset);
     mapping.strictness = clamp(1 - effectiveTemp * AC.strictness.chaosCoef, AC.strictness.min, AC.strictness.max);
 
-    /* 3. delayWet/delayFb = 0.4 × metrics基准 + 0.6 × Pet reverb目标（加权混合）*/
-    const nowS = now;
     const finalWet = 0.4 * this._metricsWet + 0.6 * this._targetWet;
     const finalFb  = 0.4 * this._metricsFb  + 0.6 * this._targetFb;
-    this.delayWet.gain.setTargetAtTime(finalWet, nowS, 0.5);
-    this.delayFb.gain.setTargetAtTime(finalFb, nowS, 0.5);
+    this.delayWet.gain.setTargetAtTime(finalWet, now, 0.5);
+    this.delayFb.gain.setTargetAtTime(finalFb, now, 0.5);
+
+    /* ---- 音乐性增强：5 个新维度 ---- */
+    const lyapunov = m.lyapunov ?? 0;
+    const fractal  = m.fractal  ?? 1.5;
+    const petState = this._audioChain?.petState ?? null;
+    const petTension = this._petTensionOffset ?? 0;
+    const moodWave = mapping.wave || 'triangle';
+
+    /* [4] dynamics: Beethoven pp ↔ ff */
+    const dyn = dynamics(petState);
+
+    /* [5] voiceCount: 巴赫复调声部数 */
+    const nVoices = voiceCount(lyapunov, activity);
+
+    /* [6] octaveShift: 情绪 register 漂移 */
+    const octShift = octaveShift(petState);
+
+    /* [7] layerWaves: 分声部 timbre */
+    const waves = layerWaves(moodWave, petTension);
+
+    /* [8] chordProgression: Lyapunov 驱动 */
+    const chordProg = chordProgressionFor(lyapunov, attractorType);
+    /* 存到实例变量，Layer 2 chord pad 用它 */
+    this._chordProg = chordProg;
 
     /* ================================================================ */
     /*  Layer 1: Heartbeat Bass 心跳节拍                                */
@@ -534,11 +559,12 @@ export class AudioEngine {
 
     if (this._heartbeatNext < now + 0.15) {
       // 心跳音：根音 1 octave 下的 sine + 极短 attack
+      // Attention 音乐性增强：音量 × dyn.heartbeat（Pet mood → pp ↔ ff）
       const hz = midiToFreq(rootMidi - 12);  // 低八度
-      this._heartbeatTone(hz, this._heartbeatNext);
+      this._heartbeatTone(hz, this._heartbeatNext, dyn.heartbeat);
       if (hasSplitHeartbeat) {
-        // 第二心音（轻微）：delay 80ms，音量小
-        this._heartbeatTone(hz * 1.06, this._heartbeatNext + beat * 0.18, 0.25);
+        // 第二心音（轻微）：delay 80ms，音量小 × dyn.heartbeat
+        this._heartbeatTone(hz * 1.06, this._heartbeatNext + beat * 0.18, dyn.heartbeat * 0.25);
       }
       this._heartbeatNext += beat;
       this._heartbeatNext = this._heartbeatNext > now + 5 ? this._heartbeatNext : now + beat;  // 防止漂移
@@ -552,9 +578,11 @@ export class AudioEngine {
     const chordSec = this._chordBeatCount * beat;
     if (this._chordNext === 0) this._chordNext = now + 0.5;
     if (this._chordNext < now + 0.25) {
-      // 推进 progression
-      this._chordProgIdx = (this._chordProgIdx + 1) % CHORD_PROGRESSION.length;
-      this._chordRootDegree = CHORD_PROGRESSION[this._chordProgIdx][0];
+      /* Attention 音乐性增强：chordProgressionFor(lyapunov, attrType) 动态和声进度
+         Lyapunov 越高 → progression 越不稳定（stable → periodic → chaotic）*/
+      const prog = this._chordProg ?? chordProg;
+      this._chordProgIdx = (this._chordProgIdx + 1) % prog.length;
+      this._chordRootDegree = prog[this._chordProgIdx][0];
 
       // 构建和弦
       const chordMidi = getChordNotes(
@@ -564,51 +592,61 @@ export class AudioEngine {
         mapping.octave ?? 3,
         rootMidi - 12,   // chord pad 在低八度，听起来是支撑
       );
-      // 每个和弦音是一个长音（attack 1.5 秒 slow rise）
+      /* Attention 音乐性增强：音量 × dyn.chordPad（Pet mood → pp ↔ ff）*/
       for (const midi of chordMidi) {
         const freq = midiToFreq(midi);
-        this._chordTone(freq, this._chordNext, chordSec * 0.9);
+        this._chordTone(freq, this._chordNext, chordSec * 0.9, dyn.chordPad, waves.chordPad);
       }
       this._chordNext += chordSec;
     }
 
     /* ================================================================ */
-    /*  Layer 3: Lead Pulse  主旋律（有旋律轮廓 + voice leading）          */
-    /*  每 half-beat（heartbeat / 2）触发一个旋律音                      */
-    /*  用 _melodyContour 数组逐拍推进                                   */
+    /*  Layer 3: Lead Pulse + Counterpoint（巴赫复调）                    */
+    /*  音乐性增强：分声部 wave + dynamics × register 漂移 × counter-melody */
     /* ================================================================ */
-    const melBeat = beat / 2;  // half-beat 旋律节奏（比心跳快一倍）
+    const melBeat = beat / 2;
     if (this.nextNote === 0 || now > this.nextNote - melBeat) this.nextNote = now + melBeat * 0.3;
 
     const strict = mapping.strictness ?? 0.7;
     if (this.nextNote < now + 0.12) {
-      // 心跳 attractor → 旋律音的音高（从 contour 数组选）
       if (this._melodyContour && this._melodyIdx < this._melodyContour.length) {
+        /* 主旋律：register = 0（基础）+ octShift（Pet mood 漂移）*/
         const degree = this._melodyContour[this._melodyIdx];
         this._melodyIdx++;
-        const freq = this._degreeFreq(degree, 0);
-        // dur 根据 attractor 类型：stable 长 1.5s，chaotic 短 0.25s
+        const freq = this._degreeFreq(degree, octShift);
         const dur = attractorType === 'stable' ? 1.5 : attractorType === 'chaotic' ? 0.28 : 0.7;
-        const amp = 0.055 + m.density * 0.12;
-        this._tone(freq, this.nextNote, dur, amp, mapping.wave || 'triangle', 0.5);
+        const amp = dyn.voice;
+        /* Attention 音乐性增强：wave 来自 waves.melody（Pet mood wave）*/
+        this._tone(freq, this.nextNote, dur, amp, waves.melody, 0.5);
+
+        /* Counter-melody：Lyapunov 高时 +1 声部（巴赫复调）*/
+        if (nVoices >= 2 && attractorType !== 'endangered' && attractorType !== 'extinct') {
+          /* counter-melody 从主 contour 高 2-3 度（五声里），register 差一个八度 */
+          const counterDegree = (degree + 2) % 5;
+          const counterOct   = octShift + 1;  /* 高八度对位 */
+          const counterFreq = this._degreeFreq(counterDegree, counterOct);
+          const counterAmp = dyn.counter;
+          const counterDur = dur * 0.8;
+          this._tone(counterFreq, this.nextNote, counterDur, counterAmp, waves.counter, 0.5);
+        }
       }
       // 保留原有 cell 触发音（新生儿）
       const cell = this.birthQueue.shift();
       if (cell) {
         const degree = Math.floor(cell.x * 5) % 5;
-        const octaveShift = Math.floor((1 - cell.y) * (1 + strict * 2));
-        const freq = this._degreeFreq(degree, octaveShift + 1);  // 高八度：新生儿更亮
-        const amp = 0.1 + Math.random() * 0.05;
-        this._tone(freq, this.nextNote, attractorType === 'stable' ? 1.2 : 0.32, amp, 'triangle', 0.5);
+        const cellOctaveShift = Math.floor((1 - cell.y) * (1 + strict * 2));
+        const freq = this._degreeFreq(degree, cellOctaveShift + 1);  // 高八度：新生儿更亮
+        /* Attention 音乐性增强：amp × dyn.sparkle，wave 来自 waves.cell */
+        const amp = dyn.sparkle + Math.random() * 0.02;
+        this._tone(freq, this.nextNote, attractorType === 'stable' ? 1.2 : 0.32, amp, waves.cell, 0.5);
 
-        // Layer 4: Sparkle Crystal — 新生儿水晶闪烁（3 harmonic 谐波）
+        // Layer 4: Sparkle Crystal — 新生儿水晶闪烁
         this._emitSparkle(this.nextNote, cell.x, cell.y);
       }
-      // Lyapunov → beat 抖动（科学指标介入）
+      // Lyapunov → beat 抖动
       const jitter = (Math.random() - 0.5) * this._beatJitterSec;
       this.nextNote += melBeat + jitter;
     }
-    // background tab 保护
     if (this.nextNote < now - 0.4) this.nextNote = now + melBeat * 0.5;
 
     this.level = clamp(this.level * 0.95 + (activity * 0.4 + m.density * 0.2) * 0.05, 0, 1);
@@ -632,20 +670,20 @@ export class AudioEngine {
   }
 
   /* ---- Layer 2: Chord pad tone（长 attack，slow rise）---- */
-  _chordTone(freq, when, dur) {
-    if (this.voices > 24) return;  // chord 占 voice budget
+  _chordTone(freq, when, dur, amp = 0.14, wave = 'triangle') {
+    if (this.voices > 24) return;
     const ctx = this.ctx;
     const osc = ctx.createOscillator();
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = 900;   // 柔和的 chord pad 不刺耳
+    filter.frequency.value = 900;
     filter.Q.value = 0.7;
-    osc.type = 'triangle';          // triangle 波最适合 chord pad
+    osc.type = wave;   /* Attention 音乐性增强：wave 可配置 */
     osc.frequency.setValueAtTime(freq, when);
 
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, when);
-    g.gain.linearRampToValueAtTime(0.14, when + 1.2);  // 1.2 秒 slow rise
+    g.gain.linearRampToValueAtTime(amp, when + 1.2);  /* Attention 音乐性增强：amp 可配置 */
     g.gain.linearRampToValueAtTime(0.0001, when + dur);
 
     osc.connect(filter);

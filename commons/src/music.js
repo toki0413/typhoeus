@@ -4,12 +4,18 @@
 /*  导出：                                                           */
 /*  - HEARTBEAT_BPM     attractor → 物理心率映射                       */
 /*  - CHORD_DENSENESS   attractor → 和弦复杂度                        */
-/*  - CHORD_PROGRESSION 五声 I-V-vi-IV 和声圈                         */
+/*  - chordProgressionFor(lyapunov, attrType) → 动态和声进度           */
+/*  - dynamics(petState) → { global, voice, heartbeat, chordPad }   */
+/*  - voiceCount(lyapunov, activity) → 声部数（巴赫复调）             */
+/*  - octaveShift(petState) → register 漂移                           */
+/*  - layerWaves(moodWave, tension) → 分声部 wave 配置               */
 /*  - generateMelodyContour(attractor, seed) → scale degree 序列      */
 /*  - applyVoiceLeading(contour, maxJump) → 修正后的序列               */
 /*  - getChordNotes(density, rootDegree, scale, octave, rootMidi)     */
 /*  - jepaToAudioParams(feedback, scale, rootMidi)                    */
 /* ================================================================ */
+
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
 /* ---- Attractor type → Heartbeat BPM 物理心率映射 ---- */
 export const HEARTBEAT_BPM = {
@@ -32,12 +38,119 @@ export const CHORD_DENSENESS = {
 };
 
 /* ---- 五声 I-V-vi-IV 和声转换（宫=I, 徵=V, 羽=vi, 商=IV）---- */
-export const CHORD_PROGRESSION = [
-  [0, 4, 7],
-  [7, 11, 2],
-  [9, 0, 4],
-  [2, 5, 9],
-];
+/* Attention 音乐性增强 v5：不再固定 4 轮循环 —— 由 Lyapunov 动态生成 */
+/* 基础 progressions（每一个 entry = [scale degree, interval from root]）*/
+const PROGRESSIONS = {
+  stable:    [[0, 4, 7], [4, 7, 11], [7, 11, 2], [2, 5, 9]],        /* I-IV-V-I 经典循环 */
+  periodic:  [[0, 4, 7], [9, 0, 4], [7, 11, 2], [5, 9, 0]],        /* I-vi-IV-V 柔和 pop */
+  drifting:  [[0, 3, 7], [7, 10, 2], [2, 5, 9], [9, 12, 3]],       /* I-bIII-bVII-IV 蓝调漂移 */
+  chaotic:   [[1, 4, 6], [5, 8, 10], [7, 10, 12], [0, 3, 6]],      /* bII-IV-bVII-I half-dim 不稳定桥 */
+  endangered:[[0, 3, 7], [4, 7, 11], [0, 4, 7]],                    /* I-IV-I 最短循环（濒危时只剩基础支撑）*/
+  extinct:   [[0, 3, 7]],                                            /* I only（灭绝时只剩根音）*/
+};
+
+/**
+ * Lyapunov 驱动的和声进度选择
+ * Attention 修复：Lyapunov 越高 → progression 越不稳定
+ *   λ < -0.15 → stable
+ *   -0.15 < λ < 0.15 → periodic
+ *   λ > 0.15 → chaotic
+ */
+export function chordProgressionFor(lyapunov, attrType) {
+  if (lyapunov === undefined) return PROGRESSIONS[attrType] ?? PROGRESSIONS.stable;
+  if (attrType === 'endangered' || attrType === 'extinct') {
+    return PROGRESSIONS[attrType];
+  }
+  if (lyapunov > 0.15)      return PROGRESSIONS.chaotic;
+  if (lyapunov < -0.15)     return PROGRESSIONS.stable;
+  // 边界态：在 stable 和 periodic 之间插值
+  return PROGRESSIONS.periodic;
+}
+
+/* ---- 动态范围 dynamics：Pet mood → pp ↔ ff ---- */
+/**
+ * Beethoven symphony 的 pp ↔ ff 差 40dB。
+ * 我们用 Pet energy + Pet mood 映射到 [0.15, 1.2] 的系数范围
+ *   happy + energy满 → ff（1.2）
+ *   sad + energy低  → pp（0.15）
+ * 这样 Pet 状态直接决定整体音量 envelope
+ */
+export function dynamics(petState) {
+  if (!petState) return { global: 0.5, voice: 0.55, heartbeat: 0.35 };
+  const mood = petState.mood ?? 'content';
+  const energy = petState.energy ?? 0.5;
+  const moodFactor = {
+    happy:    1.2,   /* 贝多芬 ff */
+    content:  1.0,   /* mf */
+    waiting:  0.75,  /* mp */
+    sad:      0.45,  /* p */
+    sick:     0.25,  /* pp */
+  }[mood] ?? 0.7;
+  const energyFactor = 0.5 + energy;  /* 0.5 ~ 1.5 */
+  const global = clamp((moodFactor * energyFactor) / 1.3, 0.15, 1.2);
+  return {
+    global,
+    voice:     0.055 * global * 2.2,    /* melody amp 基准 × dynamics */
+    heartbeat: 0.35 * global,            /* heartbeat peak 基准 × dynamics */
+    chordPad:  0.14 * global,            /* chord pad peak 基准 × dynamics */
+    counter:   0.7 * global,             /* counter-melody 比主声部稍弱 */
+    sparkle:   0.1 * global,             /* 新生儿 sparkle */
+  };
+}
+
+/* ---- 织体密度 counterpoint：Lyapunov + activity → 声部数 ---- */
+/**
+ * 巴赫复调的核心：有序系统 → 单声部（monophony）
+ * Edge of Chaos → 多声部对位（2-3 声部同时独立旋律线）
+ * Chaos → 所有声部自由但被 strictness 约束在五声内
+ */
+export function voiceCount(lyapunov, activity) {
+  if (lyapunov === undefined) return 1;
+  const base = lyapunov > 0.15 ? 3 : lyapunov < -0.15 ? 1 : 2;
+  const boost = activity > 0.7 ? 1 : 0;  /* activity 高 +1 声部 */
+  return Math.min(4, base + boost);       /* 最多 4 声部对位 */
+}
+
+/* ---- 八度 register 漂移：Pet activity + mood → octave shift ---- */
+/**
+ * 情绪心理学：紧张/兴奋 → register 升高一个八度（更亮、更紧张）
+ * 低落/虚弱 → register 降低一个八度（更低沉、更沉重）
+ */
+export function octaveShift(petState) {
+  if (!petState) return 0;
+  const mood = petState.mood ?? 'content';
+  const activity = petState.activity ?? 0.5;
+  const moodShift = {
+    happy:    1,     /* 高八度：明亮 */
+    content:  0,
+    waiting:  0,
+    sad:     -1,     /* 低八度：沉重 */
+    sick:    -1,     /* 低八度：虚弱 */
+  }[mood] ?? 0;
+  const activityShift = activity > 0.75 ? 1 : 0;
+  return moodShift + activityShift;
+}
+
+/* ---- 分声部 wave：每个声部有自己的 timbre 函数 ---- */
+/**
+ * 全局 wave 是偷懒 —— 每个声部应该有自己的音色函数
+ *   heartbeat → 固定 sine（心跳必须稳定）
+ *   chord pad → 固定 triangle（和弦必须柔和）
+ *   melody → Pet mood wave（情绪驱动）
+ *   counter-melody → triangle（对位声部稍柔和）
+ *   cell/sparkle → Pet tension × sawtooth（紧张时刺耳）
+ */
+export function layerWaves(moodWave, petTension) {
+  const isTense = petTension > 0.5;
+  return {
+    heartbeat: 'sine',
+    chordPad:  'triangle',
+    melody:    moodWave || 'triangle',
+    counter:   isTense ? 'sawtooth' : 'triangle',
+    cell:      isTense ? 'sawtooth' : 'sine',
+    sparkle:   'sine',
+  };
+}
 
 /* ---- 旋律轮廓生成器 ---- */
 export function generateMelodyContour(attractorType, scaleDegrees, seed) {
