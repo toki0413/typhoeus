@@ -71,6 +71,14 @@ import {
   getChordNotes, jepaToAudioParams,
 } from './music.js';
 
+/* ---- 复杂系统音乐层（music2.js）—— 4 篇 arXiv 论文洞见 ---- */
+import {
+  selectiveImperfectionScale,   // Buehler 2026 Hall-Petch analogy
+  edgeOfChaosKnob,              // Bell & Gabora 2016
+  generateRhythmPattern,        // Kolic 2022
+  attractorToSonicGenre,        // Pimenta-Zanon 2021
+} from './music2.js';
+
 function midiToFreq(m) {
   return 440 * Math.pow(2, (m - 69) / 12);
 }
@@ -276,6 +284,62 @@ export class AudioEngine {
     const fractal = m.fractal !== undefined ? clamp(m.fractal, 0.5, 2.0) : 1.0;
     const energyTotal = m.energy?.total ?? 1.0;
     const energyNorm = clamp(Math.log10(energyTotal + 0.01) / 1.0, 0, 1);
+
+    /* ================================================================ */
+    /*  4 篇 arXiv 论文洞见接入                                          */
+    /*  [4] Buehler 2026  → 分形维数 → 音阶选择（Hall-Petch analogy）    */
+    /*  [3] Bell & Gabora → Lyapunov → Edge of Chaos 创造力 knob       */
+    /*  [1] Kolic 2022    → activity+lyapunov → 节奏 pattern 生成       */
+    /*  [2] Pimenta-Zanon → attractor → Sonic Genre 流派识别             */
+    /* ================================================================ */
+    /* [4] Buehler 2026: Hall-Petch analogy — fractal → 音阶 */
+    const buehlerScale = selectiveImperfectionScale(fractal);
+    // 音阶动态切换：不是硬五声，而是 fractal 决定 defect density
+    this._activeScaleDegrees = buehlerScale.degrees;
+
+    /* [3] Bell & Gabora 2016: Edge of Chaos creativity knob */
+    const chaosKnob = edgeOfChaosKnob(lyapunov);
+    this._chaosTemperature = chaosKnob.temperatureK;
+    this._chaosLevel = chaosKnob.chaosLevel;
+    // chaos temperature 控制 strictness（混沌越高越不严格五声）
+    mapping.strictness = clamp(1 - chaosKnob.temperatureK * 0.55, 0.2, 1.0);
+    // chaos 控制 voice leading maxJump（混沌越高允许跳得越多）
+    this._currentMaxJump = chaosKnob.temperatureK < 0.25 ? 2 : chaosKnob.temperatureK < 0.5 ? 7 : 12;
+
+    /* [1] Kolic 2022: 节奏 pattern + complexity feedback */
+    this._rhythmPattern = generateRhythmPattern(attractorType, lyapunov, activity);
+    // 计算 rhythm complexity 3 指标，反馈到层（syncopation 高 → off-beat notes 更频繁）
+    const { permEntropy, syncopation } = (() => {
+      let permEnt = 0, sync = 0;
+      const windowSize = 3;
+      const counts = {};
+      const rp = this._rhythmPattern;
+      for (let i = 0; i <= rp.length - windowSize; i++) {
+        const p = rp.slice(i, i + windowSize).join('');
+        counts[p] = (counts[p] || 0) + 1;
+      }
+      const total = rp.length - windowSize + 1;
+      for (const c of Object.values(counts)) {
+        const pp = c / total;
+        if (pp > 0) permEnt -= pp * Math.log2(pp);
+      }
+      permEnt = permEnt / 3;
+      let on = 0, off = 0;
+      for (let i = 0; i < rp.length; i++) if (rp[i]) i % 4 === 0 ? on++ : off++;
+      sync = on + off > 0 ? off / (on + off) : 0;
+      return { permEntropy: permEnt, syncopation: sync };
+    })();
+    this._permEntropy = permEntropy;
+    this._syncopation = syncopation;
+
+    /* [2] Pimenta-Zanon 2021: attractor → Sonic Genre */
+    const genre = attractorToSonicGenre(attractorType, lyapunov, fractal);
+    // 只在 attractor 第一次变化时打印（避免刷屏）
+    if (!this._lastGenre || this._lastGenre.genreId !== genre.genreId) {
+      this._lastGenre = genre;
+      console.log('[SONIC GENRE]', genre.genreLabel, '|', genre.description.split('（')[0]);
+      if (genre.suggestion) console.log('  ↳', genre.suggestion);
+    }
 
     /* ---- Layer 1: Heartbeat BPM（物理心率映射）---- */
     // attractor type → 物理心率范围

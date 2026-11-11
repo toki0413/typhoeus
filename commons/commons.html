@@ -2767,10 +2767,10 @@ body.motion-off *::after {
     return maxOffset;
   }
   function computeScientificMetrics(v, u, w, h, engineType) {
-    const lyapunov = computeLyapunov(v, w, h);
-    const fractal = computeFractalDimension(v, w, h, 0.3);
-    const energy = u ? computeFieldEnergy(u, v, w, h) : { gradEnergy: 0, interactionEnergy: 0, total: 0 };
-    const spatialPeriod = computeSpatialPeriod(v, w, h);
+    const lyapunov = computeLyapunov(u, w, h);
+    const fractal = computeFractalDimension(u, w, h, 0.3);
+    const energy = computeFieldEnergy(u, v, w, h);
+    const spatialPeriod = computeSpatialPeriod(u, w, h);
     let attrType;
     if (lyapunov > 0.15) attrType = "chaotic";
     else if (lyapunov > 0.02) attrType = "periodic";
@@ -2930,10 +2930,12 @@ body.motion-off *::after {
           this.w = w;
           this.h = h;
           this.kind = "reaction-diffusion";
-          this.preset = opts.preset || "gs_spots";
-          this.params = { ...REACTION_DIFFUSION_PRESETS[this.preset] };
+          this.preset = opts.preset || opts.engine || "gs_spots";
+          const defaults = REACTION_DIFFUSION_PRESETS[this.preset] || {};
+          this.params = { ...defaults, ...opts };
+          this.engineType = this.params.engine || this.preset;
           this.boundary = opts.boundary || "torus";
-          this.dt = this.params.dt;
+          this.dt = this.params.dt || 1;
           this.u = new Float32Array(w * h);
           this.v = new Float32Array(w * h);
           this.t = 0;
@@ -4396,6 +4398,157 @@ body.motion-off *::after {
     return { midiNotes, reverbMs, loudness, predictionCorrect: correct };
   }
 
+  // src/music2.js
+  function selectiveImperfectionScale(fractal) {
+    const distanceFromOptimum = Math.abs(fractal - 1.5);
+    let defect;
+    if (fractal < 1.5) {
+      defect = 0.25 - (1.5 - fractal) * 0.5;
+    } else {
+      defect = 0.25 + (fractal - 1.5) * 1.5;
+    }
+    defect = Math.max(0, Math.min(1, defect));
+    const scales = [
+      { defect: 0, degrees: [0, 2, 4, 6, 8, 10], label: "\u5168\u97F3\u97F3\u9636\uFF08\u592A\u5355\u8C03\uFF09" },
+      { defect: 0.12, degrees: [0, 2, 4, 5, 7, 9, 11], label: "\u5927\u8C03\u97F3\u9636 C Ionian" },
+      { defect: 0.22, degrees: [0, 2, 4, 7, 9], label: "\u5927\u8C03\u4E94\u58F0\uFF08Hall-Petch \u6700\u4F18 \u2713\uFF09" },
+      { defect: 0.25, degrees: [0, 3, 5, 7, 10], label: "\u5C0F\u8C03\u4E94\u58F0" },
+      { defect: 0.3, degrees: [0, 2, 4, 7, 9, 11], label: "Major 7 \u516D\u97F3" },
+      { defect: 0.33, degrees: [0, 2, 3, 5, 7, 8, 11], label: "\u548C\u58F0\u5C0F\u8C03" },
+      { defect: 0.45, degrees: [0, 1, 3, 4, 6, 7, 9, 10], label: "Diminished \u516B\u97F3" },
+      { defect: 1, degrees: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], label: "Chromatic \u534A\u97F3\uFF08\u592A\u8106\uFF09" }
+    ];
+    let best = scales[0], bestDist = 99;
+    for (const s of scales) {
+      const d = Math.abs(s.defect - defect);
+      if (d < bestDist) {
+        bestDist = d;
+        best = s;
+      }
+    }
+    return {
+      degrees: best.degrees,
+      label: best.label,
+      defect: best.defect,
+      targetDefect: defect,
+      entropyLevel: defect < 0.2 ? "low-defect (too perfect)" : defect < 0.4 ? "optimum (mid-defect Hall-Petch \u2713)" : defect < 0.7 ? "high-defect (approaching chaos)" : "too-high defect (chromatic-like)"
+    };
+  }
+  function edgeOfChaosKnob(lyapunov) {
+    const temperature = 1 - Math.exp(-(lyapunov + 0.15) / 0.12);
+    const t = Math.max(0, Math.min(1, temperature));
+    let chaosLevel, description;
+    if (t < 0.2) {
+      chaosLevel = 0;
+      description = "\u6709\u5E8F\u533A (Order) \u2014 \u7C7B\u4F3C\u5168\u97F3\u97F3\u9636\uFF0C\u65CB\u5F8B\u6700\u5E73\u6ED1\uFF0C\u5076\u5C14\u8DF3\u8FDB";
+    } else if (t < 0.45) {
+      chaosLevel = 1;
+      description = "\u4E34\u754C\u533A (Edge of Chaos) \u2014 Bell & Gabora \u6700\u4F18\u521B\u9020\u529B\u533A\u95F4";
+    } else if (t < 0.75) {
+      chaosLevel = 2;
+      description = "\u6DF7\u6C8C\u533A (Chaos) \u2014 \u5141\u8BB8\u8DF3\u8FDB\u3001\u534A\u97F3\u51B2\u7A81\u3001\u8282\u594F\u4E0D\u89C4\u5219";
+    } else {
+      chaosLevel = 3;
+      description = "\u6E4D\u6D41\u533A (Turbulence) \u2014 \u51E0\u4E4E\u65E0\u7A33\u5B9A\u8C03\u5F0F\uFF0C\u58F0\u97F3\u63A5\u8FD1\u566A\u58F0";
+    }
+    return { temperatureK: t, chaosLevel, description };
+  }
+  function generateRhythmPattern(attractorType, lyapunov, activity) {
+    const N = 16;
+    const rhythm = new Array(N).fill(0);
+    const chaos = Math.max(0, Math.min(1, (lyapunov + 0.15) / 0.2));
+    let template;
+    switch (attractorType) {
+      case "stable":
+        template = [1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0];
+        break;
+      // 稳定：规整 3+1
+      case "periodic":
+        template = [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0];
+        break;
+      // 呼吸：对称波浪
+      case "chaotic":
+        template = [1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0];
+        break;
+      // 混沌：不规则
+      case "drifting":
+        template = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+        break;
+      // 漂游：松散
+      case "endangered":
+        template = [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0];
+        break;
+      // 濒危：稀疏
+      default:
+        template = [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0];
+    }
+    for (let i = 0; i < N; i++) {
+      if (Math.random() < chaos * 0.2) {
+        rhythm[i] = template[i] ? 0 : 1;
+      } else {
+        rhythm[i] = template[i];
+      }
+    }
+    for (let i = 0; i < N; i++) {
+      if (rhythm[i] === 0 && Math.random() < activity * 0.25) rhythm[i] = 1;
+    }
+    return rhythm;
+  }
+  var ATTRACTOR_SONIC_GENRE = {
+    stable: {
+      genreId: "minimal_ambient",
+      genreLabel: "\u6781\u7B80\u6C1B\u56F4 Minimal Ambient",
+      composers: ["Brian Eno", "Harold Budd", "Stars of the Lid"],
+      features: { density: "sparse", tempo: "slow", harmony: "static" },
+      description: '\u9759\u6001\u3001\u547C\u5438\u3001\u65E0\u7D27\u8FEB\u611F\u3002\u7C7B\u4F3C Brian Eno \u7684\u300AMusic for Airports\u300B\u3002\u5F53\u7A33\u5B9A\u5438\u5F15\u5B50\u4E0B\uFF0C\u58F0\u97F3\u7684"\u5B58\u5728\u611F"\u672C\u8EAB\u5C31\u662F\u7F8E\u7684\u3002'
+    },
+    periodic: {
+      genreId: "modal_jazz",
+      genreLabel: "\u8C03\u5F0F\u7235\u58EB Modal Jazz",
+      composers: ["Bill Evans", "Pat Metheny", "Philip Glass (minimalism)"],
+      features: { density: "balanced", tempo: "medium", harmony: "cyclic" },
+      description: "\u6709\u547C\u5438\u611F\u7684\u5F8B\u52A8\u3002Bill Evans \u7ECF\u5178\u8C03\u5F0F\u7235\u58EB\u6216 Philip Glass \u7B80\u7EA6\u6D3E\uFF1A\u6A21\u5F0F\u5FAA\u73AF\u4F46\u5185\u90E8\u6709\u5FAE\u5999\u53D8\u5316\u3002"
+    },
+    chaotic: {
+      genreId: "idm_glitch",
+      genreLabel: "IDM / Glitch",
+      composers: ["Aphex Twin", "Autechre", "Squarepusher"],
+      features: { density: "dense", tempo: "fast", harmony: "disjunct" },
+      description: "\u8DF3\u8131\u3001\u4E0D\u89C4\u5219\u3001\u6709\u4FB5\u7565\u6027\u3002\u7C7B\u4F3C Aphex Twin \u6216 Autechre\uFF1A\u6709\u5E8F\u4E0E\u6DF7\u6C8C\u4E4B\u95F4\u7684\u4E34\u754C\u70B9\u3002"
+    },
+    drifting: {
+      genreId: "ambient_techno",
+      genreLabel: "\u6C1B\u56F4 Techno Ambient Techno",
+      composers: ["Porter Ricks", "Gas", "Detroit Underground"],
+      features: { density: "flowing", tempo: "100-120 BPM", harmony: "drifting" },
+      description: "\u6F02\u6E38\u3001\u65E0\u5B9A\u5411\u3001\u6301\u7EED\u6D41\u52A8\u3002\u7C7B\u4F3C Porter Ricks \u6216 Gas\uFF1A\u8282\u594F\u5B58\u5728\u4F46\u4E0D\u662F\u4E3B\u89C6\u89D2\u3002"
+    },
+    endangered: {
+      genreId: "drone_lowercase",
+      genreLabel: "\u6781\u4F4E\u9891 Drone / Lowercase",
+      composers: ["Steve Roach", "Asmus Tietchens", "Taylor Deupree"],
+      features: { density: "extremely_sparse", tempo: "no_pulse", harmony: "mono" },
+      description: "\u6781\u7AEF\u7A00\u758F\u3001\u51E0\u4E4E\u6D88\u5931\u3002\u7C7B\u4F3C Steve Roach \u7684 Drone \u6216 Lowercase \u6D41\u6D3E\uFF1A\u5FAE\u5C0F\u7684\u58F0\u97F3\u5728\u5DE8\u5927\u7684\u5BC2\u9759\u4E2D\u6D6E\u73B0\u3002"
+    },
+    extinct: {
+      genreId: "silence",
+      genreLabel: "\u6C89\u9ED8 Silence",
+      composers: [`John Cage (4'33")`, "Cage, Feldman"],
+      features: { density: "zero", tempo: "no_pulse", harmony: "none" },
+      description: `\u6C89\u9ED8\u672C\u8EAB\u4E5F\u662F\u58F0\u97F3\u3002\u5F53\u751F\u547D\u7184\u706D\u65F6\uFF0C\u53C2\u8003 John Cage\u300A4'33"\u300B\u2014\u2014\u5BC2\u9759\u5373\u662F\u7B54\u6848\u3002`
+    }
+  };
+  function attractorToSonicGenre(attractorType, lyapunov, fractal) {
+    const primary = ATTRACTOR_SONIC_GENRE[attractorType] || ATTRACTOR_SONIC_GENRE.stable;
+    if (fractal > 1.45 && fractal < 1.55 && primary.genreId !== "modal_jazz") {
+      return {
+        ...primary,
+        suggestion: `\u8FB9\u754C fractal D=${fractal.toFixed(2)}\uFF08Hall-Petch \u6700\u4F18\uFF01\uFF09\uFF0C\u5EFA\u8BAE\u6DF7\u5165 ${ATTRACTOR_SONIC_GENRE.periodic.genreLabel} \u7684\u5FAA\u73AF\u548C\u58F0`
+      };
+    }
+    return { ...primary, suggestion: null };
+  }
+
   // src/audio.js
   function midiToFreq(m) {
     return 440 * Math.pow(2, (m - 69) / 12);
@@ -4579,6 +4732,42 @@ body.motion-off *::after {
       const fractal = m.fractal !== void 0 ? clamp(m.fractal, 0.5, 2) : 1;
       const energyTotal = m.energy?.total ?? 1;
       const energyNorm = clamp(Math.log10(energyTotal + 0.01) / 1, 0, 1);
+      const buehlerScale = selectiveImperfectionScale(fractal);
+      this._activeScaleDegrees = buehlerScale.degrees;
+      const chaosKnob = edgeOfChaosKnob(lyapunov);
+      this._chaosTemperature = chaosKnob.temperatureK;
+      this._chaosLevel = chaosKnob.chaosLevel;
+      mapping.strictness = clamp(1 - chaosKnob.temperatureK * 0.55, 0.2, 1);
+      this._currentMaxJump = chaosKnob.temperatureK < 0.25 ? 2 : chaosKnob.temperatureK < 0.5 ? 7 : 12;
+      this._rhythmPattern = generateRhythmPattern(attractorType, lyapunov, activity);
+      const { permEntropy, syncopation } = (() => {
+        let permEnt = 0, sync = 0;
+        const windowSize = 3;
+        const counts = {};
+        const rp = this._rhythmPattern;
+        for (let i = 0; i <= rp.length - windowSize; i++) {
+          const p = rp.slice(i, i + windowSize).join("");
+          counts[p] = (counts[p] || 0) + 1;
+        }
+        const total = rp.length - windowSize + 1;
+        for (const c of Object.values(counts)) {
+          const pp = c / total;
+          if (pp > 0) permEnt -= pp * Math.log2(pp);
+        }
+        permEnt = permEnt / 3;
+        let on = 0, off = 0;
+        for (let i = 0; i < rp.length; i++) if (rp[i]) i % 4 === 0 ? on++ : off++;
+        sync = on + off > 0 ? off / (on + off) : 0;
+        return { permEntropy: permEnt, syncopation: sync };
+      })();
+      this._permEntropy = permEntropy;
+      this._syncopation = syncopation;
+      const genre = attractorToSonicGenre(attractorType, lyapunov, fractal);
+      if (!this._lastGenre || this._lastGenre.genreId !== genre.genreId) {
+        this._lastGenre = genre;
+        console.log("[SONIC GENRE]", genre.genreLabel, "|", genre.description.split("\uFF08")[0]);
+        if (genre.suggestion) console.log("  \u21B3", genre.suggestion);
+      }
       const targetBPM = HEARTBEAT_BPM[attractorType] ?? 72;
       const withActivity = targetBPM + activity * 25;
       this._heartbeatBPM = this._heartbeatBPM * 0.92 + withActivity * 0.08;

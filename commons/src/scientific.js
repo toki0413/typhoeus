@@ -140,12 +140,15 @@ export class ReactionDiffusionEngine {
     this.w = w;
     this.h = h;
     this.kind = 'reaction-diffusion';
-    this.preset = opts.preset || 'gs_spots';
-    this.params = { ...REACTION_DIFFUSION_PRESETS[this.preset] };
+    // 先取 preset defaults，再用用户传的 opts 覆盖（包括 engine 类型！）
+    this.preset = opts.preset || opts.engine || 'gs_spots';
+    const defaults = REACTION_DIFFUSION_PRESETS[this.preset] || {};
+    this.params = { ...defaults, ...opts };  // 用户参数优先
+    this.engineType = this.params.engine || this.preset;
     this.boundary = opts.boundary || 'torus';
-    this.dt = this.params.dt;
-    this.u = new Float32Array(w * h);   // 激活场
-    this.v = new Float32Array(w * h);   // 抑制场
+    this.dt = this.params.dt || 1.0;
+    this.u = new Float32Array(w * h);
+    this.v = new Float32Array(w * h);
     this.t = 0;
     this._initField(opts.pattern || 'ring');
   }
@@ -406,10 +409,12 @@ export function computeSpatialPeriod(v, w, h) {
 /* 科学模式 metrics 汇总（替换拓扑指标）                            */
 /* -------------------------------------------------------------- */
 export function computeScientificMetrics(v, u, w, h, engineType) {
-  const lyapunov = computeLyapunov(v, w, h);
-  const fractal = computeFractalDimension(v, w, h, 0.3);
-  const energy = u ? computeFieldEnergy(u, v, w, h) : { gradEnergy: 0, interactionEnergy: 0, total: 0 };
-  const spatialPeriod = computeSpatialPeriod(v, w, h);
+  // uField 才有真实 pattern（vField 在 Gray-Scott 等引擎里会饱和到 1.0）
+  // 所以用 uField 算 Lyapunov、分形维数、空间周期
+  const lyapunov = computeLyapunov(u, w, h);
+  const fractal = computeFractalDimension(u, w, h, 0.3);
+  const energy = computeFieldEnergy(u, v, w, h);
+  const spatialPeriod = computeSpatialPeriod(u, w, h);
 
   // 从 Lyapunov 指数判定吸引子类型（比拓扑指标科学）
   let attrType;
