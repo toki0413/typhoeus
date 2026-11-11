@@ -652,6 +652,7 @@ export class AudioEngine {
   /* ---- Layer 1: Heartbeat tone ---- */
   _heartbeatTone(freq, when, peak = 0.35) {
     const ctx = this.ctx;
+    if (!Number.isFinite(freq) || freq <= 0) return;   // 防御：非法频率直接跳过
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -669,6 +670,7 @@ export class AudioEngine {
   /* ---- Layer 2: Chord pad tone（长 attack，slow rise）---- */
   _chordTone(freq, when, dur, amp = 0.14, wave = 'triangle') {
     if (this.voices > 24) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;   // 防御：非法频率不能中断 tick 循环
     const ctx = this.ctx;
     const osc = ctx.createOscillator();
     const filter = ctx.createBiquadFilter();
@@ -750,6 +752,7 @@ export class AudioEngine {
   _tone(freq, when, dur, peak, wave, send = 0.5, detune = 0) {
     const ctx = this.ctx;
     if (this.voices > 26) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;   // 防御：非法频率直接跳过
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = wave;

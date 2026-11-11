@@ -25,6 +25,7 @@ import {
 } from '../src/music2.js';
 import { discretizeField, adhesionEnergy, simulateRD, CPM_DEFAULTS } from '../src/cpm.js';
 import { matchPatternLibrary, buildDiscoveryRecord } from '../src/patterns.js';
+import { getChordNotes } from '../src/music.js';
 import { mulberry32, hashString } from '../src/rng.js';
 
 /* ================================================================
@@ -300,6 +301,23 @@ test('patterns: 发现记录含 environment + 稳定 fingerprint', () => {
 
   const bare = buildDiscoveryRecord({ seed: { genome: {} } }, metrics, []);
   assert.deepEqual(bare.environment, { noise: null, constraint: null, timeScale: null });
+});
+
+/* ================================================================
+ * music.js · 和弦池
+ * ================================================================ */
+test('music: 所有和弦进行 × 五声音阶都产生有限 MIDI（回归：曾 NaN 中断音频）', () => {
+  const degrees = [0, 2, 4, 7, 9];   // 大调五声
+  const roots = [0, 4, 7, 11, 9, 12, 1, 5, 2, 3, 6, 8, 10];
+  for (const root of roots) {
+    for (const density of ['root', 'power', 'triads', 'sevenths', 'ninths']) {
+      const notes = getChordNotes(density, root, degrees, 3, 60);
+      assert.ok(notes.length >= 1, `${density}/${root}`);
+      for (const n of notes) assert.ok(Number.isFinite(n), `${density}/${root} → ${n}`);
+    }
+  }
+  // 越界音级按半音解释（7 = 纯五度）
+  assert.deepEqual(getChordNotes('root', 7, degrees, 3, 60), [67]);
 });
 
 /* ================================================================

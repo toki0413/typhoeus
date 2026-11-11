@@ -225,11 +225,17 @@ export function applyVoiceLeading(contour, maxJump = 7) {
 
 /* ---- 和弦池 ---- */
 export function getChordNotes(densityType, chordRootDegree, scaleDegrees, octave, rootMidi) {
-  const chordRootMidi = rootMidi + scaleDegrees[chordRootDegree];
+  /* PROGRESSIONS 里的值有两套语义：
+     - 0..scaleDegrees.length-1 → 音阶索引（如 4 = 徵）
+     - 更大的值（5/7/9/11/12）→ 半音数（V、vi、maj7 等）
+     之前统一按索引取，越界得到 undefined → midi NaN → setValueAtTime 抛错，
+     整条 tick 音频链被中断。 */
+  const semis = (i) => (Number.isInteger(i) && i >= 0 && i < scaleDegrees.length ? scaleDegrees[i] : i);
+  const chordRootMidi = rootMidi + semis(chordRootDegree);
   const notes = [chordRootMidi];
   if (densityType === 'root') return notes;
   if (densityType === 'power') {
-    return [chordRootMidi, chordRootMidi + scaleDegrees[(chordRootDegree + 2) % 5] - scaleDegrees[chordRootDegree]];
+    return [chordRootMidi, chordRootMidi + semis((chordRootDegree + 2) % 5) - semis(chordRootDegree)];
   }
   const stepInterval = [0, 2, 4, 7, 9];
   for (const add of [2, 4]) notes.push(chordRootMidi + stepInterval[add]);
