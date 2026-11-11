@@ -245,3 +245,221 @@ export function computeAudioChain(m, petState, exoticEnv, music2) {
 }
 
 /* ---- 底部已移到 config.js：EXTREME_PHYSICS / EXTREME_AUDIO_TEMPO ---- */
+
+/* ================================================================
+ * 🧬 Life Operator Self-Evolution Bridges
+ *    参考: arXiv 2609.00068 "Life Operators: a self-evolving framework
+ *          for multiscale life modelling" (Fudan + HKUST, 2026)
+ *
+ * Commons 实现了论文的三个核心 Bridge Operator：
+ *
+ *   B1: Auto-Tuning Bridge
+ *       Lyapunov 偏离 edge-of-chaos → 微调 diffusionMult / dtMult
+ *       让系统永远活跃（不冻结、不爆炸）
+ *
+ *   B2: Pet → Physics Back-Influence Bridge
+ *       Pet mood 反向注入物理
+ *       Pet sick  → 微增 globalDecay（更"沉重"）
+ *       Pet happy → 微增 noise（更多生机）
+ *
+ *   B3: Crowd Feedback Bridge
+ *       top-N 发现的参数组合反哺 defaultEnv
+ *       玩家贡献的数据 → 系统默认物理直觉
+ * ================================================================ */
+
+/* ---- B1: Auto-Tuning Bridge ----
+ * Lyapunov 偏离 edge-of-chaos（≈0 附近）时，微调 diffusionMult 和 dtMult。
+ * 论文 Evidence-Gated Self-Evolution 的直接实现：
+ *   "operators can revise their own parameters when observations contradict
+ *    their predictions"
+ *
+ * 目标：让系统永远活跃。极端环境默认参数可能过强（冻结）或过弱（爆炸），
+ * Auto-Tuning 会自动把它拉回 edge-of-chaos 邻域。
+ *
+ * 返回：{ diffusionMult, dtMult } delta — 调用者加到现有 physics 上
+ */
+export function autoTunePhysics(metrics, currentPhysics) {
+  const lyap = metrics?.lyapunov;
+  if (!Number.isFinite(lyap)) return { diffusionMult: 0, dtMult: 0 };
+
+  // Edge-of-chaos 邻域：Lyapunov 在 [-0.3, +0.15] 之间最活跃
+  const EDGE_LO = -0.30;
+  const EDGE_HI =  0.15;
+  const EDGE_CENTER = (EDGE_LO + EDGE_HI) / 2;  // ≈ -0.075
+
+  const diffMult = currentPhysics?.diffusionMult ?? 1.0;
+  const dtMult   = currentPhysics?.dtMult ?? 1.0;
+
+  let dDiff = 0, dDt = 0;
+
+  if (lyap < EDGE_LO) {
+    /* 冻结态：Lyapunov 太负 → 需要更多扩散打破冻结
+       论文 P→E Bridge: "evolution operators may be revised when
+       observed dynamics are too stable" */
+    const severity = Math.min(1.0, (EDGE_LO - lyap) / 3.0);  // 严重度 0~1
+    dDiff = +0.02 * severity;   // 每次只微调 2%（平滑收敛）
+    dDt   = +0.01 * severity;
+
+  } else if (lyap > EDGE_HI) {
+    /* 爆炸态：Lyapunov 太正 → 需要少一点扩散抑制爆炸
+       论文 P→E Bridge: "operators reduce activity when observations
+       indicate instability" */
+    const severity = Math.min(1.0, (lyap - EDGE_HI) / 1.5);
+    dDiff = -0.02 * severity;
+    dDt   = -0.01 * severity;
+
+  } else {
+    /* 活跃区：微调 dtMult 让 Lyapunov 向 CENTER 靠拢 */
+    const drift = (EDGE_CENTER - lyap) / (EDGE_HI - EDGE_LO);  // -1~1
+    dDt = 0.005 * drift;  // 很小的漂移力
+  }
+
+  // 硬边界保护（不让物理调到完全不合理）
+  const newDiff = Math.max(0.1, Math.min(5.0, diffMult + dDiff));
+  const newDt   = Math.max(0.1, Math.min(3.0, dtMult + dDt));
+
+  return { diffusionMult: newDiff, dtMult: newDt };
+}
+
+/* ---- B2: Pet → Physics Back-Influence Bridge ----
+ * 论文的 "bidirectional bridges between evolution and perception"
+ * — Pet 作为 Perception Operator 的状态，反向注入 Evolution Operator。
+ *
+ * 这让 Commons 不再是"观察者看一个被动的系统"，
+ * 而是"观察者的情绪会改变被观察对象的物理"。
+ *
+ * 返回：physics patch 对象（调用者 Object.assign 到现有 physics）
+ */
+export function petToPhysicsBridge(petState) {
+  if (!petState || !petState.mood) return {};
+
+  const mood = petState.mood;
+  const patch = {};
+
+  switch (mood) {
+    case 'sick':
+      /* Pet 病了 → 物理更"沉重"（globalDecay 微增 + 扩散稍慢）
+         直觉：生病时连物理演化都变慢了 */
+      patch.globalDecay = 0.0015;   // 轻微衰减（不影响稳定性）
+      patch._petInfluence = 'sick: decay+diff-';
+      break;
+
+    case 'sad':
+      /* Pet 伤心 → 物理稍"沉重"（globalDecay 微增）*/
+      patch.globalDecay = 0.0008;
+      patch._petInfluence = 'sad: decay+';
+      break;
+
+    case 'waiting':
+      /* Pet 等待 → 不影响物理（中性）*/
+      patch._petInfluence = 'waiting: neutral';
+      break;
+
+    case 'content':
+      /* Pet 满足 → 稍增噪声（更多生机感）*/
+      patch._petNoiseBoost = 0.02;
+      patch._petInfluence = 'content: noise+';
+      break;
+
+    case 'happy':
+      /* Pet 开心 → 物理最活跃（noise 稍增 + dtMult 微增）
+         直觉：好心情让演化节奏变快 */
+      patch._petNoiseBoost = 0.04;
+      patch._petDtBoost = 0.05;
+      patch._petInfluence = 'happy: noise+dt+';
+      break;
+
+    default:
+      break;
+  }
+
+  return patch;
+}
+
+/* ---- B3: Crowd Feedback Bridge ----
+ * 论文的 "self-evolving: operators learn from evidence"
+ * — top-N 发现的参数组合自动存到 localStorage，
+ * 下次启动时自动合并进 defaultEnv 的默认值。
+ *
+ * 这是 Foldit 式众包科学的轻量实现：
+ *   玩家发现 → 贡献 → 系统下次默认更接近"好种子"
+ *
+ * 返回：promise<{ updated: boolean, seedCount: number }>
+ */
+const CROWD_KEY = 'commons.crowdFeedback.v1';
+const CROWD_TOP_N = 5;  // 只取 top 5 发现的参数
+const CROWD_LEARN_RATE = 0.1;  // 新发现权重 10%，旧默认保留 90%
+
+export function crowdFeedbackBridge(newDiscovery) {
+  try {
+    if (!newDiscovery) return { updated: false, seedCount: 0 };
+    const lb = typeof safeStorage !== 'undefined'
+      ? safeStorage?.get('commons.leaderboard.v1', []) ?? []
+      : JSON.parse(localStorage.getItem('commons.leaderboard.v1') || '[]');
+
+    if (lb.length === 0) return { updated: false, seedCount: 0 };
+
+    // 取 top-N（按 similarity 排序）
+    const ranked = [...lb].sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0));
+    const topN = ranked.slice(0, CROWD_TOP_N);
+
+    // 检查有没有新发现进了 top-N
+    const isNewTop = topN.some(d => d.fingerprint === newDiscovery.fingerprint);
+    if (!isNewTop) return { updated: false, seedCount: topN.length };
+
+    // 众包平均：所有 top-N 发现的 env 参数取加权平均
+    // 权重 = similarity^2（越相似权重越高）
+    let totalW = 0;
+    const envSum = { noise: 0, constraint: 0, timeScale: 0 };
+    for (const d of topN) {
+      const w = Math.pow((d.similarity ?? 50) / 100, 2);
+      totalW += w;
+      const e = d.recipe?.env ?? {};
+      envSum.noise     += (e.noise ?? 0.02) * w;
+      envSum.constraint += (e.constraint ?? 0.15) * w;
+      envSum.timeScale += (e.timeScale ?? 1.0) * w;
+    }
+    if (totalW === 0) return { updated: false, seedCount: topN.length };
+
+    const crowdEnv = {
+      noise:      envSum.noise / totalW,
+      constraint: envSum.constraint / totalW,
+      timeScale:  envSum.timeScale / totalW,
+    };
+
+    // 平滑学习：新参数 = 90% 旧默认 + 10% 众包均值
+    const prev = typeof safeStorage !== 'undefined'
+      ? safeStorage?.get(CROWD_KEY, null)
+      : JSON.parse(localStorage.getItem(CROWD_KEY) || 'null');
+
+    const oldDefault = prev ?? { noise: 0.02, constraint: 0.15, timeScale: 1.0 };
+    const learned = {
+      noise:      oldDefault.noise      * (1 - CROWD_LEARN_RATE) + crowdEnv.noise      * CROWD_LEARN_RATE,
+      constraint: oldDefault.constraint * (1 - CROWD_LEARN_RATE) + crowdEnv.constraint * CROWD_LEARN_RATE,
+      timeScale:  oldDefault.timeScale  * (1 - CROWD_LEARN_RATE) + crowdEnv.timeScale  * CROWD_LEARN_RATE,
+      updatedAt:  Date.now(),
+      sourceSeedCount: topN.length,
+    };
+
+    // 存回 localStorage
+    if (typeof safeStorage !== 'undefined') {
+      safeStorage?.set(CROWD_KEY, learned);
+    } else {
+      localStorage.setItem(CROWD_KEY, JSON.stringify(learned));
+    }
+
+    return { updated: true, seedCount: topN.length, learned };
+  } catch (e) {
+    return { updated: false, seedCount: 0, error: e.message };
+  }
+}
+
+/* ---- 读众包默认值（engines.js defaultEnv 会调这个）---- */
+export function getCrowdDefaultEnv() {
+  try {
+    const raw = typeof safeStorage !== 'undefined'
+      ? safeStorage?.get(CROWD_KEY, null)
+      : JSON.parse(localStorage.getItem(CROWD_KEY) || 'null');
+    return raw && typeof raw === 'object' ? raw : null;
+  } catch { return null; }
+}

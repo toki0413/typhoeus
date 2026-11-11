@@ -1,5 +1,7 @@
 // Life layer: Conway / rule variants / simplified Lenia.
 // Deterministic given (genome, environment, rngSeed). Includes structural metrics.
+
+import { autoTunePhysics } from './physics.js';  /* 🧬 Life Operator B1: Auto-Tuning Bridge */
 //
 // ========== 参数表（完整范围） ==========
 //
@@ -955,7 +957,13 @@ export class ScientificEngine {
     let densitySum = 0;
     for (let i = 0; i < v.length; i++) densitySum += v[i];
     const density = densitySum / v.length;
-    return {
+
+    /* 🧬 Life Operator B1: Auto-Tuning Bridge
+       每次算完 Lyapunov 后，检查是否需要微调 diffusionMult / dtMult。
+       论文 Evidence-Gated Self-Evolution:
+         "operators revise their parameters when observations contradict predictions"
+       只在极端环境 physics 存在时 auto-tune（普通环境保持默认）。*/
+    const result = {
       density,
       entropy: sci.lyapunov + 1.5,
       period: sci.spatialPeriod,
@@ -970,6 +978,17 @@ export class ScientificEngine {
       type: sci.attrType,
       typeLabel: sci.typeLabel,
     };
+
+    if (this._physics) {
+      const tuned = autoTunePhysics(result, this._physics);
+      if (tuned) {
+        this._physics.diffusionMult = tuned.diffusionMult;
+        this._physics.dtMult = tuned.dtMult;
+        result._autoTuned = { diffusionMult: tuned.diffusionMult, dtMult: tuned.dtMult };
+      }
+    }
+
+    return result;
   }
 
   /* ==== CPM Monte Carlo — 玩家触发形态调谐 ==== */
