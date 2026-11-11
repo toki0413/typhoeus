@@ -2,6 +2,8 @@
 /* Scientific Kernel — Turing 反应-扩散 + 科学指标库                          */
 /* ========================================================================== */
 
+import { PHYSICS_DEFAULTS, SCIENCE_THRESHOLDS } from './config.js';
+
 // clamp（自包含，避免跨模块依赖 rng.js 是否 export）
 const clampSafe = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
 
@@ -202,9 +204,11 @@ export class ReactionDiffusionEngine {
   step() {
     const { w, h } = this;
     const physics = this._physics;
-    const diffMult = physics?.diffusionMult ?? 1.0;
-    const dtMult = physics?.dtMult ?? 1.0;
+    const diffMult = physics?.diffusionMult ?? PHYSICS_DEFAULTS.multipliers.diffusion;
+    const dtMult = physics?.dtMult ?? PHYSICS_DEFAULTS.multipliers.dt;
     const globalDecay = physics?.globalDecay ?? 0;
+    const gDecayU = physics?.globalDecayU ?? PHYSICS_DEFAULTS.multipliers.globalDecayU;
+    const gDecayV = physics?.globalDecayV ?? PHYSICS_DEFAULTS.multipliers.globalDecayV;
     const boost = physics?.reactionBoost ?? null;
     const fMult = boost?.fMult ?? 1.0;
     const kMult = boost?.kMult ?? 1.0;
@@ -259,8 +263,8 @@ export class ReactionDiffusionEngine {
             v_new[idx] *= physics.tidalField[idx];
           }
           if (globalDecay > 0) {
-            u_new[idx] *= (1 - globalDecay);
-            v_new[idx] *= (1 - globalDecay * 0.5);
+            u_new[idx] *= (1 - globalDecay * gDecayU);
+            v_new[idx] *= (1 - globalDecay * gDecayV);
           }
         }
       }
@@ -285,8 +289,8 @@ export class ReactionDiffusionEngine {
           v_new[idx] = clampSafe(vv + dt * dtMult * (Dv * lapV - (uu - a + b * vv) / c), -2, 2);
           if (physics?.tidalField) v_new[idx] *= physics.tidalField[idx];
           if (globalDecay > 0) {
-            u_new[idx] *= (1 - globalDecay);
-            v_new[idx] *= (1 - globalDecay * 0.5);
+            u_new[idx] *= (1 - globalDecay * gDecayU);
+            v_new[idx] *= (1 - globalDecay * gDecayV);
           }
         }
       }
@@ -310,8 +314,8 @@ export class ReactionDiffusionEngine {
           v_new[idx] = clampSafe(vv + dt * dtMult * (Dv * lapV + B * uu - u2v), 0, 10);
           if (physics?.tidalField) v_new[idx] *= physics.tidalField[idx];
           if (globalDecay > 0) {
-            u_new[idx] *= (1 - globalDecay);
-            v_new[idx] *= (1 - globalDecay * 0.5);
+            u_new[idx] *= (1 - globalDecay * gDecayU);
+            v_new[idx] *= (1 - globalDecay * gDecayV);
           }
         }
       }
@@ -494,17 +498,19 @@ export function computeScientificMetrics(v, u, w, h, engineType) {
   const spatialPeriod = computeSpatialPeriod(u, w, h);
 
   // 从 Lyapunov 指数判定吸引子类型（比拓扑指标科学）
+  const LT = SCIENCE_THRESHOLDS.lyapunov;
   let attrType;
-  if (lyapunov > 0.15) attrType = 'chaotic';
-  else if (lyapunov > 0.02) attrType = 'periodic';
-  else if (lyapunov > -0.01) attrType = 'stable';
+  if (lyapunov > LT.chaotic) attrType = 'chaotic';
+  else if (lyapunov > LT.periodic) attrType = 'periodic';
+  else if (lyapunov > LT.stable) attrType = 'stable';
   else attrType = 'stable';
 
   // 分形维数判定"复杂度"
+  const FT = SCIENCE_THRESHOLDS.fractal;
   let complexity;
-  if (fractal > 1.6) complexity = '高度复杂';
-  else if (fractal > 1.3) complexity = '中等复杂';
-  else if (fractal > 1.1) complexity = '低复杂度';
+  if (fractal > FT.veryHigh) complexity = '高度复杂';
+  else if (fractal > FT.medium) complexity = '中等复杂';
+  else if (fractal > FT.low) complexity = '低复杂度';
   else complexity = '简单';
 
   return {

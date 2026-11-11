@@ -2544,7 +2544,11 @@ function onEnvClick(e) {
       state.sim.width,
       state.sim.height
     );
-    if (physicsObj && state.sim.setPhysics) {
+    if (physicsObj?._nonScientific) {
+      /* 🔴 Attention 审计修复：非科学引擎收到明确降级标记 → toast 提示用户 */
+      console.warn(`⚠️ ${physicsObj._reason}`);
+      toast(`⚠️ 此引擎是 ${state.recipe.seed.engine} 系，极端物理参数仅作用于科学引擎（反应-扩散）。环境 slider 已生效。`, 3200, 'warn');
+    } else if (physicsObj && state.sim.setPhysics) {
       state.sim.setPhysics(physicsObj);
       console.log(`🧪 Exotic physics injected → ${target.label} | D×${physicsObj.diffusionMult ?? 1} | dt×${physicsObj.dtMult ?? 1}${physicsObj.reactionBoost ? ` | f×${physicsObj.reactionBoost.fMult ?? 1}/k×${physicsObj.reactionBoost.kMult ?? 1}` : ''}${physicsObj.perturbation ? ` | perturbation=${physicsObj.perturbation.rate}步/${physicsObj.perturbation.intensity}` : ''}`);
     }

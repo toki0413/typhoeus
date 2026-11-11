@@ -5,22 +5,36 @@
  * 物理参数**。把这层从 app.js → engines.js 完全解耦出来：
  *
  *   EXOTIC_ENVIRONMENTS[id]
- *     ↓ 物理变换（physics.js）
+ *     ↓ 物理变换（physics.js，读 config.js 里的 EXTREME_PHYSICS 表）
  *   { D_u, D_v, f, k, dt, noiseField, constraintField, perturbation }
  *     ↓ 注入 ScientificEngine.step()
  *   真实演化
  *
- * 物理基础：
- *   金星高压 → 流体高压下扩散系数 ∝ 1/ρ × D₀（ρ↑ → D↓ ×0.5）
- *   木卫二热梯度 → 扩散系数不均匀（上热下冷 → D_u 上半部 ×1.2）
- *   火星低重力 → 低重力下分子运动更自由 → D×1.5，约束弱
- *   土星环碎片场 → 周期性粒子撞击（每 3 步注入 0.4 强度扰动）
- *   黑洞潮汐 → 潮汐拉伸 → 边界条件变成"指向中心的衰减"
- *   原始地球 → 高扰动 + 弱约束 = Turing 不稳定性起点
+ * 物理基础（config.js 有注释）：
+ *   金星 → D×0.5，globalDecay=0.002
+ *   木卫二 → 热梯度 D_u 1.2→0.8
+ *   火星 → D×1.5, dt×1.2
+ *   土星环 → 每 3 步扰动 0.45
+ *   黑洞 → dt×0.4 + 潮汐场衰减 0.6
  * ================================================================ */
+
+import { EXTREME_PHYSICS as CONFIG_EXTREME, EXTREME_AUDIO_TEMPO, ENV_DEFAULTS } from './config.js';
+
+/* ---- 对外导出音频 tempo modifier ---- */
+export const _EXOTIC_AUDIO_TEMPO = EXTREME_AUDIO_TEMPO;
+export const _EXOTIC_PHYSICS_KEYS = Object.keys(CONFIG_EXTREME);
+
+/* 科学引擎白名单 —— 只有这些引擎能收到 physics.js 的逐格物理注入 */
+const SCIENCE_ENGINES = new Set(['grayScott', 'fitzHughNagumo', 'brusselator', 'scientific']);
 
 /**
  * 根据 env + 极端环境 id 返回物理重参数化对象
+ *
+ * 【Attention 审计修复】非科学引擎（Conway/Lenia/Voronoi）现在不会 silent fail 了：
+ *   —— 检测 engineType 是否在 SCIENCE_ENGINES 里
+ *   —— 如果不在，返回 { _nonScientific: true } 明确标记
+ *   —— app.js 收到后 toast 提示用户
+ *
  * engine 自动识别 grayScott / brusselator / fitzHughNagumo 再给对的参数
  */
 export function applyExoticPhysics(env, engineType, w, h) {
@@ -28,164 +42,163 @@ export function applyExoticPhysics(env, engineType, w, h) {
   if (!id) return null;  // 非极端环境 → 不改物理，用默认
   const preset = EXOTIC_PHYSICS[id];
   if (!preset) return null;
+
+  /* 🔴 Attention 反模式修复：明确降级标记，不 silent fail */
+  if (!SCIENCE_ENGINES.has(engineType)) {
+    return {
+      _nonScientific: true,
+      _reason: `engine "${engineType}" 不支持逐格 physics 注入（仅 grayScott/fitzHughNagumo/brusselator）`,
+      diffusionMult: 1.0,   // 保守默认值
+      dtMult: 1.0,
+      reactionBoost: null,
+    };
+  }
+
   return preset.transform(env, engineType, w, h);
 }
 
-/* ---- 物理参数重参数化表 ---- */
+/* ---- 物理参数重参数化表：transform() 函数体从 CONFIG_EXTREME 读参数 ---- */
 const EXOTIC_PHYSICS = {
 
   /* ============================================================
-   * 🌍 原始地球（38 亿年）
-   * 物理基础：高扰动 + 低约束 + 适中时间尺度
-   * → Turing 不稳定性最容易发生的条件
-   * → Buehler mid-defect corridor 最容易命中
+   * 🌍 原始地球
    * ============================================================ */
   'exo-primitive': {
-    label: '原始地球',
-    desc: '高扰动 · 弱约束 → Turing 不稳定性起点',
+    label: CONFIG_EXTREME.exoPrimitive.label,
     transform(env, eng, w, h) {
+      const cfg = CONFIG_EXTREME.exoPrimitive;
       return {
-        // 适度提高噪声 + 稍微放宽扩散（让模式更容易长出来）
         noiseField: makeUniformNoise(w, h, env.noise || 0.15),
         constraintField: makeUniformConstraint(w, h, env.constraint || 0.1),
-        // 反应-扩散：稍微增大 f（创造更高活性）
-        reactionBoost: eng === 'grayScott' ? { fMult: 1.25, kMult: 1.0 } : null,
-        dtMult: 1.1,  // 稍微加速
+        diffusionMult: cfg.diffusionMult,
+        reactionBoost: eng === 'grayScott' ? { fMult: cfg.reactionBoost.fMult, kMult: cfg.reactionBoost.kMult } : null,
+        dtMult: cfg.dtMult,
         perturbation: null,
       };
     }
   },
 
   /* ============================================================
-   * 🔥 金星高压（92 atm, 460°C）
-   * 物理基础：流体高压下扩散系数 D ∝ 1/ρ × D₀
-   * → D_u/D_v × 0.5，时间慢（env.timeScale 已做了，这里再加物理效应）
-   * → 高压让碰撞概率高 → 反应速率 f × 1.3
+   * 🔥 金星高压
    * ============================================================ */
   'exo-venus': {
-    label: '金星高压',
-    desc: '高压下扩散慢 + 反应速率高',
+    label: CONFIG_EXTREME.exoVenus.label,
     transform(env, eng, w, h) {
+      const cfg = CONFIG_EXTREME.exoVenus;
+      const rb = cfg.reactionBoost;
       return {
-        // 高压：扩散减半，反应加快
-        diffusionMult: 0.5,
-        reactionBoost: eng === 'grayScott' ? { fMult: 1.3, kMult: 0.85 }
-                    : eng === 'brusselator' ? { A_Mult: 1.2, B_Mult: 1.15 }
-                    : eng === 'fitzHughNagumo' ? { aMult: 0.85, bMult: 1.0 }
-                    : null,
-        dtMult: 0.95,  // 高压下演化略慢
-        noiseField: makeUniformNoise(w, h, 0.0),  // 高压 → 无随机扰动
-        constraintField: makeUniformConstraint(w, h, 0.95),  // 严格约束
+        diffusionMult: cfg.diffusionMult,
+        reactionBoost: eng === 'grayScott'
+          ? { fMult: rb.fMult, kMult: rb.kMult }
+          : eng === 'brusselator'
+          ? { A_Mult: rb.A_Mult, B_Mult: rb.B_Mult }
+          : eng === 'fitzHughNagumo'
+          ? { aMult: rb.aMult, bMult: rb.bMult }
+          : null,
+        dtMult: cfg.dtMult,
+        noiseField: makeUniformNoise(w, h, 0.0),
+        constraintField: makeUniformConstraint(w, h, 0.95),
         perturbation: null,
-        // 金星效应：额外的全局衰减（像"重力压"）
-        globalDecay: 0.002,
+        globalDecay: cfg.globalDecay,
       };
     }
   },
 
   /* ============================================================
-   * 🧊 木卫二冰下海洋（~100km 冰层, 冰下液态水）
-   * 物理基础：热梯度导致扩散系数不均匀（上热下冷）
-   * → D_u 上半部 × 1.2（热），下半部 × 0.8（冷）
-   * → 这种不均匀会自然产生螺旋波（Brusselator/FHN 的经典现象）
+   * 🧊 木卫二冰下（热梯度 → 构造 Float32Array）
    * ============================================================ */
   'exo-europa': {
-    label: '木卫二冰下',
-    desc: '热梯度 → 不均匀扩散 → 螺旋波涌现',
+    label: CONFIG_EXTREME.exoEuropa.label,
     transform(env, eng, w, h) {
-      // 构造垂直热梯度：顶部 y=0 热 (D×1.2)，底部 y=h 冷 (D×0.8)
+      const cfg = CONFIG_EXTREME.exoEuropa;
+      /* 从 config 读热梯度参数 */
+      const tg = cfg.thermalGradient;
       const D_u_field = new Float32Array(w * h);
       const D_v_field = new Float32Array(w * h);
       for (let y = 0; y < h; y++) {
-        const t = y / h;  // 0 (top, 热) → 1 (bottom, 冷)
-        const grad = 1.2 - 0.4 * t;  // 1.2 → 0.8
-        const gradV = 1.1 - 0.3 * t;
+        const progress = y / h;  // 0 (top, 热) → 1 (bottom, 冷)
+        // 从 tg.top → tg.bottom 线性过渡
+        const gradU = tg.top + (tg.bottom - tg.top) * progress;
+        const gradV = tg.topV + (tg.bottomV - tg.topV) * progress;
         for (let x = 0; x < w; x++) {
           const idx = y * w + x;
-          D_u_field[idx] = grad;
+          D_u_field[idx] = gradU;
           D_v_field[idx] = gradV;
         }
       }
       return {
-        diffusionMult: 1.0,
+        diffusionMult: cfg.diffusionMult,
         diffusionField_u: D_u_field,
         diffusionField_v: D_v_field,
-        noiseField: makeUniformNoise(w, h, env.noise || 0.05),  // 微热扰动
+        noiseField: makeUniformNoise(w, h, env.noise || 0.05),
         constraintField: makeUniformConstraint(w, h, env.constraint || 0.2),
-        dtMult: 1.0,
+        dtMult: cfg.dtMult,
         perturbation: null,
       };
     }
   },
 
   /* ============================================================
-   * 🪐 火星（低重力 0.38g, 稀薄大气）
-   * 物理基础：低重力 → 分子自由程长 → 扩散快，边界约束弱
-   * → D×1.5，constraint 低
+   * 🪐 火星殖民
    * ============================================================ */
   'exo-mars': {
-    label: '火星殖民',
-    desc: '低重力 → 扩散快 + 约束弱',
+    label: CONFIG_EXTREME.exoMars.label,
     transform(env, eng, w, h) {
+      const cfg = CONFIG_EXTREME.exoMars;
       return {
-        diffusionMult: 1.5,
+        diffusionMult: cfg.diffusionMult,
         noiseField: makeUniformNoise(w, h, env.noise || 0.25),
         constraintField: makeUniformConstraint(w, h, env.constraint || 0.05),
-        dtMult: 1.2,
+        dtMult: cfg.dtMult,
         perturbation: null,
       };
     }
   },
 
   /* ============================================================
-   * 💍 土星环碎片场（碎片撞击 → 周期性扰动）
-   * 物理基础：土星环里的碎片持续撞击 → 周期性粒子扰动
-   * → 每 P 步注入 intensity 的 Perlin 扰动
+   * 💍 土星环碎片场
    * ============================================================ */
   'exo-saturn': {
-    label: '土星环碎片场',
-    desc: '周期性碎片撞击 → 混沌吸引子主导',
+    label: CONFIG_EXTREME.exoSaturn.label,
     transform(env, eng, w, h) {
+      const cfg = CONFIG_EXTREME.exoSaturn;
       return {
-        diffusionMult: 1.1,
+        diffusionMult: cfg.diffusionMult,
         noiseField: makeUniformNoise(w, h, env.noise || 0.6),
         constraintField: makeUniformConstraint(w, h, env.constraint || 0.4),
-        dtMult: 1.3,
-        // 关键：周期性碎片撞击扰动
-        perturbation: { rate: 3, intensity: 0.45, shape: 'perlin' },
+        dtMult: cfg.dtMult,
+        perturbation: cfg.perturbation,   // { rate, intensity, shape } 全从 config 来
       };
     }
   },
 
   /* ============================================================
-   * 🕳️ 黑洞潮汐力（潮汐拉伸 → 指向中心的梯度 + 极慢演化）
-   * 物理基础：潮汐力 ∝ 1/r³ → 离中心越远，v 场被"拉向中心"
-   * → 边界条件：v = v × 衰减，中心保持 1.0
-   * → 极慢演化，严格边界约束
+   * 🕳️ 黑洞潮汐（潮汐衰减 → 构造 Float32Array）
    * ============================================================ */
   'exo-blackhole': {
-    label: '黑洞潮汐',
-    desc: '极慢 + 潮汐力 → 冻结晶体',
+    label: CONFIG_EXTREME.exoBlackhole.label,
     transform(env, eng, w, h) {
+      const cfg = CONFIG_EXTREME.exoBlackhole;
       const cx = w / 2, cy = h / 2;
       const tidalField = new Float32Array(w * h);
       const maxR = Math.min(w, h) / 2;
+      const td = cfg.tidalDecay;  // { min, power }
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const r = Math.hypot(x - cx, y - cy);
-          // 潮汐衰减：离中心越远，v 场衰减越大
-          const decay = Math.max(0.6, 1 - Math.pow(r / maxR, 3) * 0.4);
+          // 潮汐衰减公式：离中心越远衰减越多，min 保底
+          const decay = Math.max(td.min, 1 - Math.pow(r / maxR, td.power) * (1 - td.min));
           tidalField[y * w + x] = decay;
         }
       }
       return {
-        diffusionMult: 0.8,
-        dtMult: 0.4,
+        diffusionMult: cfg.diffusionMult,
+        dtMult: cfg.dtMult,
         noiseField: makeUniformNoise(w, h, 0.0),
         constraintField: makeUniformConstraint(w, h, 1.0),
         perturbation: null,
         tidalField,
-        globalDecay: 0.0005,  // 极小的全局衰减，维持冻结态
+        globalDecay: cfg.globalDecay,
       };
     }
   },
@@ -233,8 +246,8 @@ export function computeAudioChain(m, petState, exoticEnv, music2) {
   chain.petMood = petState.mood;
   chain.petAudio = petAudio;
 
-  // 5. 极端环境 → tempo modifier（金星慢 ×0.6，土星快 ×1.3 等）
-  chain.tempoModifier = exoticEnv ? EXOTIC_TEMPO[exoticEnv] ?? 1.0 : 1.0;
+  // 5. 极端环境 → tempo modifier（config.js EXTREME_AUDIO_TEMPO 是单一事实源）
+  chain.tempoModifier = exoticEnv ? EXTREME_AUDIO_TEMPO[exoticEnv] ?? 1.0 : 1.0;
 
   // 6. 综合最终：audio.js.tick() 要用的最终参数
   chain.finalTempo = (petAudio.tempo ?? 1.0) * chain.tempoModifier * (chain.chaosKnob.temperatureK > 0.3 ? 1.15 : 1.0);
@@ -247,15 +260,4 @@ export function computeAudioChain(m, petState, exoticEnv, music2) {
   return chain;
 }
 
-/* 极端环境对 audio tempo 的自然影响（模拟不同星球的"心跳"）*/
-const EXOTIC_TEMPO = {
-  'exo-primitive': 1.15,  // 原始地球 → 生命刚出来，心跳稍快
-  'exo-venus':     0.55,  // 金星高压 → 心跳极慢（几乎是 drone）
-  'exo-europa':    1.25,  // 木卫二 → 冰下活跃，心跳快一点
-  'exo-mars':      1.30,  // 火星低重力 → 心跳快
-  'exo-saturn':    1.40,  // 土星环碎片撞击 → 心跳最快（chaos）
-  'exo-blackhole': 0.35,  // 黑洞潮汐 → 几乎停跳
-};
-
-/* ---- 快速自检 ---- */
-export const _EXOTIC_PHYSICS_KEYS = Object.keys(EXOTIC_PHYSICS);
+/* ---- 底部已移到 config.js：EXTREME_PHYSICS / EXTREME_AUDIO_TEMPO ---- */

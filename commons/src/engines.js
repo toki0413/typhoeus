@@ -72,12 +72,14 @@ import {
   computeScientificMetrics,
   SCIENCE_VERSION,
 } from './scientific.js';
+import { ENGINE_GRID, ENV_DEFAULTS } from './config.js';
 
 export { REACTION_DIFFUSION_PRESETS, SCIENCE_VERSION };
 
 export const ENGINE_VERSION = '1.0.0';
-export const GRID_W = 160;
-export const GRID_H = 90;
+/* ↓ 单一事实源：值从 config.js 读出来再 re-export，其他模块还能 import GRID_W/H */
+export const GRID_W = ENGINE_GRID.W;
+export const GRID_H = ENGINE_GRID.H;
 
 /* ------------------------------------------------------------------ */
 /* Conway 系规则集：Bx/Sy 记法                                         */
@@ -201,10 +203,10 @@ export const NEIGHBORHOODS = {
 /* 环境扰动策略                                                         */
 /* ------------------------------------------------------------------ */
 export const CONSTRAINT_MODES = {
-  low:    { label: '宽容',    constraint: 0.15, note: '允许更多噪声涌现新结构' },
-  normal: { label: '平衡',    constraint: 0.35, note: '默认值' },
-  strict: { label: '严格',    constraint: 0.65, note: '更稳定，不容易变' },
-  glass:  { label: '封印',    constraint: 0.85, note: '几乎不会变，像玻璃' },
+  low:    { label: '宽容',    constraint: ENV_DEFAULTS.constraint * 0.43, note: '允许更多噪声涌现新结构' },
+  normal: { label: '平衡',    constraint: ENV_DEFAULTS.constraint,          note: '默认值' },
+  strict: { label: '严格',    constraint: ENV_DEFAULTS.constraint * 1.86,   note: '更稳定，不容易变' },
+  glass:  { label: '封印',    constraint: ENV_DEFAULTS.constraint * 2.43,   note: '几乎不会变，像玻璃' },
 };
 
 export const NOISE_MODES = {
@@ -275,7 +277,7 @@ export function defaultEnv(overrides = {}) {
     noise: 0,
     resource: { rate: 0, period: 90 },
     timeScale: 1,
-    constraint: 0.35,
+    constraint: ENV_DEFAULTS.constraint,
     ...overrides,
   };
 }
@@ -543,7 +545,7 @@ export class LifeEngine {
     }
 
     // stochastic perturbation — reproducible through the engine rng
-    const effNoise = this.env.noise * (1 - 0.85 * this.env.constraint);
+    const effNoise = this.env.noise * (1 - ENV_DEFAULTS.constraintKillCoef * this.env.constraint);
     const flips = Math.round(effNoise * 55);
     for (let k = 0; k < flips; k++) {
       const i = Math.floor(this.rng() * next.length);
@@ -812,7 +814,7 @@ export class LeniaEngine {
       }
     }
 
-    const effNoise = this.env.noise * (1 - 0.85 * this.env.constraint) * 0.06;
+    const effNoise = this.env.noise * (1 - ENV_DEFAULTS.constraintKillCoef * this.env.constraint) * 0.06;
     if (effNoise > 0) {
       for (let i = 0; i < next.length; i++) {
         if (this.rng() < 0.06) {

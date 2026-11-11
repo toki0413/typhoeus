@@ -63,6 +63,7 @@
 
 import { clamp, hashString } from './rng.js';
 import { SCALES } from './engines.js';
+import { AUDIO_CONSTANTS } from './config.js';
 
 /* ---- 音乐理论层（music.js）---- */
 import {
@@ -117,7 +118,7 @@ export class AudioEngine {
 
     /* ---- 音乐性增强（v3）状态 ---- */
     this._heartbeatNext = 0;       // Layer 1: 心跳
-    this._heartbeatBPM = 72;
+    this._heartbeatBPM = AUDIO_CONSTANTS.heartbeat.defaultBPM;
     this._chordNext = 0;           // Layer 2: 和弦 pad
     this._chordRootDegree = 0;
     this._chordDensity = 'triads';
@@ -147,14 +148,14 @@ export class AudioEngine {
 
     // ambient feedback delay
     this.delay = ctx.createDelay(1.5);
-    this.delay.delayTime.value = 0.34;
+    this.delay.delayTime.value = AUDIO_CONSTANTS.delay.defaultTime;
     this.delayFb = ctx.createGain();
-    this.delayFb.gain.value = 0.26;
+    this.delayFb.gain.value = AUDIO_CONSTANTS.delay.feedback;
     this.delayFilter = ctx.createBiquadFilter();
     this.delayFilter.type = 'lowpass';
-    this.delayFilter.frequency.value = 1600;
+    this.delayFilter.frequency.value = AUDIO_CONSTANTS.delay.filterCutoff;
     this.delayWet = ctx.createGain();
-    this.delayWet.gain.value = 0.22;
+    this.delayWet.gain.value = AUDIO_CONSTANTS.delay.wet;
     this.delay.connect(this.delayFilter);
     this.delayFilter.connect(this.delayFb);
     this.delayFb.connect(this.delay);
@@ -252,12 +253,15 @@ export class AudioEngine {
     if (!chain) return;
     if (!this.built) return;
     const now = this.ctx.currentTime;
+    const AC = AUDIO_CONSTANTS;
+    const strictC = AC.strictness;
 
     // 1. finalTempo → heartbeat BPM 覆盖（极端环境心跳自然快慢）
     //    chain.finalTempo 是倍率 (0.35 ~ 1.40)，乘在 heartbeatBPM 上
     if (chain.finalTempo !== undefined) {
       const target = this._heartbeatBPM * chain.finalTempo;
-      this._heartbeatBPM = this._heartbeatBPM * 0.6 + target * 0.4;  // 平滑过渡
+      /* 平滑过渡：α=0.4 新值 + α=0.6 旧值（config.heartbeat.smoothRatio）*/
+      this._heartbeatBPM = this._heartbeatBPM * AC.heartbeat.smoothRatioOld + target * AC.heartbeat.smoothRatioNew;
     }
 
     // 2. finalWave → 写入 mapping.wave（旋律音 + 心跳音用这个音色）
@@ -273,20 +277,23 @@ export class AudioEngine {
 
     // 4. finalReverb → delay wet + delay feedback（Pet sad/sick → 干声；happy → 混响）
     if (chain.finalReverb !== undefined) {
-      const wet = 0.05 + chain.finalReverb * 0.35;   // 0.05 ~ 0.40
-      const fb = 0.12 + chain.finalReverb * 0.20;     // 0.12 ~ 0.32
+      const wetR = AC.reverbAndTension.wetRange;
+      const fbR  = AC.reverbAndTension.fbRange;
+      const wet = wetR.min + chain.finalReverb * (wetR.max - wetR.min);
+      const fb  = fbR.min  + chain.finalReverb  * (fbR.max  - fbR.min);
       this.delayWet.gain.setTargetAtTime(wet, now, 0.5);
       this.delayFb.gain.setTargetAtTime(fb, now, 0.5);
     }
 
-    // 5. finalTension → chaos temperature 偏移（sick 紧张 → chaosKnob 被拉高 → strictness 降低）
+    // 5. finalTension → chaos temperature 偏移 → strictness
+    //    Attention 反模式已修：strictness 只在此处算一次（Pet mood + env 是最高优先级的上下文）
+    //    updateMetrics() 里那套 chaosKnob.temperatureK 计算现在不覆盖这里 —— 谁最后执行谁生效，这里保证最后
     if (chain.finalTension !== undefined) {
-      // 叠加 tension 到 chaos temperature，让 Pet 情绪影响 strictness
       const baseTemp = this._chaosTemperature ?? 0.2;
-      const effectiveTemp = Math.min(1.0, baseTemp + chain.finalTension * 0.3);
+      const effectiveTemp = Math.min(1.0, baseTemp + chain.finalTension * AC.reverbAndTension.tensionChaosCoef);
       this._chaosTemperature = effectiveTemp;
       if (this.mapping) {
-        this.mapping.strictness = clamp(1 - effectiveTemp * 0.55, 0.2, 1.0);
+        this.mapping.strictness = clamp(1 - effectiveTemp * strictC.chaosCoef, strictC.min, strictC.max);
       }
     }
 
