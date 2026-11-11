@@ -51,6 +51,8 @@ import { runPlayerMC, discretizeField, CPM_DEFAULTS } from './cpm.js';
 import { runParameterScan, renderHeatmap, DEFAULT_SCAN_AXES, SCAN_METRICS } from './scan.js';
 import { matchPatternLibrary, PATTERN_LIBRARY, buildDiscoveryRecord } from './patterns.js';
 import { saveAsDiscovery, buildOpenScienceIssue, loadLeaderboard, rankDiscoveries, clearLeaderboard, exportLeaderboard, importDiscoveries } from './leaderboard.js';
+/* ---- Commons-JEPA：形态嵌入空间里的预测（超越 Foldit 的核心武器）---- */
+import { PlayerPredictor, toMorphoEmbedding, jepaSoundFeedback, morphoDistance } from './jepa.js';
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                          */
@@ -143,6 +145,14 @@ const state = {
   lastUI: 0,
   lastMetricsAt: 0,
   lastStructUI: 0,
+  /* ---- JEPA 直觉训练状态 ---- */
+  jepa: {
+    predictor: new PlayerPredictor(),
+    embBefore: null,
+    pendingDebounce: null,   // setTimeout id for debounced feedback
+    paramChangePending: null,  // { dParams }
+    trainingOn: true,        // 直觉训练音效开关（默认开）
+  },
   compare: {
     ready: false,
     mode: 'seed',
@@ -2291,6 +2301,8 @@ function onRuleInput(e) {
   if (sciKey) {
     // 科学引擎物理参数热更新（每帧仿真就用新值，不需要 reset）
     if (!g.scientific) g.scientific = {};
+    // ① JEPA：记录调参前的形态（debounce 起点）
+    const wasSciCustom = g.scientific.preset === 'custom';
     g.scientific[sciKey] = v;
     g.scientific.preset = 'custom';
     state.sim.applyGenome(g);
@@ -2298,6 +2310,20 @@ function onRuleInput(e) {
     const head = e.target.closest('.field')?.querySelector('.val');
     if (head) head.textContent = v.toFixed(sciKey === 'dt' ? 2 : 3);
     refreshMainMetrics();
+
+    // ② JEPA 直觉训练：debounced — 停 180ms 后跑 K=20 步算形态变化
+    const j = state.jepa;
+    if (j.trainingOn && state.recipe.seed.genome.engine === 'scientific') {
+      if (!j.pendingDebounce) {
+        j.embBefore = state.metrics ? toMorphoEmbedding(state.metrics) : null;
+        j.paramChangePending = { [sciKey]: v };
+      }
+      if (j.pendingDebounce) clearTimeout(j.pendingDebounce);
+      j.pendingDebounce = setTimeout(() => {
+        j.pendingDebounce = null;
+        debouncedJepaFeedback(sciKey, v, g);
+      }, 180);
+    }
     return;
   }
 
@@ -2392,6 +2418,104 @@ function onEnvClick(e) {
 /* ================================================================ */
 /*  科学工具：玩家驱动的科研能力                                     */
 /* ================================================================ */
+/* ================================================================ */
+/*  Commons-JEPA 直觉训练：debounced 反馈                             */
+/*                                                                  */
+/*  玩家调科学引擎参数 → 等 180ms → 跑 K=30 步 → 算形态变化            */
+/*  → jepaSoundFeedback → 调 audio tension/reverb → 训练直觉          */
+/* ================================================================ */
+function debouncedJepaFeedback(paramKey, newValue, genome) {
+  const sim = state.sim;
+  if (!sim || !sim.step) return;
+
+  // ① 保存当前仿真状态（不 reset，不打断玩家的演化流）
+  // 直接在热更新后的新参数下跑 K=30 步到"半稳定"
+  const K = 30;
+  for (let i = 0; i < K; i++) sim.step();
+
+  // ② 算参数变化后的形态嵌入
+  const afterMetrics = sim.metrics();
+  const embAfter = toMorphoEmbedding(afterMetrics);
+
+  const j = state.jepa;
+  const embBefore = j.embBefore;
+  if (!embBefore) { j.embBefore = embAfter; return; }
+
+  // ③ 让 PlayerPredictor 学习这条经验
+  const dParams = j.paramChangePending || { [paramKey]: newValue };
+  j.predictor.record({
+    dParams,
+    embBefore: embBefore.slice(),
+    embAfter: embAfter.slice(),
+  });
+
+  // ④ JEPA predictor 预测（如果历史够）
+  const predicted = j.predictor.predict(dParams, embBefore);
+
+  // ⑤ 计算预测误差（如果有）
+  let predictionError = null;
+  if (predicted) {
+    // 玩家直觉是否和历史上类似调参的实际变化一致？
+    predictionError = morphoDistance(embAfter, predicted);
+  }
+
+  // ⑥ 生成声音反馈 tension + reverb 实时调
+  const feedback = jepaSoundFeedback(embBefore, embAfter);
+
+  // ⑦ 应用到 audio.js（如果有）
+  if (state.audio && state.audio.built && state.audio.enabled) {
+    // tension → 实时调 brightness / drone filter center
+    const now = state.audio.ctx.currentTime;
+    const droneFilter = state.audio.droneFilter;
+    if (droneFilter && droneFilter.frequency) {
+      // tension 高 → 频率往下拉（紧张/不协和）
+      const tensionShift = feedback.tension * 120;  // 最高 -120Hz
+      droneFilter.frequency.setTargetAtTime(
+        Math.max(120, droneFilter.frequency.value - tensionShift + feedback.freq - 260),
+        now, 0.15
+      );
+    }
+    // reverb 模拟：delayWet
+    if (state.audio.delayWet && state.audio.delayWet.gain) {
+      state.audio.delayWet.gain.setTargetAtTime(feedback.reverbMix * 0.4, now, 0.12);
+    }
+    // 加一个短音事件（玩家调参数 → 发出一个音）
+    state.audio.emitEvent?.({ type: 'jepa', ...feedback });
+  }
+
+  // ⑧ 控制台打印（玩家可以 F12 看自己的直觉训练数据）
+  const d = feedback.shiftMagnitude;
+  const label = (() => {
+    if (!feedback.meaningful) return '形态基本稳定（没变化）';
+    const tags = feedback.directionTags;
+    const parts = [];
+    if (tags.λ_up)   parts.push('更混沌 λ↑');
+    if (tags.λ_down) parts.push('更稳定 λ↓');
+    if (tags.D_up)   parts.push('更复杂 D↑');
+    if (tags.D_down) parts.push('更简单 D↓');
+    if (tags.E_up)   parts.push('更活跃 E↑');
+    if (tags.E_down) parts.push('更松弛 E↓');
+    return parts.join(' + ') || '小幅抖动';
+  })();
+
+  console.log('[JEPA 直觉训练]', {
+    param: paramKey, val: newValue,
+    distance: d.toFixed(3),
+    direction: label,
+    predictorTrained: j.predictor.size,
+    predictionError: predictionError?.toFixed(3),
+  });
+
+  // ⑨ toast 给玩家反馈（简洁，不刷屏）
+  const icon = !feedback.meaningful ? '·' : (predictionError !== null && predictionError < 0.15 ? '✓' : '→');
+  toast(`JEPA ${icon} ${label}（d=${d.toFixed(2)}，历史 ${j.predictor.size} 条）`);
+
+  // ⑩ 更新 state.metrics（让 HUD 也同步）
+  state.metrics = afterMetrics;
+  state.jepa.embBefore = null;
+  state.jepa.paramChangePending = null;
+}
+
 function handleSciAction(action) {
   if (action === 'mc' && runPlayerMC) {
     toast('🧬 让 CPM 来调一下...');

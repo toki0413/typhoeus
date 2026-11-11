@@ -2344,7 +2344,7 @@ body.motion-off *::after {
   animation-iteration-count: 0 !important;
 }
 
-    </style>
+</style>
   </head>
   <body>
     <div class="ambient" aria-hidden="true"></div>
@@ -6324,6 +6324,149 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
     return { url, title, body };
   }
 
+  // src/jepa.js
+  var MORPHO_WEIGHTS = {
+    lyapunov: 0.35,
+    // λ 最能决定"系统性格"
+    fractal: 0.25,
+    // D 决定"系统复杂度"
+    energy: 0.25,
+    // E 决定"活跃度"
+    period: 0.15
+    // P 决定"结构尺度"
+  };
+  function toMorphoEmbedding(metrics) {
+    const \u03BB = metrics.lyapunov ?? -2.5;
+    const D = metrics.fractal ?? 1.5;
+    const E = metrics.energy?.total ?? 1;
+    const P = metrics.spatialPeriod ?? 12;
+    return new Float32Array([
+      clampEmb(\u03BB, -0.3, -3),
+      // λ 范围 ~ -3.0 ~ +0.1
+      clampEmb(D, 0.5, 2),
+      // D 范围 ~ 1.0 ~ 2.0
+      clampEmb(Math.log10(E + 0.01), -2.5, 1),
+      clampEmb(P, 0, 60)
+    ]);
+  }
+  function clampEmb(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+  }
+  function morphoDistance(embA, embB) {
+    const w = MORPHO_WEIGHTS;
+    const d\u03BB = (embA[0] - embB[0]) / 2;
+    const dD = (embA[1] - embB[1]) / 0.7;
+    const dE = (embA[2] - embB[2]) / 1.5;
+    const dP = (embA[3] - embB[3]) / 30;
+    return Math.sqrt(
+      w.lyapunov * d\u03BB * d\u03BB + w.fractal * dD * dD + w.energy * dE * dE + w.period * dP * dP
+    );
+  }
+  function analyzeShift(embNow, embFuture, intendedDirection = null) {
+    const d = morphoDistance(embNow, embFuture);
+    const directionTags = {
+      \u03BB_up: embFuture[0] - embNow[0] > 0.02,
+      \u03BB_down: embFuture[0] - embNow[0] < -0.02,
+      D_up: embFuture[1] - embNow[1] > 0.04,
+      D_down: embFuture[1] - embNow[1] < -0.04,
+      E_up: embFuture[2] - embNow[2] > 0.06,
+      E_down: embFuture[2] - embNow[2] < -0.06,
+      P_up: embFuture[3] - embNow[3] > 2,
+      P_down: embFuture[3] - embNow[3] < -2
+    };
+    const meaningfulShift = d > 0.04;
+    let directionCorrect = null;
+    if (intendedDirection) {
+      directionCorrect = matchIntention(directionTags, intendedDirection);
+    }
+    return { dMag: d, meaningfulShift, directionCorrect, directionTags };
+  }
+  function matchIntention(actual, intended) {
+    if (intended.chaos) return actual.\u03BB_up || actual.D_up;
+    if (intended.stable) return actual.\u03BB_down;
+    if (intended.complex) return actual.D_up || actual.E_up;
+    if (intended.simpler) return actual.D_down || actual.E_down;
+    if (intended.biggerScale) return actual.P_up;
+    if (intended.smallerScale) return actual.P_down;
+    return null;
+  }
+  var PlayerPredictor = class {
+    constructor() {
+      this.history = [];
+      this.maxHistory = 200;
+    }
+    record({ dParams, embBefore, embAfter, time = Date.now() }) {
+      if (!dParams || !embBefore || !embAfter) return;
+      this.history.push({ dParams: { ...dParams }, embBefore: [...embBefore], embAfter: [...embAfter], time });
+      if (this.history.length > this.maxHistory) this.history.shift();
+    }
+    /**
+     * 3-NN 回归：给定 dParams，找历史上最相似的 3 条，平均它们的 embAfter - embBefore
+     * 返回：预测的 dEmbedding（4 维）
+     */
+    predict(dParams, embNow) {
+      if (this.history.length < 3) return null;
+      const candidates = this.history.map((h) => {
+        const dist = paramDistance(dParams, h.dParams);
+        return { h, dist };
+      }).sort((a, b) => a.dist - b.dist).slice(0, 3);
+      let dEmb = new Float32Array(4);
+      for (const { h } of candidates) {
+        for (let i = 0; i < 4; i++) dEmb[i] += h.embAfter[i] - h.embBefore[i];
+      }
+      for (let i = 0; i < 4; i++) dEmb[i] /= 3;
+      const predicted = new Float32Array(4);
+      for (let i = 0; i < 4; i++) predicted[i] = embNow[i] + dEmb[i];
+      return predicted;
+    }
+    get size() {
+      return this.history.length;
+    }
+  };
+  function paramDistance(a, b) {
+    const keys = /* @__PURE__ */ new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
+    let d = 0;
+    for (const k of keys) {
+      const va = a?.[k] ?? 0;
+      const vb = b?.[k] ?? 0;
+      const range = k === "f" || k === "k" ? 0.05 : k === "D_u" || k === "D_v" ? 2 : k === "A" || k === "B" ? 5 : 1;
+      d += ((va - vb) / range) ** 2;
+    }
+    return Math.sqrt(d);
+  }
+  function jepaSoundFeedback(embNow, embFuture, intendedDir = null) {
+    const shift = analyzeShift(embNow, embFuture, intendedDir);
+    const correct = shift.directionCorrect;
+    const meaningful = shift.meaningfulShift;
+    const base = 261.63;
+    let tension;
+    if (intendedDir === null) {
+      tension = Math.min(1, shift.dMag * 2);
+    } else {
+      tension = correct === null ? 0.3 : correct ? 0.15 : 0.85;
+    }
+    let semitoneOffset = 0;
+    if (shift.directionTags.\u03BB_up) semitoneOffset += 4;
+    if (shift.directionTags.\u03BB_down) semitoneOffset -= 4;
+    if (shift.directionTags.D_up) semitoneOffset += 3;
+    if (shift.directionTags.D_down) semitoneOffset -= 3;
+    if (shift.directionTags.E_up) semitoneOffset += 2;
+    if (shift.directionTags.E_down) semitoneOffset -= 2;
+    const freq = base * Math.pow(2, semitoneOffset / 12);
+    const reverbMix = correct === null ? 0.2 : correct ? 0.6 : 0.05;
+    const loudness = clampEmb(0.3 + shift.dMag * 1.5, 0.3, 0.85);
+    return {
+      freq,
+      tension,
+      reverbMix,
+      loudness,
+      correct,
+      meaningful,
+      directionTags: shift.directionTags,
+      shiftMagnitude: shift.dMag
+    };
+  }
+
   // src/app.js
   var $ = (sel, root = document) => root.querySelector(sel);
   var $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -6396,6 +6539,17 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
     lastUI: 0,
     lastMetricsAt: 0,
     lastStructUI: 0,
+    /* ---- JEPA 直觉训练状态 ---- */
+    jepa: {
+      predictor: new PlayerPredictor(),
+      embBefore: null,
+      pendingDebounce: null,
+      // setTimeout id for debounced feedback
+      paramChangePending: null,
+      // { dParams }
+      trainingOn: true
+      // 直觉训练音效开关（默认开）
+    },
     compare: {
       ready: false,
       mode: "seed",
@@ -8327,6 +8481,7 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
     const g = state.recipe.seed.genome;
     if (sciKey) {
       if (!g.scientific) g.scientific = {};
+      const wasSciCustom = g.scientific.preset === "custom";
       g.scientific[sciKey] = v;
       g.scientific.preset = "custom";
       state.sim.applyGenome(g);
@@ -8334,6 +8489,18 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
       const head = e.target.closest(".field")?.querySelector(".val");
       if (head) head.textContent = v.toFixed(sciKey === "dt" ? 2 : 3);
       refreshMainMetrics();
+      const j = state.jepa;
+      if (j.trainingOn && state.recipe.seed.genome.engine === "scientific") {
+        if (!j.pendingDebounce) {
+          j.embBefore = state.metrics ? toMorphoEmbedding(state.metrics) : null;
+          j.paramChangePending = { [sciKey]: v };
+        }
+        if (j.pendingDebounce) clearTimeout(j.pendingDebounce);
+        j.pendingDebounce = setTimeout(() => {
+          j.pendingDebounce = null;
+          debouncedJepaFeedback(sciKey, v, g);
+        }, 180);
+      }
       return;
     }
     if (leniaKey) {
@@ -8418,6 +8585,74 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
       renderEnvPanel();
       toast(`\u8FB9\u754C\uFF1A${BOUNDARY_LABEL[boundary.dataset.boundary]}`);
     }
+  }
+  function debouncedJepaFeedback(paramKey, newValue, genome) {
+    const sim = state.sim;
+    if (!sim || !sim.step) return;
+    const K = 30;
+    for (let i = 0; i < K; i++) sim.step();
+    const afterMetrics = sim.metrics();
+    const embAfter = toMorphoEmbedding(afterMetrics);
+    const j = state.jepa;
+    const embBefore = j.embBefore;
+    if (!embBefore) {
+      j.embBefore = embAfter;
+      return;
+    }
+    const dParams = j.paramChangePending || { [paramKey]: newValue };
+    j.predictor.record({
+      dParams,
+      embBefore: embBefore.slice(),
+      embAfter: embAfter.slice()
+    });
+    const predicted = j.predictor.predict(dParams, embBefore);
+    let predictionError = null;
+    if (predicted) {
+      predictionError = morphoDistance(embAfter, predicted);
+    }
+    const feedback = jepaSoundFeedback(embBefore, embAfter);
+    if (state.audio && state.audio.built && state.audio.enabled) {
+      const now = state.audio.ctx.currentTime;
+      const droneFilter = state.audio.droneFilter;
+      if (droneFilter && droneFilter.frequency) {
+        const tensionShift = feedback.tension * 120;
+        droneFilter.frequency.setTargetAtTime(
+          Math.max(120, droneFilter.frequency.value - tensionShift + feedback.freq - 260),
+          now,
+          0.15
+        );
+      }
+      if (state.audio.delayWet && state.audio.delayWet.gain) {
+        state.audio.delayWet.gain.setTargetAtTime(feedback.reverbMix * 0.4, now, 0.12);
+      }
+      state.audio.emitEvent?.({ type: "jepa", ...feedback });
+    }
+    const d = feedback.shiftMagnitude;
+    const label = (() => {
+      if (!feedback.meaningful) return "\u5F62\u6001\u57FA\u672C\u7A33\u5B9A\uFF08\u6CA1\u53D8\u5316\uFF09";
+      const tags = feedback.directionTags;
+      const parts = [];
+      if (tags.\u03BB_up) parts.push("\u66F4\u6DF7\u6C8C \u03BB\u2191");
+      if (tags.\u03BB_down) parts.push("\u66F4\u7A33\u5B9A \u03BB\u2193");
+      if (tags.D_up) parts.push("\u66F4\u590D\u6742 D\u2191");
+      if (tags.D_down) parts.push("\u66F4\u7B80\u5355 D\u2193");
+      if (tags.E_up) parts.push("\u66F4\u6D3B\u8DC3 E\u2191");
+      if (tags.E_down) parts.push("\u66F4\u677E\u5F1B E\u2193");
+      return parts.join(" + ") || "\u5C0F\u5E45\u6296\u52A8";
+    })();
+    console.log("[JEPA \u76F4\u89C9\u8BAD\u7EC3]", {
+      param: paramKey,
+      val: newValue,
+      distance: d.toFixed(3),
+      direction: label,
+      predictorTrained: j.predictor.size,
+      predictionError: predictionError?.toFixed(3)
+    });
+    const icon = !feedback.meaningful ? "\xB7" : predictionError !== null && predictionError < 0.15 ? "\u2713" : "\u2192";
+    toast(`JEPA ${icon} ${label}\uFF08d=${d.toFixed(2)}\uFF0C\u5386\u53F2 ${j.predictor.size} \u6761\uFF09`);
+    state.metrics = afterMetrics;
+    state.jepa.embBefore = null;
+    state.jepa.paramChangePending = null;
   }
   function handleSciAction(action) {
     if (action === "mc" && runPlayerMC) {
@@ -8704,6 +8939,6 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
   boot();
 })();
 
-    </script>
+</script>
   </body>
 </html>
