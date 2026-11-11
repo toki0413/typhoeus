@@ -175,6 +175,17 @@ pass('Parameter Scan 36 pts 返回', `Nx=${scanRes.Nx} Ny=${scanRes.Ny}`, scanRe
 pass('bestPoint / worstPoint 存在',
      `best_E=${isFinite(scanRes.bestPoint.energy) ? scanRes.bestPoint.energy.toFixed(3) : 'Infinity'}`,
      scanRes.bestPoint && scanRes.worstPoint);
+// 回归断言：曾因 engine 被当 preset 键解析导致全部 NaN（热力图全灰 + bestPoint=Infinity）
+const finiteEnergy = Array.from(scanRes.raw.energy).filter(Number.isFinite).length;
+pass('Parameter Scan 能量全部有限（非 NaN）',
+     `${finiteEnergy}/${scanRes.Nx * scanRes.Ny} 有效`,
+     finiteEnergy === scanRes.Nx * scanRes.Ny);
+pass('bestPoint.energy 有限',
+     `best_E=${scanRes.bestPoint.energy.toFixed(4)}`,
+     Number.isFinite(scanRes.bestPoint.energy));
+pass('worstPoint.energy 有限且 >= bestPoint',
+     `worst_E=${scanRes.worstPoint.energy.toFixed(4)}`,
+     Number.isFinite(scanRes.worstPoint.energy) && scanRes.worstPoint.energy >= scanRes.bestPoint.energy);
 
 // ============================================================
 // T6: Null-safety + 降级兜底（生产成熟度）

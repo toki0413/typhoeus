@@ -1344,7 +1344,8 @@ async function startParameterScan() {
       xAxis: { key: axes[0].key, min: axes[0].min, max: axes[0].max, N: 16 },
       yAxis: { key: axes[1].key, min: axes[1].min, max: axes[1].max, N: 16 },
     };
-    const baseParams = { ...sim.genome?.scientific?.params, preset: engineType, engine: 'grayScott' };
+    // 引擎归属由 preset 决定（scientific.js 的 preset 表是唯一事实源），这里不再硬编码 engine
+    const baseParams = { preset: engineType };
     const result = await runParameterScan(baseParams, axes_obj, {
       w: 40, h: 30, steps: 200,
       progressCb: (p) => {

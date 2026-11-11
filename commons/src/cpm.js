@@ -242,8 +242,27 @@ export function runPlayerMC(engine, steps = 4, params = {}) {
  */
 export async function simulateRD(params, w, h, steps, rngSeed = 42) {
   const mod = await import('./scientific.js');
-  const e = new mod.ReactionDiffusionEngine(w, h, params, rngSeed);
+  const src = params ?? {};
+
+  // preset 是唯一物理参数源。未显式给 preset（或给了不存在的 preset 键）时，
+  // 按 engine 类型挑一个该引擎的经典预设——避免把 engine 名当成 preset 键解析。
+  let presetKey = src.preset;
+  if (!presetKey || !mod.REACTION_DIFFUSION_PRESETS[presetKey]) {
+    presetKey = Object.keys(mod.REACTION_DIFFUSION_PRESETS)
+      .find(k => mod.REACTION_DIFFUSION_PRESETS[k].engine === src.engine) || 'gs_spots';
+  }
+
+  const opts = { ...src, preset: presetKey };
+  delete opts.engine;   // 引擎归属由 preset 决定，禁止外部覆盖（否则 FHN/Brusselator 会跑成 grayScott）
+  const e = new mod.ReactionDiffusionEngine(w, h, opts);
+
+  // 缺物理参数会静默积出 NaN，这里显式报错，让失败可定位
+  const missing = ['D_u', 'D_v', 'dt'].filter(k => !Number.isFinite(e.params[k]));
+  if (missing.length) {
+    throw new Error(`simulateRD: preset "${presetKey}" 缺少物理参数 ${missing.join(', ')}`);
+  }
+
   for (let i = 0; i < steps; i++) e.step();
-  const m = mod.computeScientificMetrics(e.vField, e.uField, w, h, params.engine);
-  return { metrics: m, vField: e.vField, uField: e.uField };
+  const m = mod.computeScientificMetrics(e.vField, e.uField, w, h, e.engineType);
+  return { metrics: m, vField: e.vField, uField: e.uField, preset: presetKey, engineType: e.engineType };
 }
