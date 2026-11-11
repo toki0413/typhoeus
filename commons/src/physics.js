@@ -18,6 +18,7 @@
  *   黑洞 → dt×0.4 + 潮汐场衰减 0.6
  * ================================================================ */
 
+import { petMoodToAudio } from './pet.js';
 import { EXTREME_PHYSICS as CONFIG_EXTREME, EXTREME_AUDIO_TEMPO, ENV_DEFAULTS } from './config.js';
 
 /* ---- 对外导出音频 tempo modifier ---- */
@@ -110,29 +111,16 @@ const EXOTIC_PHYSICS = {
   'exo-europa': {
     label: CONFIG_EXTREME.exoEuropa.label,
     transform(env, eng, w, h) {
-      const cfg = CONFIG_EXTREME.exoEuropa;
-      /* 从 config 读热梯度参数 */
-      const tg = cfg.thermalGradient;
-      const D_u_field = new Float32Array(w * h);
-      const D_v_field = new Float32Array(w * h);
-      for (let y = 0; y < h; y++) {
-        const progress = y / h;  // 0 (top, 热) → 1 (bottom, 冷)
-        // 从 tg.top → tg.bottom 线性过渡
-        const gradU = tg.top + (tg.bottom - tg.top) * progress;
-        const gradV = tg.topV + (tg.bottomV - tg.topV) * progress;
-        for (let x = 0; x < w; x++) {
-          const idx = y * w + x;
-          D_u_field[idx] = gradU;
-          D_v_field[idx] = gradV;
-        }
-      }
+      /* 木卫二冰下：去掉逐格 diffusionField（让 Euler 积分稳定）
+         改用高一点的 diffusionMult + 稍高 dtMult，模拟"冰下高粘度"的物理直觉。
+         热梯度 → 纯扩散系数变化，保留差异化但不破坏 Laplacian 假设。*/
       return {
-        diffusionMult: cfg.diffusionMult,
-        diffusionField_u: D_u_field,
-        diffusionField_v: D_v_field,
-        noiseField: makeUniformNoise(w, h, env.noise || 0.05),
-        constraintField: makeUniformConstraint(w, h, env.constraint || 0.2),
-        dtMult: cfg.dtMult,
+        diffusionMult: 1.15,   /* 比默认 1.0 高 15%：冰下分子扩散稍快 */
+        dtMult: 1.0,           /* 保守 dt */
+        reactionBoost: null,
+        globalDecay: 0.0005,   /* 极低衰减：冰下稳定但不冻结 */
+        noiseField: makeUniformNoise(w, h, env.noise || 0.005),
+        constraintField: makeUniformConstraint(w, h, env.constraint || 0.05),
         perturbation: null,
       };
     }
@@ -161,13 +149,17 @@ const EXOTIC_PHYSICS = {
   'exo-saturn': {
     label: CONFIG_EXTREME.exoSaturn.label,
     transform(env, eng, w, h) {
-      const cfg = CONFIG_EXTREME.exoSaturn;
+      /* 土星环碎片：去掉 perturbation（全 canvas 扰动破坏 Laplacian）
+         改用高 diffusionMult + 高 dtMult + 稍高 noise 营造"碎片撞击的混沌感"。
+         perturbation 保留 null，让 step() 里的 Euler 积分不被破坏。*/
       return {
-        diffusionMult: cfg.diffusionMult,
-        noiseField: makeUniformNoise(w, h, env.noise || 0.6),
-        constraintField: makeUniformConstraint(w, h, env.constraint || 0.4),
-        dtMult: cfg.dtMult,
-        perturbation: cfg.perturbation,   // { rate, intensity, shape } 全从 config 来
+        diffusionMult: 1.2,    /* 比默认高 20%：碎片场分子扩散更快 */
+        dtMult: 1.4,           /* 比默认高 40%：土星环环境"反应更激烈" */
+        reactionBoost: null,
+        globalDecay: 0,
+        noiseField: makeUniformNoise(w, h, env.noise || 0.10),  /* 稍高噪声 */
+        constraintField: makeUniformConstraint(w, h, env.constraint || 0.20),
+        perturbation: null,    /* 去掉全 canvas 扰动 → 数值稳定 */
       };
     }
   },
@@ -178,27 +170,18 @@ const EXOTIC_PHYSICS = {
   'exo-blackhole': {
     label: CONFIG_EXTREME.exoBlackhole.label,
     transform(env, eng, w, h) {
-      const cfg = CONFIG_EXTREME.exoBlackhole;
-      const cx = w / 2, cy = h / 2;
-      const tidalField = new Float32Array(w * h);
-      const maxR = Math.min(w, h) / 2;
-      const td = cfg.tidalDecay;  // { min, power }
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const r = Math.hypot(x - cx, y - cy);
-          // 潮汐衰减公式：离中心越远衰减越多，min 保底
-          const decay = Math.max(td.min, 1 - Math.pow(r / maxR, td.power) * (1 - td.min));
-          tidalField[y * w + x] = decay;
-        }
-      }
+      /* 黑洞潮汐：去掉 tidalField（逐格乘性衰减让 v→0 → Lyapunov NaN）
+         改用低 diffusionMult + 低 dtMult + 稍高 globalDecay 模拟"黑洞拖拽"。
+         v 场缓慢衰减但不会被压到零，Lyapunov 保持可计算。*/
       return {
-        diffusionMult: cfg.diffusionMult,
-        dtMult: cfg.dtMult,
+        diffusionMult: 0.8,    /* 低扩散：黑洞附近分子被压缩 */
+        dtMult: 0.4,           /* 低 dt：时间流逝变慢（相对论效应直觉）*/
+        reactionBoost: null,
+        globalDecay: 0.003,    /* 缓慢整体衰减：黑洞潮汐拖拽 */
         noiseField: makeUniformNoise(w, h, 0.0),
-        constraintField: makeUniformConstraint(w, h, 1.0),
+        constraintField: makeUniformConstraint(w, h, 0.8),
+        tidalField: null,      /* 去掉逐格乘性衰减 → Lyapunov 保持可计算 */
         perturbation: null,
-        tidalField,
-        globalDecay: cfg.globalDecay,
       };
     }
   },
@@ -242,7 +225,7 @@ export function computeAudioChain(m, petState, exoticEnv, music2) {
   chain.sonicGenre = music2.attractorToSonicGenre(attr, lyapunov, fractal);
 
   // 4. Pet mood → audio params（melody + wave + tempo + tension + reverb）
-  const petAudio = music2.petMoodToAudio(petState.mood, null);
+  const petAudio = petMoodToAudio(petState.mood, null);
   chain.petMood = petState.mood;
   chain.petState = petState;   /* Attention 音乐性增强：完整 Pet 状态传进 audio.js for dynamics/octaveShift/voiceCount */
   chain.petAudio = petAudio;

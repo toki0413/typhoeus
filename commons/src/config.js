@@ -87,8 +87,8 @@ export const EXTREME_PHYSICS = {
     dtMult: 1.0,
     reactionBoost: null,   // 热梯度由 diffusionField_u/v 生成，不需要 reaction 乘子
     globalDecay: 0,
-    /* 热梯度范围（上热下冷 → D_u 1.2 渐变到 0.8）*/
-    thermalGradient: { top: 1.2, bottom: 0.8, topV: 1.1, bottomV: 0.8 },
+    /* 热梯度范围（±10% 差异，物理稳定但有差异化）*/
+    thermalGradient: { top: 1.1, bottom: 0.9, topV: 1.05, bottomV: 0.95 },
   },
   exoMars: {
     label: '火星殖民',
@@ -103,8 +103,8 @@ export const EXTREME_PHYSICS = {
     dtMult: 1.3,
     reactionBoost: null,
     globalDecay: 0,
-    /* 碎片撞击扰动 */
-    perturbation: { rate: 3, intensity: 0.45, shape: 'perlin' },
+    /* 碎片撞击扰动（温和版本，每 3 步注入 0.05，有差异化但不炸）*/
+    perturbation: { rate: 3, intensity: 0.05, shape: 'perlin' },
   },
   exoBlackhole: {
     label: '黑洞潮汐',
@@ -112,8 +112,8 @@ export const EXTREME_PHYSICS = {
     dtMult: 0.4,
     reactionBoost: null,
     globalDecay: 0.0005,
-    /* 潮汐衰减：离中心越远衰减越多，最远衰减到 0.6 */
-    tidalDecay: { min: 0.6, power: 3 },
+    /* 潮汐衰减：离中心越远衰减越多，最远衰减到 0.95（温和版，让系统保持活性）*/
+    tidalDecay: { min: 0.95, power: 2 },
   },
 };
 
