@@ -111,6 +111,8 @@ export class AudioEngine {
     this.built = false;
     this.lastMetricsUpdate = 0;
     this.tempoSmoothed = 0.5;
+    /* ---- 🌌 全链 audioChain: env → sim.metrics → Pet mood → music2 → audio ---- */
+    this._audioChain = null;
     this._build();
 
     /* ---- 音乐性增强（v3）状态 ---- */
@@ -231,6 +233,70 @@ export class AudioEngine {
   setPan(v) {
     this.pan = v;
     if (this.built) this.panner.pan.setTargetAtTime(v, this.ctx.currentTime, 0.2);
+  }
+
+  /* ================================================================
+   * setAudioChain: env → sim → Pet → music2 → audio 的全链入口
+   *                                                                *
+   * 由 app.js refreshMainMetrics() 每 5 步调用一次。                *
+   * 接收 computeAudioChain() 返回的完整结果：                       *
+   *   finalTempo    — Pet mood × 极端环境 tempo modifier            *
+   *   finalTension  — Pet mood tension (sick 0.75 → content 0.05)   *
+   *   finalReverb   — Pet mood reverb                               *
+   *   finalScaleDegrees — Buehler selectiveImperfectionScale 音阶   *
+   *   finalWave     — Pet mood 波形                                 *
+   *   finalMelody   — Pet mood 旋律轮廓                            *
+   * ================================================================ */
+  setAudioChain(chain) {
+    this._audioChain = chain;
+    if (!chain) return;
+    if (!this.built) return;
+    const now = this.ctx.currentTime;
+
+    // 1. finalTempo → heartbeat BPM 覆盖（极端环境心跳自然快慢）
+    //    chain.finalTempo 是倍率 (0.35 ~ 1.40)，乘在 heartbeatBPM 上
+    if (chain.finalTempo !== undefined) {
+      const target = this._heartbeatBPM * chain.finalTempo;
+      this._heartbeatBPM = this._heartbeatBPM * 0.6 + target * 0.4;  // 平滑过渡
+    }
+
+    // 2. finalWave → 写入 mapping.wave（旋律音 + 心跳音用这个音色）
+    if (chain.finalWave) {
+      if (!this.mapping) this.mapping = {};
+      this.mapping.wave = chain.finalWave;
+    }
+
+    // 3. finalScaleDegrees → 覆盖 Buehler scale（tick() 里 _degreeFreq 用 mapping.scale）
+    if (chain.finalScaleDegrees) {
+      this._activeScaleDegrees = chain.finalScaleDegrees;
+    }
+
+    // 4. finalReverb → delay wet + delay feedback（Pet sad/sick → 干声；happy → 混响）
+    if (chain.finalReverb !== undefined) {
+      const wet = 0.05 + chain.finalReverb * 0.35;   // 0.05 ~ 0.40
+      const fb = 0.12 + chain.finalReverb * 0.20;     // 0.12 ~ 0.32
+      this.delayWet.gain.setTargetAtTime(wet, now, 0.5);
+      this.delayFb.gain.setTargetAtTime(fb, now, 0.5);
+    }
+
+    // 5. finalTension → chaos temperature 偏移（sick 紧张 → chaosKnob 被拉高 → strictness 降低）
+    if (chain.finalTension !== undefined) {
+      // 叠加 tension 到 chaos temperature，让 Pet 情绪影响 strictness
+      const baseTemp = this._chaosTemperature ?? 0.2;
+      const effectiveTemp = Math.min(1.0, baseTemp + chain.finalTension * 0.3);
+      this._chaosTemperature = effectiveTemp;
+      if (this.mapping) {
+        this.mapping.strictness = clamp(1 - effectiveTemp * 0.55, 0.2, 1.0);
+      }
+    }
+
+    // 6. 极端环境日志（仅状态变化时打印，避免刷屏）
+    if (chain.tempoModifier && Math.abs(chain.tempoModifier - 1.0) > 0.15) {
+      if (this._lastExoticTempo !== chain.tempoModifier) {
+        this._lastExoticTempo = chain.tempoModifier;
+        console.log(`♪ Audio chain → exotic tempo ×${chain.tempoModifier.toFixed(2)} | mood=${chain.petMood} | wave=${chain.finalWave}`);
+      }
+    }
   }
 
   setEnabled(on) {

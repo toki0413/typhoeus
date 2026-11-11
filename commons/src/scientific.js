@@ -192,50 +192,127 @@ export class ReactionDiffusionEngine {
     this._initField(pattern || 'ring');
   }
 
+  /** 注入极端环境物理参数（physics.js 调用）*/
+  setPhysics(physicsObj) {
+    this._physics = physicsObj;
+  }
+  clearPhysics() { this._physics = null; }
+
   /* ---- 一步 Euler 积分 ---- */
   step() {
     const { w, h } = this;
+    const physics = this._physics;
+    const diffMult = physics?.diffusionMult ?? 1.0;
+    const dtMult = physics?.dtMult ?? 1.0;
+    const globalDecay = physics?.globalDecay ?? 0;
+    const boost = physics?.reactionBoost ?? null;
+    const fMult = boost?.fMult ?? 1.0;
+    const kMult = boost?.kMult ?? 1.0;
+    const aMult = boost?.aMult ?? 1.0;
+    const bMult = boost?.bMult ?? 1.0;
+    const A_Mult = boost?.A_Mult ?? 1.0;
+    const B_Mult = boost?.B_Mult ?? 1.0;
+
+    // 土星环碎片：每 perturbation.rate 步注入扰动
+    if (physics?.perturbation && this.t % physics.perturbation.rate === 0) {
+      const { intensity = 0.4 } = physics.perturbation;
+      const fld = physics.noiseField;
+      if (fld) {
+        for (let i = 0; i < w * h; i++) {
+          this.v[i] = clampSafe(this.v[i] + intensity * (Math.random() - 0.5) * 2 * fld[i], 0, 1);
+        }
+      } else {
+        for (let i = 0; i < w * h; i++) {
+          this.v[i] = clampSafe(this.v[i] + intensity * (Math.random() - 0.5) * 2, 0, 1);
+        }
+      }
+    }
+
     const { D_u, D_v, engine } = this.params;
     const { boundary, dt, u, v } = this;
     const u_new = new Float32Array(w * h);
     const v_new = new Float32Array(w * h);
 
     if (engine === 'grayScott') {
-      const { f, k } = this.params;
+      const f = this.params.f * fMult;
+      const k = this.params.k * kMult;
+      const baseD_u = D_u * diffMult;
+      const baseD_v = D_v * diffMult;
+      const fU = physics?.diffusionField_u, fV = physics?.diffusionField_v;
+
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
+          const idx = y * w + x;
           const lapU = laplacian(u, w, h, x, y, boundary);
           const lapV = laplacian(v, w, h, x, y, boundary);
-          const uu = u[y * w + x];
-          const vv = v[y * w + x];
+          const uu = u[idx];
+          const vv = v[idx];
           const uv2 = uu * vv * vv;
-          u_new[y * w + x] = clampSafe(uu + dt * (D_u * lapU - uv2 + f * (1 - uu)), 0, 1);
-          v_new[y * w + x] = clampSafe(vv + dt * (D_v * lapV + uv2 - (f + k) * vv), 0, 1);
+          // 逐格扩散系数（木卫二热梯度用）：标量 × field[idx]
+          const Du = fU ? baseD_u * fU[idx] : baseD_u;
+          const Dv = fV ? baseD_v * fV[idx] : baseD_v;
+          u_new[idx] = clampSafe(uu + dt * dtMult * (Du * lapU - uv2 + f * (1 - uu)), 0, 1);
+          v_new[idx] = clampSafe(vv + dt * dtMult * (Dv * lapV + uv2 - (f + k) * vv), 0, 1);
+
+          // 黑洞潮汐：tidalField 让 v 场随"离中心距离"衰减
+          if (physics?.tidalField) {
+            v_new[idx] *= physics.tidalField[idx];
+          }
+          if (globalDecay > 0) {
+            u_new[idx] *= (1 - globalDecay);
+            v_new[idx] *= (1 - globalDecay * 0.5);
+          }
         }
       }
     } else if (engine === 'fitzHughNagumo') {
-      const { a, b, c } = this.params;
+      const a = this.params.a * aMult;
+      const b = this.params.b * bMult;
+      const c = this.params.c;
+      // FHN 默认 D_u=D_v=1.0，但 physics 可以乘 diffMult + 逐格 field
+      const baseD_u = (this.params.D_u ?? 1.0) * diffMult;
+      const baseD_v = (this.params.D_v ?? 1.0) * diffMult;
+      const fU = physics?.diffusionField_u, fV = physics?.diffusionField_v;
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
+          const idx = y * w + x;
           const lapU = laplacian(u, w, h, x, y, boundary);
           const lapV = laplacian(v, w, h, x, y, boundary);
-          const uu = u[y * w + x];
-          const vv = v[y * w + x];
-          u_new[y * w + x] = clampSafe(uu + dt * (lapU + c * (uu - uu * uu * uu / 3 + vv)), -2, 2);
-          v_new[y * w + x] = clampSafe(vv + dt * (lapV - (uu - a + b * vv) / c), -2, 2);
+          const uu = u[idx];
+          const vv = v[idx];
+          const Du = fU ? baseD_u * fU[idx] : baseD_u;
+          const Dv = fV ? baseD_v * fV[idx] : baseD_v;
+          u_new[idx] = clampSafe(uu + dt * dtMult * (Du * lapU + c * (uu - uu * uu * uu / 3 + vv)), -2, 2);
+          v_new[idx] = clampSafe(vv + dt * dtMult * (Dv * lapV - (uu - a + b * vv) / c), -2, 2);
+          if (physics?.tidalField) v_new[idx] *= physics.tidalField[idx];
+          if (globalDecay > 0) {
+            u_new[idx] *= (1 - globalDecay);
+            v_new[idx] *= (1 - globalDecay * 0.5);
+          }
         }
       }
     } else if (engine === 'brusselator') {
-      const { A, B } = this.params;
+      const A = this.params.A * (boost?.A_Mult ?? 1.0);
+      const B = this.params.B * (boost?.B_Mult ?? 1.0);
+      const baseD_u = this.params.D_u * diffMult;
+      const baseD_v = this.params.D_v * diffMult;
+      const fU = physics?.diffusionField_u, fV = physics?.diffusionField_v;
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
+          const idx = y * w + x;
           const lapU = laplacian(u, w, h, x, y, boundary);
           const lapV = laplacian(v, w, h, x, y, boundary);
-          const uu = u[y * w + x];
-          const vv = v[y * w + x];
+          const uu = u[idx];
+          const vv = v[idx];
           const u2v = uu * uu * vv;
-          u_new[y * w + x] = clampSafe(uu + dt * (D_u * lapU + A + u2v - (B + 1) * uu), 0, 10);
-          v_new[y * w + x] = clampSafe(vv + dt * (D_v * lapV + B * uu - u2v), 0, 10);
+          const Du = fU ? baseD_u * fU[idx] : baseD_u;
+          const Dv = fV ? baseD_v * fV[idx] : baseD_v;
+          u_new[idx] = clampSafe(uu + dt * dtMult * (Du * lapU + A + u2v - (B + 1) * uu), 0, 10);
+          v_new[idx] = clampSafe(vv + dt * dtMult * (Dv * lapV + B * uu - u2v), 0, 10);
+          if (physics?.tidalField) v_new[idx] *= physics.tidalField[idx];
+          if (globalDecay > 0) {
+            u_new[idx] *= (1 - globalDecay);
+            v_new[idx] *= (1 - globalDecay * 0.5);
+          }
         }
       }
     }

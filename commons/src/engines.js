@@ -905,6 +905,7 @@ export class ScientificEngine {
   }
 
   step() {
+    if (this._physics) this._rd.setPhysics(this._physics);
     for (let i = 0; i < 2; i++) this._rd.step();
     this.grid = this._rdSnapshotAsGrid();
     for (let i = 0; i < this.age.length; i++) {
@@ -912,6 +913,10 @@ export class ScientificEngine {
       else { this.age[i] = 0; }
     }
   }
+
+  /** 把 physics.js 的极端环境物理参数注入到底层 ReactionDiffusionEngine */
+  setPhysics(physicsObj) { this._physics = physicsObj; }
+  clearPhysics() { this._physics = null; this._rd.clearPhysics?.(); }
 
   reset() { this._rd.reset(this.env.pattern); this.grid = this._rdSnapshotAsGrid(); }
   setEnv(env) { this.env = env; }

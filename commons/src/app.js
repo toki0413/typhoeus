@@ -48,12 +48,16 @@ import { clamp, hashString, mulberry32, proceduralName, toHex, uid } from './rng
 
 /* ---- 科学工具模块（静态 import + 运行时降级） ---- */
 import { runPlayerMC, discretizeField, CPM_DEFAULTS } from './cpm.js';
+import { applyExoticPhysics, computeAudioChain } from './physics.js';
+import {
+  selectiveImperfectionScale, edgeOfChaosKnob, attractorToSonicGenre
+} from './music2.js';
 import { runParameterScan, renderHeatmap, DEFAULT_SCAN_AXES, SCAN_METRICS } from './scan.js';
 import { matchPatternLibrary, PATTERN_LIBRARY, buildDiscoveryRecord } from './patterns.js';
 import { saveAsDiscovery, buildOpenScienceIssue, loadLeaderboard, rankDiscoveries, clearLeaderboard, exportLeaderboard, importDiscoveries } from './leaderboard.js';
 /* ---- Commons-JEPA：形态嵌入空间里的预测（超越 Foldit 的核心武器）---- */
 import { PlayerPredictor, toMorphoEmbedding, jepaSoundFeedback, morphoDistance } from './jepa.js';
-import { PetState, PET_MOOD, PET_MOOD_EMOJI, PET_MOOD_LABEL, petMoodToOverlay } from './pet.js';
+import { PetState, PET_MOOD, PET_MOOD_EMOJI, PET_MOOD_LABEL, petMoodToOverlay, petMoodToAudio } from './pet.js';
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                          */
@@ -524,6 +528,21 @@ function refreshMainMetrics() {
     }
     renderPetHUD();
   }
+
+  /* ===== 🌌 全链打通：env → sim.metrics → Pet mood → music2 (Buehler/Bell/Kolic/Pimenta) → audio ===== */
+  try {
+    const audioChain = computeAudioChain(
+      m,
+      state.pet.state || { mood: 'content' },
+      state.exoticEnvId,
+      { selectiveImperfectionScale, edgeOfChaosKnob, attractorToSonicGenre, petMoodToAudio }
+    );
+    if (state.audio) {
+      // 把全链结果传给 audio.js — tempo / tension / reverb / scale 全动态
+      state.audio.setAudioChain?.(audioChain);
+    }
+  } catch (e) { /* audio 未就绪时静默跳过 */ }
+
   updateHUD();
   updateStructValues();
 }
@@ -2512,13 +2531,28 @@ function onEnvClick(e) {
     if (!target) return;
     // 深拷贝 env（避免 defaultEnv 共享引用）
     const newEnv = defaultEnv(target.env);
+    newEnv._exoticId = id;  // 打上极端环境标记
     // 保持当前 pattern 不变（除非你想完全切），这里用极端预设的 pattern
     state.recipe.env = newEnv;
     state.sim.setEnv(newEnv);
     state.sim.reset();
+
+    /* ===== 物理注入：physics.js → ScientificEngine._physics → step() 真实扩散/反应 ===== */
+    const physicsObj = applyExoticPhysics(
+      newEnv,
+      state.recipe.seed.scientific?.engineType || state.recipe.seed.engine,
+      state.sim.width,
+      state.sim.height
+    );
+    if (physicsObj && state.sim.setPhysics) {
+      state.sim.setPhysics(physicsObj);
+      console.log(`🧪 Exotic physics injected → ${target.label} | D×${physicsObj.diffusionMult ?? 1} | dt×${physicsObj.dtMult ?? 1}${physicsObj.reactionBoost ? ` | f×${physicsObj.reactionBoost.fMult ?? 1}/k×${physicsObj.reactionBoost.kMult ?? 1}` : ''}${physicsObj.perturbation ? ` | perturbation=${physicsObj.perturbation.rate}步/${physicsObj.perturbation.intensity}` : ''}`);
+    }
+
     state.exoticEnvId = id;
     afterEnvReset();
     renderEnvPanel();
+    renderPetHUD();
     toast(`${target.emoji} 切到「${target.label}」· ${target.desc}`, 2600);
     return;
   }
@@ -2526,8 +2560,23 @@ function onEnvClick(e) {
   const cancelExotic = e.target.closest('[data-exotic-cancel]');
   if (cancelExotic) {
     state.exoticEnvId = null;
+    /* ① 清 physics.js 注入的所有物理参数（D×0.5 / dt×0.4 / 潮汐场 / 热梯度等）*/
+    if (state.sim.clearPhysics) state.sim.clearPhysics();
+    /* ② env 恢复默认值（极端环境的 timeScale/noise/constraint 全部回正常）*/
+    state.recipe.env = defaultEnv(state.recipe.env);
+    delete state.recipe.env._exoticId;
+    state.sim.setEnv(state.recipe.env);
+    /* ③ reset sim 让新物理生效 */
+    state.sim.reset();
+    /* ④ Pet 情绪清零（从极端环境回来，一切 fresh start）*/
+    state.pet.state = new PetState();
+    state.lastPetMood = null;
+    /* ⑤ 刷新所有 UI + 指标 + Pet HUD */
+    afterEnvReset();
     renderEnvPanel();
-    toast('已切回普通环境');
+    renderPetHUD();
+    refreshMainMetrics();
+    toast('♡ 已切回普通环境 · 物理清零 · 重新播种');
     return;
   }
 
@@ -2756,6 +2805,24 @@ function onEnvInput(e) {
   state.forceMetrics = true;
   const head = e.target.closest('.field')?.querySelector('.val');
   if (head) head.textContent = display;
+
+  /* ===== 🌌 如果当前在极端环境，改完 slider 后重算 physics 注入 =====
+   * 极端环境的 physics.transform() 里 noiseField/constraintField 是用 env.noise/constraint 生成的，
+   * 所以用户改了这些 slider 后必须重新注入，否则 physics 里的 field 还是旧值。
+   */
+  if (state.exoticEnvId && state.sim.setPhysics) {
+    env._exoticId = state.exoticEnvId;  // 确保 marker 在
+    const physicsObj = applyExoticPhysics(
+      env,
+      state.recipe.seed.scientific?.engineType || state.recipe.seed.engine,
+      state.sim.width,
+      state.sim.height
+    );
+    if (physicsObj) {
+      state.sim.setPhysics(physicsObj);
+      // 不需要 reset，physics 注入在 step() 里自动生效
+    }
+  }
 }
 
 function onCommonsClick(e) {
