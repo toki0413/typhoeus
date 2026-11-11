@@ -553,7 +553,9 @@ export class StageRenderer {
   _drawPulse(now, W, H) {
     if (!this.pulse) return;
     const p = this.pulse;
-    const elapsed = (now - p.t0) / 1000;
+    /* rAF 时间戳可能早于触发脉冲时的 performance.now()（首帧/后台节流），
+       elapsed 为负会让下面的取模变负 → arc 收到负半径抛 IndexSizeError。 */
+    const elapsed = Math.max(0, (now - p.t0) / 1000);
     if (elapsed > 2.4) {
       this.pulse = null;
       return;
@@ -568,7 +570,7 @@ export class StageRenderer {
       const n = 9;
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2 + now * 0.001;
-        const r = base * (0.18 + ((elapsed * 0.8 + i * 0.09) % 1) * 0.3);
+        const r = Math.max(0, base * (0.18 + ((elapsed * 0.8 + i * 0.09) % 1) * 0.3));
         ctx.strokeStyle = `hsla(${t.hue2 + i * 6}, 90%, 68%, ${0.22 * (1 - elapsed / 2.4)})`;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
@@ -586,7 +588,7 @@ export class StageRenderer {
       ctx.stroke();
     } else if (p.type === 'reproduction') {
       for (let i = 0; i < 2; i++) {
-        const r = base * (0.1 + ((elapsed + i * 0.35) % 1) * 0.42);
+        const r = Math.max(0, base * (0.1 + ((elapsed + i * 0.35) % 1) * 0.42));
         ctx.strokeStyle = `hsla(${t.hue}, 92%, 68%, ${0.5 * (1 - ((elapsed + i * 0.35) % 1))})`;
         ctx.lineWidth = 2.5;
         ctx.beginPath();

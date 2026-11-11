@@ -82,6 +82,10 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 let _galleryBreathRafId = null;
 let _galleryLastTick = 0;
 
+// 库内未剖析种子的后台剖析队列（queueProfiles 使用）
+let profileQueue = [];
+let profileTimer = null;
+
 /* ============================================================== */
 /* 无障碍：动效开关初始化                                          */
 /* 优先级：localStorage 用户覆盖 > prefers-reduced-motion 系统设置 */
