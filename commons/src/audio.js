@@ -148,7 +148,18 @@ export class AudioEngine {
     this._chordBeatCount = 8;       // 默认 8 拍切换一次（约 6.67 秒 @ 72BPM）
     this._melodyContour = null;    // Layer 3: 主旋律
     this._melodyIdx = 0;
+    this._melodyEpoch = 0;         // 每次重生成 +1 → 旋律不会原样循环
     this._sparkleNext = 0;         // Layer 4: 水晶闪烁
+    /* 生命涌现：种群趋势 → bloom/thinning 姿态 */
+    this._lastDensity = null;
+    this._lastDensityAt = 0;
+    this._gateUntil = 0;           // thinning 后的留白窗口
+    this._padCutoff = 2200;        // 由生命密度驱动（1100–3900Hz）
+    this._vitality = 0.5;          // activity*0.65 + density*0.35
+    this._intensity = 0.5;         // 编曲强度（快起慢落）→ 层次进出
+    this._type = null;             // 上一次的结构态
+    this._registerShift = 0;       // 结构态 → 八度位移（chaotic +1 / stable -1）
+    this._scaleDegrees = null;     // 当前音阶（科学引擎用 Buehler，生命引擎用五声）
   }
 
   _build() {
@@ -375,7 +386,7 @@ export class AudioEngine {
     const now = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(now);
     if (on) {
-      this.master.gain.setTargetAtTime(0.95, now, 0.35);
+      this.master.gain.setTargetAtTime(0.88, now, 0.35);
       this.nextNote = now + 0.15;
       this._tuneDrone();
     } else {
@@ -432,6 +443,11 @@ export class AudioEngine {
     const buehlerScale = selectiveImperfectionScale(fractal);
     // 音阶动态切换：不是硬五声，而是 fractal 决定 defect density
     this._activeScaleDegrees = buehlerScale.degrees;
+    /* 科学引擎（有 fractal）用 Buehler 音阶；生命引擎保持用户选择的五声，
+       避免 fractal 缺省值 1.0 把五声变成全音音阶 */
+    this._scaleDegrees = m.fractal !== undefined
+      ? buehlerScale.degrees
+      : (SCALES[mapping.scale || 'major'] || SCALES.major).degrees;
 
     /* [3] Bell & Gabora 2016: Edge of Chaos creativity knob */
     const chaosKnob = edgeOfChaosKnob(lyapunov);
@@ -492,14 +508,25 @@ export class AudioEngine {
     this._chordBeatCount = Math.round(clamp(8 - density * 6, 2, 8));
 
     /* ---- Layer 3: Melody Contour ---- */
-    // 每 16 拍（~8 秒）重新生成一段新的旋律轮廓
+    // 每次轮廓耗尽都重新生成，并把「当前生命状态 + epoch」写进种子：
+    // 不再是同一段旋律无限循环，而是随密度/熵/活跃度持续演化。
     if (!this._melodyContour || this._melodyIdx >= this._melodyContour.length) {
-      const seed = (hashString(String(attractorType) + String(lyapunov.toFixed(2))) >>> 0) % 1000000;
+      this._melodyEpoch = (this._melodyEpoch || 0) + 1;
+      const seed = (hashString(JSON.stringify({
+        t: attractorType,
+        l: +lyapunov.toFixed(2),
+        d: +density.toFixed(2),
+        e: +entropy.toFixed(2),
+        a: +activity.toFixed(2),
+        n: this._melodyEpoch,
+      })) >>> 0) % 1000000;
       const scale = SCALES[mapping.scale || 'major'];
       const raw = generateMelodyContour(attractorType, scale.degrees, seed);
       // Voice leading 修正（稳定态严格，混沌态宽松）
       const maxJump = attractorType === 'stable' ? 2 : attractorType === 'chaotic' ? 12 : 7;
-      this._melodyContour = applyVoiceLeading(raw, maxJump);
+      /* 乐句长度随活跃度变化：活跃 → 长句；安静 → 短句 + 留白 */
+      const len = 6 + Math.round(clamp(activity, 0, 1) * 14);
+      this._melodyContour = applyVoiceLeading(raw, maxJump).slice(0, len);
       this._melodyIdx = 0;
     }
 
@@ -549,6 +576,46 @@ export class AudioEngine {
     const scale = SCALES[mapping.scale || 'major'];
     const rootMidi = this._rootMidi();
     const AC = AUDIO_CONSTANTS;
+
+    /* ================================================================ */
+    /* 🧬 生命涌现：把「种群变化」变成可听见的姿态                      */
+    /*   - 繁盛度 → pad 亮度 / 和弦音数                                  */
+    /*   - 种群上升 → 上行琶音（bloom）                                   */
+    /*   - 种群骤降 → 低频闷响 + 短暂留白（thinning）                     */
+    /* ================================================================ */
+    const lifeDensity = clamp(m.density, 0, 1);
+    this._vitality = clamp(activity * 0.65 + lifeDensity * 0.35, 0, 1);
+    /* 编曲强度：快起慢落 —— 生命活跃时层次迅速进入，安静时缓慢退场 */
+    const rate = this._vitality > this._intensity ? 0.22 : 0.05;
+    this._intensity += (this._vitality - this._intensity) * rate;
+    this._padCutoff = 1100 + lifeDensity * 2800;
+
+    /* 空气层电平随生命力起伏：繁盛时"空气更满"，沉寂时退到几乎听不见 */
+    if (this.airBed && now >= (this._airNext || 0)) {
+      this._airNext = now + 0.5;
+      const airTarget = 0.006 + this._intensity * 0.018;
+      for (const a of this.airBed) a.gain.gain.setTargetAtTime(airTarget, now, 0.8);
+    }
+
+    /* 生命力跨过阈值 → 八度位移（滞回，避免抖动）：
+       繁盛时旋律抬高一个八度，衰退时降低一个八度 —— 生命"换一种活法"时音区跟着换 */
+    if (this._intensity > 0.52) this._registerShift = 1;
+    else if (this._intensity < 0.40) this._registerShift = -1;
+    else this._registerShift = 0;
+
+    if (this._lastDensity == null) {
+      this._lastDensity = lifeDensity;
+      this._lastDensityAt = now;
+    } else if (now - this._lastDensityAt > 1.0) {
+      const delta = lifeDensity - this._lastDensity;
+      this._lastDensity = lifeDensity;
+      this._lastDensityAt = now;
+      /* 手势之间有冷却，避免密集抖动；阈值取 0.8%，常规演化也能触发 */
+      if (now >= (this._gestureCooldown || 0)) {
+        if (delta > 0.008) { this._bloom(now); this._gestureCooldown = now + 2.5; }
+        else if (delta < -0.008) { this._thin(now); this._gestureCooldown = now + 2.5; }
+      }
+    }
 
     /* ================================================================ */
     /*  Attention 统一聚合 v5：8 项聚合（音乐性 44% → 75%）              */
@@ -639,16 +706,19 @@ export class AudioEngine {
       const chordMidi = getChordNotes(
         this._chordDensity,
         this._chordRootDegree,
-        scale.degrees,
+        this._scaleDegrees || scale.degrees,
         mapping.octave ?? 3,
         rootMidi - 12,   // chord pad 在低八度，听起来是支撑
       );
       /* Attention 音乐性增强：音量 × dyn.chordPad（Pet mood → pp ↔ ff）
-         pad 音符交替左右声像，避免整个和弦挤在正中 */
-      chordMidi.forEach((midi, ci) => {
+         pad 音符交替左右声像，避免整个和弦挤在正中；
+         和弦音数随生命密度增加 —— 繁盛时和声更厚 */
+      const noteCount = Math.max(3, Math.min(chordMidi.length, 3 + Math.round(lifeDensity * 8)));
+      const padAmp = dyn.chordPad * (0.65 + this._intensity * 0.7);
+      chordMidi.slice(0, noteCount).forEach((midi, ci) => {
         const freq = midiToFreq(midi);
         const pan = (ci % 2 === 0 ? -1 : 1) * (0.18 + 0.1 * (ci % 3));
-        this._chordTone(freq, this._chordNext, chordSec * 0.9, dyn.chordPad, waves.chordPad, pan);
+        this._chordTone(freq, this._chordNext, chordSec * 0.9, padAmp, waves.chordPad, pan);
       });
       this._chordNext += chordSec;
     }
@@ -657,11 +727,12 @@ export class AudioEngine {
     /*  Layer 3: Lead Pulse + Counterpoint（巴赫复调）                    */
     /*  音乐性增强：分声部 wave + dynamics × register 漂移 × counter-melody */
     /* ================================================================ */
-    const melBeat = beat / 2;
+    /* 旋律速率随生命力变化：沉寂时拉长（留白），繁盛时更密 */
+    const melBeat = (beat / 2) * (1.55 - this._intensity * 0.75);
     if (this.nextNote === 0 || now > this.nextNote - melBeat) this.nextNote = now + melBeat * 0.3;
 
     const strict = mapping.strictness ?? 0.7;
-    if (this.nextNote < now + 0.12) {
+    if (this.nextNote < now + 0.12 && now >= (this._gateUntil || 0)) {
       if (this._melodyContour && this._melodyIdx < this._melodyContour.length) {
         /* 主旋律：register = 0（基础）+ octShift（Pet mood 漂移）*/
         const degree = this._melodyContour[this._melodyIdx];
@@ -672,8 +743,8 @@ export class AudioEngine {
         /* Attention 音乐性增强：wave 来自 waves.melody（Pet mood wave）*/
         this._tone(freq, this.nextNote, dur, amp, waves.melody, 0.5);
 
-        /* Counter-melody：Lyapunov 高时 +1 声部（巴赫复调）*/
-        if (nVoices >= 2 && attractorType !== 'endangered' && attractorType !== 'extinct') {
+        /* Counter-melody：生命繁盛 + 混沌度高时 +1 声部（巴赫复调）*/
+        if (nVoices >= 2 && this._intensity > 0.45 && attractorType !== 'endangered' && attractorType !== 'extinct') {
           /* counter-melody 从主 contour 高 2-3 度（五声里），register 差一个八度 */
           const counterDegree = (degree + 2) % 5;
           const counterOct   = octShift + 1;  /* 高八度对位 */
@@ -723,6 +794,23 @@ export class AudioEngine {
     osc.stop(when + 0.42);
   }
 
+  /* ---- 生命涌现：种群增长 → 上行琶音（bloom）---- */
+  _bloom(now) {
+    if (!this.built || !this.enabled) return;
+    const degrees = [0, 2, 4, 3];
+    degrees.forEach((deg, i) => {
+      const f = this._degreeFreq(deg, 1);
+      this._tone(f, now + 0.02 + i * 0.13, 0.24, 0.075, 'triangle', 0.7, 0, i % 2 ? 0.45 : -0.45);
+    });
+  }
+
+  /* ---- 生命涌现：种群骤降 → 低频闷响 + 留白（thinning）---- */
+  _thin(now) {
+    if (!this.built || !this.enabled) return;
+    this._gateUntil = now + 1.2;
+    this._heartbeatTone(midiToFreq(this._rootMidi() - 12), now + 0.02, 0.2);
+  }
+
   /* ---- Layer 2: Chord pad tone（长 attack，slow rise）---- */
   _chordTone(freq, when, dur, amp = 0.14, wave = 'triangle', pan = 0) {
     if (this.voices > 24) return;
@@ -731,8 +819,10 @@ export class AudioEngine {
     const osc = ctx.createOscillator();
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    /* 900Hz 会把 pad 的泛音全部滤掉 → 听感闷、单薄；抬到 2.2kHz 保留中高频 */
-    filter.frequency.value = 2200;
+    /* 900Hz 会把 pad 的泛音全部滤掉 → 听感闷、单薄；
+       现在的截止频率由生命密度驱动（1100–3900Hz），繁盛时更亮 */
+    const padCut = this._padCutoff ?? 2200;
+    filter.frequency.value = padCut;
     filter.Q.value = 0.9;
     osc.type = wave === 'sine' ? 'triangle' : wave;   /* pad 不用纯 sine，留一点泛音 */
     osc.frequency.setValueAtTime(freq, when);
@@ -807,10 +897,13 @@ export class AudioEngine {
 
   _degreeFreq(degree, octaveShift = 0) {
     const mapping = this.mapping || { scale: 'major', root: 0, octave: 3, register: 0.5 };
-    const scale = SCALES[mapping.scale] || SCALES.major;
-    const idx = ((degree % 5) + 5) % 5;
-    const oct = Math.floor(degree / 5) + octaveShift + Math.round(mapping.register * 2);
-    const midi = this._rootMidi() + scale.degrees[idx] + oct * 12;
+    const degrees = this._scaleDegrees || (SCALES[mapping.scale] || SCALES.major).degrees;
+    const len = degrees.length || 5;
+    const idx = ((degree % len) + len) % len;
+    /* 结构态带来的八度位移：chaotic 抬高、stable 降低 → 生命"换一种活法"时听得见 */
+    const oct = Math.floor(degree / len) + octaveShift + (this._registerShift || 0)
+      + Math.round((mapping.register ?? 0.5) * 2);
+    const midi = this._rootMidi() + degrees[idx] + oct * 12;
     return midiToFreq(midi);
   }
 
