@@ -1,0 +1,9 @@
+[
+  {
+    "date": "2026-11-11",
+    "mode": "Health Dashboard",
+    "score": 80,
+    "findings": { "critical": 2, "warning": 5, "suggestion": 3 },
+    "scope": "/workspace/commons — src/ (18 modules, 10,799 lines) + e2e-test.mjs"
+  }
+]
