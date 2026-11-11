@@ -23,34 +23,11 @@ export const ENGINE_GRID = {
   H: 90,
 };
 
-/* ---- Reaction-Diffusion 物理默认值 ---- */
+/* ---- Reaction-Diffusion 物理默认乘子 ----
+ * 引擎本身的 D_u/D_v/f/k/A/B/dt 默认值只在 REACTION_DIFFUSION_PRESETS
+ * （scientific.js）里维护一份；这里只放“非极端环境”的乘子，
+ * 避免同一组物理参数在两个地方各存一份、改一处忘一处。 */
 export const PHYSICS_DEFAULTS = {
-  /* Gray-Scott 经典参数（斑点）—— Turing 1952 奠定基础 */
-  grayScott: {
-    D_u: 1.0,
-    D_v: 0.5,
-    f: 0.035,
-    k: 0.065,
-    dt: 1.0,
-  },
-  /* FitzHugh-Nagumo 神经脉冲 */
-  fitzHughNagumo: {
-    a: 0.7,
-    b: 0.8,
-    c: 10.0,
-    D_u: 1.0,
-    D_v: 1.0,
-    dt: 0.5,
-  },
-  /* Brusselator 化学振荡 */
-  brusselator: {
-    A: 2.0,
-    B: 4.5,
-    D_u: 1.0,
-    D_v: 0.2,
-    dt: 0.1,
-  },
-  /* 默认的 physics 乘子（非极端环境用） */
   multipliers: {
     diffusion: 1.0,
     dt: 1.0,

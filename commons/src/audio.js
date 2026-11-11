@@ -307,11 +307,10 @@ export class AudioEngine {
       this._petTensionOffset = Math.min(1.0, chain.finalTension * AC.reverbAndTension.tensionChaosCoef);
     }
 
-    // 6. 极端环境日志（仅状态变化时打印，避免刷屏）
+    // 6. 极端环境状态跟踪（仅状态变化时更新，供调试/后续 UI 使用）
     if (chain.tempoModifier && Math.abs(chain.tempoModifier - 1.0) > 0.15) {
       if (this._lastExoticTempo !== chain.tempoModifier) {
         this._lastExoticTempo = chain.tempoModifier;
-        console.log(`♪ Audio chain → exotic tempo ×${chain.tempoModifier.toFixed(2)} | mood=${chain.petMood} | wave=${chain.finalWave}`);
       }
     }
   }
@@ -417,11 +416,9 @@ export class AudioEngine {
 
     /* [2] Pimenta-Zanon 2021: attractor → Sonic Genre */
     const genre = attractorToSonicGenre(attractorType, lyapunov, fractal);
-    // 只在 attractor 第一次变化时打印（避免刷屏）
+    // 只在 attractor 第一次变化时记录当前 genre（供状态查询）
     if (!this._lastGenre || this._lastGenre.genreId !== genre.genreId) {
       this._lastGenre = genre;
-      console.log('[SONIC GENRE]', genre.genreLabel, '|', genre.description.split('（')[0]);
-      if (genre.suggestion) console.log('  ↳', genre.suggestion);
     }
 
     /* ---- Layer 1: Heartbeat BPM（物理心率映射）---- */

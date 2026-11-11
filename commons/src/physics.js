@@ -399,12 +399,25 @@ const CROWD_KEY = 'commons.crowdFeedback.v1';
 const CROWD_TOP_N = 5;  // 只取 top 5 发现的参数
 const CROWD_LEARN_RATE = 0.1;  // 新发现权重 10%，旧默认保留 90%
 
+/* localStorage 安全包装：Node / 隐私模式 / 禁用存储时降级为进程内 Map。
+   （此前这里写的是 `typeof safeStorage !== 'undefined'`，但 safeStorage
+   从未在本模块定义，那个分支永远不可达，实际一直走裸 localStorage。） */
+let _memStore = null;
+function storage() {
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage) return localStorage;
+  } catch (_) { /* 某些环境访问 localStorage 本身也会 throw */ }
+  if (!_memStore) _memStore = new Map();
+  return {
+    getItem: (k) => _memStore.get(k) ?? null,
+    setItem: (k, v) => { _memStore.set(k, String(v)); },
+  };
+}
+
 export function crowdFeedbackBridge(newDiscovery) {
   try {
     if (!newDiscovery) return { updated: false, seedCount: 0 };
-    const lb = typeof safeStorage !== 'undefined'
-      ? safeStorage?.get('commons.leaderboard.v1', []) ?? []
-      : JSON.parse(localStorage.getItem('commons.leaderboard.v1') || '[]');
+    const lb = JSON.parse(storage().getItem('commons.leaderboard.v1') || '[]');
 
     if (lb.length === 0) return { updated: false, seedCount: 0 };
 
@@ -437,9 +450,7 @@ export function crowdFeedbackBridge(newDiscovery) {
     };
 
     // 平滑学习：新参数 = 90% 旧默认 + 10% 众包均值
-    const prev = typeof safeStorage !== 'undefined'
-      ? safeStorage?.get(CROWD_KEY, null)
-      : JSON.parse(localStorage.getItem(CROWD_KEY) || 'null');
+    const prev = JSON.parse(storage().getItem(CROWD_KEY) || 'null');
 
     const oldDefault = prev ?? { noise: 0.02, constraint: 0.15, timeScale: 1.0 };
     const learned = {
@@ -450,12 +461,8 @@ export function crowdFeedbackBridge(newDiscovery) {
       sourceSeedCount: topN.length,
     };
 
-    // 存回 localStorage
-    if (typeof safeStorage !== 'undefined') {
-      safeStorage?.set(CROWD_KEY, learned);
-    } else {
-      localStorage.setItem(CROWD_KEY, JSON.stringify(learned));
-    }
+    // 存回本地存储
+    storage().setItem(CROWD_KEY, JSON.stringify(learned));
 
     return { updated: true, seedCount: topN.length, learned };
   } catch (e) {
@@ -469,9 +476,7 @@ export function crowdFeedbackBridge(newDiscovery) {
  */
 export function getCrowdDefaultEnv() {
   try {
-    const raw = typeof safeStorage !== 'undefined'
-      ? safeStorage?.get(CROWD_KEY, null)
-      : JSON.parse(localStorage.getItem(CROWD_KEY) || 'null');
+    const raw = JSON.parse(storage().getItem(CROWD_KEY) || 'null');
     if (!raw || typeof raw !== 'object') return null;
     const pick = (v, lo, hi) =>
       Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : undefined;

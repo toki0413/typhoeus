@@ -52,12 +52,20 @@ import { applyExoticPhysics, computeAudioChain, petToPhysicsBridge, crowdFeedbac
 import {
   selectiveImperfectionScale, edgeOfChaosKnob, attractorToSonicGenre
 } from './music2.js';
-import { runParameterScan, renderHeatmap, DEFAULT_SCAN_AXES, SCAN_METRICS } from './scan.js';
+import { runParameterScan, DEFAULT_SCAN_AXES } from './scan.js';
 import { matchPatternLibrary, PATTERN_LIBRARY, buildDiscoveryRecord } from './patterns.js';
 import { saveAsDiscovery, buildOpenScienceIssue, loadLeaderboard, rankDiscoveries, clearLeaderboard, exportLeaderboard, importDiscoveries } from './leaderboard.js';
 /* ---- Commons-JEPA：形态嵌入空间里的预测（超越 Foldit 的核心武器）---- */
 import { PlayerPredictor, toMorphoEmbedding, jepaSoundFeedback, morphoDistance } from './jepa.js';
 import { PetState, PET_MOOD, PET_MOOD_EMOJI, PET_MOOD_LABEL, petMoodToOverlay, petMoodToAudio } from './pet.js';
+/* ---- UI 子模块（从 app.js 拆出） ---- */
+import { createSciencePanel } from './ui/science-panel.js';
+import { createLineageView } from './ui/lineage.js';
+import { ENV_PRESETS, EXOTIC_ENVIRONMENTS, BOUNDARY_LABEL } from './ui/presets.js';
+import {
+  esc, ENGINE_LABEL, TYPE_COLOR, TYPE_EVENT_LABEL,
+  formatFp, ruleLabel, diagnosisShort,
+} from './ui/format.js';
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                          */
@@ -65,66 +73,6 @@ import { PetState, PET_MOOD, PET_MOOD_EMOJI, PET_MOOD_LABEL, petMoodToOverlay, p
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-const esc = (s) =>
-  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-const ENGINE_LABEL = { life: 'Conway 系', lenia: 'Lenia 简化', scientific: '反应-扩散（科学）' };
-
-const ENV_PRESETS = [
-  { id: 'torus-soup', label: '环面 · 随机汤', env: defaultEnv({ pattern: 'soup', boundary: 'torus', noise: 0 }) },
-  { id: 'wall-sparse', label: '硬壁 · 稀疏', env: defaultEnv({ pattern: 'sparse', boundary: 'wall', noise: 0.01 }) },
-  { id: 'feed', label: '环面 · 营养脉冲', env: defaultEnv({ pattern: 'soup', boundary: 'torus', resource: { rate: 0.26, period: 70 } }) },
-  { id: 'noise', label: '环面 · 高扰动', env: defaultEnv({ pattern: 'sparse', boundary: 'torus', noise: 0.16, constraint: 0.12 }) },
-  { id: 'blob', label: '环面 · 团块', env: defaultEnv({ pattern: 'blob', boundary: 'torus', noise: 0 }) },
-  { id: 'ring', label: '硬壁 · 环带', env: defaultEnv({ pattern: 'ring', boundary: 'wall', noise: 0.02 }) },
-  { id: 'low-constraint', label: '环面 · 低约束', env: defaultEnv({ pattern: 'soup', boundary: 'torus', noise: 0.08, constraint: 0.05 }) },
-];
-
-/* ---- 🌌 外星/极端环境预设（一键切换）---- */
-const EXOTIC_ENVIRONMENTS = [
-  { id: 'exo-primitive',
-    label: '原始地球', emoji: '🌍',
-    desc: '38 亿年前，高扰动是 Turing 不稳定性的温床',
-    env: defaultEnv({ pattern: 'soup', boundary: 'torus', noise: 0.15, constraint: 0.1, timeScale: 2.0 }) },
-  { id: 'exo-venus',
-    label: '金星高压', emoji: '🔥',
-    desc: '时间慢 5×，边界严格，生命活得很慢',
-    env: defaultEnv({ pattern: 'blob', boundary: 'wall', noise: 0, constraint: 0.9, timeScale: 0.2 }) },
-  { id: 'exo-europa',
-    label: '木卫二冰下', emoji: '🧊',
-    desc: '微小热扰动 + 边界松散 → 螺旋波涌现',
-    env: defaultEnv({ pattern: 'ring', boundary: 'torus', noise: 0.05, constraint: 0.2, timeScale: 2.5 }) },
-  { id: 'exo-mars',
-    label: '火星殖民', emoji: '🪐',
-    desc: '低重力 = 边界松散，形态迅速膨胀',
-    env: defaultEnv({ pattern: 'soup', boundary: 'torus', noise: 0.25, constraint: 0.05, timeScale: 2.5 }) },
-  { id: 'exo-saturn',
-    label: '土星环碎片场', emoji: '💍',
-    desc: '极快时间 + 高扰动 → 混沌吸引子主导',
-    env: defaultEnv({ pattern: 'sparse', boundary: 'torus', noise: 0.6, constraint: 0.4, timeScale: 5.0 }) },
-  { id: 'exo-blackhole',
-    label: '黑洞潮汐', emoji: '🕳️',
-    desc: '几乎静止 + 严格边界 → 冻结晶体',
-    env: defaultEnv({ pattern: 'blob', boundary: 'wall', noise: 0, constraint: 1.0, timeScale: 0.05 }) },
-];
-
-const TYPE_COLOR = {
-  stable: '#7cffb2',
-  periodic: '#57d8ff',
-  chaotic: '#c39bff',
-  endangered: '#ffc46b',
-  extinct: '#ff7a9c',
-  drifting: '#8a9a95',
-};
-
-const TYPE_EVENT_LABEL = {
-  stable: '进入安睡态 ♡',
-  periodic: '开始轻轻呼吸 ♡',
-  chaotic: '变得灵动起来 ✿',
-  endangered: '需要更多关爱哦 ♡',
-  extinct: '安静地休眠了 ♡',
-  drifting: '开始慢慢漫步',
-};
 
 /* ------------------------------------------------------------------ */
 /* State                                                              */
@@ -225,6 +173,14 @@ const state = {
 };
 
 /* ------------------------------------------------------------------ */
+/* UI 子模块实例化                                                    */
+/* 工厂闭包共享 state，宿主能力（toast/modal/下载/领养）由组合根注入。 */
+/* ------------------------------------------------------------------ */
+
+const sciencePanel = createSciencePanel({ state, toast, openModal, downloadJSON });
+const lineageView = createLineageView({ state, findRecipe, adoptRecipe });
+
+/* ------------------------------------------------------------------ */
 /* Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -246,21 +202,6 @@ function normalizeRecipe(rec) {
   if (typeof out.rngSeed !== 'number') out.rngSeed = hashString(JSON.stringify(out.seed.genome));
   out.note = out.note || '';
   return out;
-}
-
-function ruleLabel(genome) {
-  if (!genome) return '—';
-  if (genome.engine === 'life') {
-    const b = genome.life.birth.join('');
-    const s = genome.life.survive.join('');
-    return `B${b || '∅'}/S${s || '∅'}`;
-  }
-  return `Lenia μ${genome.lenia.mu.toFixed(2)} σ${genome.lenia.sigma.toFixed(3)} R${genome.lenia.radius}`;
-}
-
-function formatFp(fp) {
-  const h = (fp >>> 0).toString(16).toUpperCase().padStart(8, '0');
-  return `${h.slice(0, 4)}-${h.slice(4)}`;
 }
 
 function currentFingerprint() {
@@ -586,7 +527,7 @@ function refreshMainMetrics() {
 
       // 只在科学发现 tab 打开时才刷新 UI
       const activeTab = document.querySelector('#railTabs button.active')?.dataset.tab;
-      if (activeTab === 'science') renderSciencePanel();
+      if (activeTab === 'science') sciencePanel.render();
     }
   } catch (e) { /* leaderboard 初始化可能失败（localStorage 不可用），静默跳过 */ }
 }
@@ -1115,297 +1056,6 @@ function diagnosisText(m) {
   return html;
 }
 
-/* ------------------------------------------------------------------ */
-/* 🔬 Science Discovery Panel                                          */
-/* ------------------------------------------------------------------ */
-
-function renderSciencePanel() {
-  const panel = $('#panel-science');
-  if (!panel) return;
-  const sim = state.sim;
-  const m = state.metrics;
-  const isScientific = sim?.kind === 'reaction-diffusion';
-
-  let html = '';
-
-  /* ---- Section 1: Pattern Match 已发表 Turing 模式匹配 ---- */
-  html += `<div class="sci-section"><h4>🎯 已发表模式匹配</h4>`;
-  if (!m) {
-    html += `<p class="dim">先让它演化一会儿…</p>`;
-  } else if (!isScientific) {
-    html += `<p class="dim">模式匹配只对科学引擎（Reaction-Diffusion）有效。当前引擎不产生可匹配的斑图科学指标。</p>`;
-  } else if (state.topPatterns?.length) {
-    html += `<ul class="pattern-list">`;
-    for (const p of state.topPatterns) {
-      const color = p.similarity >= 80 ? 'var(--mint)' : p.similarity >= 60 ? 'var(--amber)' : 'var(--dim)';
-      html += `<li class="pattern-item">
-        <div class="pattern-head">
-          <span class="pattern-name">${p.label}</span>
-          <span class="pattern-sim" style="color:${color}">${p.similarity}%</span>
-        </div>
-        <div class="pattern-desc">${p.desc}</div>
-        <div class="pattern-diff">
-          Lyap ${p.diff.lyapunov > 0 ? '+' : ''}${p.diff.lyapunov}
-          · D ${p.diff.fractal > 0 ? '+' : ''}${p.diff.fractal}
-          · E ${p.diff.energy}
-          · T ${p.diff.period > 0 ? '+' : ''}${p.diff.period}
-        </div>
-        <div class="pattern-refs dim">${p.refs?.join(' · ') ?? ''}</div>
-      </li>`;
-    }
-    html += `</ul>`;
-  } else {
-    html += `<p class="dim">正在匹配…</p>`;
-  }
-  html += `</div>`;
-
-  /* ---- Section 2: CPM Monte Carlo 玩家调谐 ---- */
-  html += `<div class="sci-section"><h4>🧬 Cellular Potts 细胞调谐</h4>`;
-  if (!isScientific) {
-    html += `<p class="dim">CPM 细胞调谐只对科学引擎有效。</p>`;
-  } else {
-    const mc = sim?.getMCLastResult?.();
-    html += `<p class="dim">Metropolis MC sweep × 4 — 把 v 场离散化为 Potts 细胞类型，然后让它们按黏附能自发排序。只在形态场操作，不修改物理方程。</p>`;
-    html += `<div class="sci-row">
-      <button class="btn" id="mcBtn" ${!state.playing ? '' : 'disabled'}>🧬 运行 MC 细胞调谐</button>
-      <button class="btn ghost tiny" id="mcToggle">${state.mcLabelsVisible ? '🙈 隐藏 Potts 标签' : '👁 显示 Potts 标签'}</button>
-    </div>`;
-    if (mc) {
-      const rate = (mc.acceptedRate * 100).toFixed(1);
-      const dE = mc.energyDelta.toFixed(3);
-      html += `<div class="mc-result">
-        <div>接受率 <b>${rate}%</b> | ΔH <b>${dE}</b></div>
-        <div class="dim">用 ${mc.usedField} 场 · ${mc.parameters.nTypes} 种细胞类型</div>
-      </div>`;
-    }
-  }
-  html += `</div>`;
-
-  /* ---- Section 3: 参数扫描 heatmap ---- */
-  html += `<div class="sci-section"><h4>🔥 参数空间扫描</h4>`;
-  if (!isScientific) {
-    html += `<p class="dim">参数扫描只对科学引擎有效。</p>`;
-  } else {
-    const engineType = sim.genome?.scientific?.preset || 'gs_spots';
-    const axes = DEFAULT_SCAN_AXES[engineType.startsWith('gs') ? 'grayScott' :
-                                  engineType.startsWith('fhn') ? 'fitzHughNagumo' :
-                                  engineType.startsWith('brs') ? 'brusselator' : 'grayScott'];
-    html += `<p class="dim">选 2 个物理参数 → N×M 网格搜索 → 看能量景观热力图，找到最优参数组合。</p>`;
-    html += `<div class="sci-row">
-      <button class="btn" id="scanBtn" ${state.scanRunning ? 'disabled' : ''}>
-        ${state.scanRunning ? '🔄 扫描中…' : '🔥 开始扫描'}
-      </button>
-      <button class="btn ghost tiny" id="scanShow" ${state.scanResult ? '' : 'disabled'}>📊 查看热力图</button>
-    </div>`;
-    if (state.scanResult) {
-      const r = state.scanResult;
-      html += `<div class="scan-info">
-        <div>N×M = ${r.Nx}×${r.Ny} = ${r.Nx * r.Ny} 点</div>
-        <div>最佳点：ix=${r.bestPoint.ix}, iy=${r.bestPoint.iy} · E=${r.bestPoint.energy.toFixed(4)}</div>
-        <div>最差点：ix=${r.worstPoint.ix}, iy=${r.worstPoint.iy} · E=${r.worstPoint.energy.toFixed(4)}</div>
-      </div>`;
-    }
-    html += `<details class="scan-axes">
-      <summary class="dim">扫描轴预设：${axes?.[0]?.label ?? '默认'} × ${axes?.[1]?.label ?? '默认'}</summary>
-      <p class="tiny dim">扫描完成后可以点「📊 查看热力图」在 overlay 里看 — 绿色边框=最佳点，红色边框=最差点。</p>
-    </details>`;
-  }
-  html += `</div>`;
-
-  /* ---- Section 4: Leaderboard 众包排名 ---- */
-  html += `<div class="sci-section"><h4>🏆 我的发现 · 众包排名</h4>`;
-  html += `<p class="dim">每个发现都被自动保存到浏览器本地（privacy-by-default）。排序：</p>
-    <div class="sci-row">
-      ${['similarity','energy','lyapunov','fractal','recent'].map(s =>
-        `<button class="tiny ghost lb-sort" data-sort="${s}">${sortLabel(s)}</button>`
-      ).join('')}
-    </div>
-    <div id="lbList" class="lb-list"></div>
-    <div class="sci-row">
-      <button class="btn tiny" id="lbSaveNow">💾 立即保存当前发现</button>
-      <button class="btn ghost tiny" id="lbClear">🗑 清空</button>
-      <button class="btn ghost tiny" id="lbExport">📤 导出 JSON</button>
-      <button class="btn ghost tiny" id="lbOSR">🌐 提交到开放科学</button>
-    </div>`;
-  html += `</div>`;
-
-  panel.innerHTML = html;
-
-  /* ---- Bindings ---- */
-  const mcBtn = $('#mcBtn');
-  if (mcBtn) mcBtn.addEventListener('click', runPlayerMcNow);
-  const mcToggle = $('#mcToggle');
-  if (mcToggle) mcToggle.addEventListener('click', () => {
-    state.mcLabelsVisible = !state.mcLabelsVisible;
-    sim?.renderer?.setMCOverlay?.(state.mcLabelsVisible ? sim.getMCLabels?.() : null);
-    renderSciencePanel();
-  });
-  const scanBtn = $('#scanBtn');
-  if (scanBtn) scanBtn.addEventListener('click', startParameterScan);
-  const scanShow = $('#scanShow');
-  if (scanShow) scanShow.addEventListener('click', showScanHeatmapOverlay);
-
-  // Leaderboard sort + actions
-  $$('.lb-sort').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.leaderboard = rankDiscoveries(loadLeaderboard(), btn.dataset.sort);
-      renderLeaderboardList();
-    });
-  });
-  $('#lbSaveNow')?.addEventListener('click', () => {
-    if (!state.metrics) { toast('没有可保存的发现', 1600); return; }
-    const rec = saveAsDiscovery(state.recipe, state.metrics, state.topPatterns);
-    state.leaderboard = loadLeaderboard();
-    renderLeaderboardList();
-    toast(`💾 发现已保存 · ${rec.fingerprint}`, 2000);
-  });
-  $('#lbClear')?.addEventListener('click', () => {
-    if (!confirm('清空本地所有发现？（不可恢复）')) return;
-    clearLeaderboard();
-    state.leaderboard = [];
-    renderLeaderboardList();
-    toast('已清空', 1200);
-  });
-  $('#lbExport')?.addEventListener('click', () => {
-    const lb = loadLeaderboard();
-    if (!lb.length) { toast('没有发现可导出', 1600); return; }
-    downloadJSON(`commons-discoveries-${Date.now()}.json`, lb);
-  });
-  $('#lbOSR')?.addEventListener('click', () => {
-    const lb = loadLeaderboard();
-    if (!lb.length) { toast('先保存一个发现', 1600); return; }
-    // 用最近保存的那个
-    const latest = lb[0];
-    const { title, body, url } = buildOpenScienceIssue(latest);
-    // 给用户看 body，让他们 copy-paste
-    openModal({
-      eyebrow: '开放科学仓库提交',
-      title: `提交发现：${title}`,
-      body: `<p class="dim">把下面的内容复制，然后在浏览器打开仓库 issue 页面粘贴提交。</p>
-        <pre class="osr-body" id="osrBody">${escapeHtml(body)}</pre>
-        <p class="tiny dim">目标仓库 URL：<a href="${url}" target="_blank">${url}</a></p>`,
-      actions: [
-        { label: '复制 body', cls: 'primary', onClick: () => {
-            navigator.clipboard?.writeText(body).then(() => toast('已复制！', 1400));
-          } },
-        { label: '打开仓库', cls: 'ghost', onClick: () => window.open(url, '_blank') },
-        { label: '关闭', cls: 'ghost' },
-      ],
-    });
-  });
-
-  // Initial leaderboard render
-  state.leaderboard = loadLeaderboard();
-  renderLeaderboardList();
-}
-
-function sortLabel(s) {
-  return { similarity: '相似度', energy: '能量最低', lyapunov: '混沌度', fractal: '分形最优', recent: '最新' }[s] ?? s;
-}
-
-function renderLeaderboardList() {
-  const host = $('#lbList');
-  if (!host) return;
-  const lb = state.leaderboard;
-  if (!lb.length) {
-    host.innerHTML = `<p class="dim">还没有发现 — 让它演化一会儿，自动保存会生效。或点「💾 立即保存当前发现」。</p>`;
-    return;
-  }
-  const sorted = rankDiscoveries(lb, 'similarity');
-  host.innerHTML = sorted.slice(0, 20).map((r, i) => {
-    const topMatch = r.patternMatches?.[0];
-    const sim = topMatch ? `${topMatch.similarity}%` : '—';
-    const lyap = r.metrics?.lyapunov?.toFixed(3) ?? '—';
-    const fract = r.metrics?.fractal?.toFixed(3) ?? '—';
-    const eng = r.metrics?.energy?.total?.toFixed(4) ?? '—';
-    const time = new Date(r.timestamp).toLocaleTimeString();
-    return `<div class="lb-row">
-      <span class="lb-rank">#${i + 1}</span>
-      <span class="lb-sim">${sim}</span>
-      <span class="lb-tiny dim">λ${lyap}·D${fract}·E${eng}</span>
-      <span class="lb-time dim tiny">${time}</span>
-    </div>`;
-  }).join('');
-}
-
-/* ---- CPM player trigger ---- */
-function runPlayerMcNow() {
-  const sim = state.sim;
-  if (!sim?.mcStep) { toast('CPM 只对科学引擎有效', 1600); return; }
-  const before = sim?.getMCLastResult?.();
-  const res = sim.mcStep(4);
-  if (!res) { toast('MC 调谐失败', 1600); return; }
-  const rate = (res.acceptedRate * 100).toFixed(1);
-  const dE = res.energyDelta.toFixed(3);
-  toast(`🧬 MC 完成 · 接受率 ${rate}% · ΔH ${dE}`, 2200);
-  renderSciencePanel();
-}
-
-/* ---- Parameter scan ---- */
-async function startParameterScan() {
-  const sim = state.sim;
-  if (!sim || sim.kind !== 'reaction-diffusion') { toast('扫描只对科学引擎有效', 1800); return; }
-
-  state.scanRunning = true;
-  renderSciencePanel();
-  toast('🔥 开始参数扫描…', 1600);
-
-  try {
-    const engineType = sim.genome?.scientific?.preset || 'gs_spots';
-    const axes = DEFAULT_SCAN_AXES[engineType.startsWith('gs') ? 'grayScott' :
-                                   engineType.startsWith('fhn') ? 'fitzHughNagumo' :
-                                   engineType.startsWith('brs') ? 'brusselator' : 'grayScott'];
-
-    const axes_obj = {
-      xAxis: { key: axes[0].key, min: axes[0].min, max: axes[0].max, N: 16 },
-      yAxis: { key: axes[1].key, min: axes[1].min, max: axes[1].max, N: 16 },
-    };
-    // 引擎归属由 preset 决定（scientific.js 的 preset 表是唯一事实源），这里不再硬编码 engine
-    const baseParams = { preset: engineType };
-    const result = await runParameterScan(baseParams, axes_obj, {
-      w: 40, h: 30, steps: 200,
-      progressCb: (p) => {
-        // 静默 — 16×16×200步 不算慢
-      },
-    });
-    state.scanResult = result;
-    toast(`✅ 扫描完成 · 最佳 E=${result.bestPoint.energy.toFixed(4)}`, 2000);
-  } catch (err) {
-    console.error('scan failed', err);
-    toast('扫描失败：' + (err.message ?? '未知'), 2000);
-  } finally {
-    state.scanRunning = false;
-    renderSciencePanel();
-  }
-}
-
-function showScanHeatmapOverlay() {
-  const r = state.scanResult;
-  if (!r) { toast('先跑一次扫描', 1600); return; }
-  openModal({
-    eyebrow: '参数空间能量景观',
-    title: `Heatmap · ${r.Nx}×${r.Ny}`,
-    body: `<p class="dim">绿色边框=能量最低（最接近吸引子），红色边框=能量最高（最远离）。</p>
-      <div style="text-align:center"><canvas id="heatmapCanvas"></canvas></div>
-      <p class="tiny dim">x 轴: ${r.axes.xAxis.label} (${r.gridX[0].toFixed(3)} → ${r.gridX[r.Nx - 1].toFixed(3)})
-        <br>y 轴: ${r.axes.yAxis.label} (${r.gridY[0].toFixed(3)} → ${r.gridY[r.Ny - 1].toFixed(3)})</p>`,
-    actions: [
-      { label: '导出扫描 JSON', cls: 'ghost', onClick: () => downloadJSON(`commons-scan-${Date.now()}.json`, r) },
-      { label: '关闭', cls: 'ghost' },
-    ],
-    onOpen: () => {
-      // renderHeatmap 需要 canvas 已经挂载到 DOM — openModal 的 body 渲染后
-      setTimeout(() => {
-        const c = $('#heatmapCanvas');
-        if (c) renderHeatmap(c, r, 'energy', 'viridis');
-      }, 50);
-    },
-  });
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
 
 function renderCommons() {
   const grid = $('#commonsGrid');
@@ -1597,18 +1247,6 @@ function applyEnvPreset(envId, mode) {
   }
 }
 
-function diagnosisShort(m) {
-  const map = {
-    stable: '安睡中，像一段温柔的呼吸 ♡',
-    periodic: `每 ${m.period || '—'} 代轻轻呼吸一次。`,
-    chaotic: '灵动而充满惊喜，歌声明亮热闹。',
-    endangered: '歌声轻轻的，需要你的关爱 ♡',
-    extinct: '安静地休眠了，只剩一点点余音。',
-    drifting: '慢慢漫步中，还在找自己的节奏。',
-  };
-  return map[m.type] || '';
-}
-
 function placeholderSnapshot(r) {
   /* 占位快照：用种子名+随机种子生成稳定的伪年龄/场强度数据。
      让每颗种子即使没有真实快照也能有独特的缩略图水彩感。 */
@@ -1737,8 +1375,6 @@ function hatchRandom(opts = {}) {
   switchView('cultivate');
   toast(`随机孵出了一颗小心心 ♡「${name.zh}」`, 'ok');
 }
-
-const BOUNDARY_LABEL = { torus: BOUNDARIES.torus.label, wall: BOUNDARIES.wall.label };
 
 /* ------------------------------------------------------------------ */
 /* Actions                                                            */
@@ -2288,69 +1924,6 @@ function updateCompareAudioButton() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Lineage                                                            */
-/* ------------------------------------------------------------------ */
-
-function renderLineage() {
-  const all = allCommons(state.lib);
-  const cur = currentRecipeForCompare();
-  const map = new Map();
-  for (const r of all) map.set(r.id, r);
-  map.set(cur.id, cur);
-
-  const nodes = Array.from(map.values());
-  const maxGen = Math.max(0, ...nodes.map((n) => n.seed.lineage?.generation || 0));
-  const groups = new Map();
-  for (const n of nodes) {
-    const g = n.seed.lineage?.generation || 0;
-    if (!groups.has(g)) groups.set(g, []);
-    groups.get(g).push(n);
-  }
-
-  const hybrids = nodes.filter((n) => n.seed.lineage?.parents?.length).length;
-  $('#lineageSummary').innerHTML = `
-    <div class="stat-chip">节点 <b>${nodes.length}</b></div>
-    <div class="stat-chip">最深世代 <b>${maxGen}</b></div>
-    <div class="stat-chip">杂交个体 <b>${hybrids}</b></div>
-    <div class="stat-chip">公地原生 <b>${nodes.filter((n) => n.curated).length}</b></div>`;
-
-  const tree = $('#lineageTree');
-  if (!nodes.length) {
-    tree.innerHTML = '<div class="lineage-empty">谱系还没有节点。先孵化或杂交一枚生命。</div>';
-    return;
-  }
-
-  const gens = Array.from(groups.keys()).sort((a, b) => a - b);
-  tree.innerHTML = gens
-    .map((g) => {
-      const items = groups
-        .get(g)
-        .sort((a, b) => (a.curated === b.curated ? 0 : a.curated ? -1 : 1))
-        .map((n) => {
-          const parents = (n.seed.lineage?.parentNames || []).join(' × ') || '—';
-          const isCurrent = n.id === cur.id;
-          return `<button class="lineage-node ${n.curated ? 'curated' : ''} ${n.auto ? 'auto' : ''}" data-adopt="${esc(n.id)}">
-            <div class="ln-name">${esc(n.seed.name)}${isCurrent ? ' · 当前' : ''}</div>
-            <div class="ln-meta">${ENGINE_LABEL[n.seed.genome.engine]} · ${ruleLabel(n.seed.genome)}</div>
-            <div class="ln-parents">亲本：${esc(parents)}</div>
-          </button>`;
-        })
-        .join('');
-      return `<div class="gen-row">
-        <div class="gen-label">GENERATION ${g}</div>
-        <div class="gen-nodes">${items}</div>
-      </div>`;
-    })
-    .join('');
-  tree.querySelectorAll('[data-adopt]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const rec = findRecipe(btn.dataset.adopt);
-      if (rec) adoptRecipe(rec, { toastText: `已回到「${rec.seed.name}」` });
-    });
-  });
-}
-
-/* ------------------------------------------------------------------ */
 /* Research data                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -2456,7 +2029,7 @@ function switchView(view) {
   }
   if (view === 'commons') renderCommons();
   if (view === 'compare') openCompare();
-  if (view === 'lineage') renderLineage();
+  if (view === 'lineage') lineageView.render();
   syncAudioForView();
   updateCompareAudioButton();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2490,7 +2063,7 @@ function bindUI() {
     for (const b of $$('#railTabs button')) b.classList.toggle('active', b === btn);
     for (const p of $$('.panel')) p.classList.toggle('active', p.id === `panel-${btn.dataset.tab}`);
     if (btn.dataset.tab === 'struct') updateStructValues();
-    if (btn.dataset.tab === 'science') renderSciencePanel();
+    if (btn.dataset.tab === 'science') sciencePanel.render();
   });
 
   $('#panel-rule').addEventListener('click', onRuleClick);

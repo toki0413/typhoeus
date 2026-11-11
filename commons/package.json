@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "test": "node e2e-test.mjs",
+    "test": "node --test test/unit.test.mjs && node test/app-smoke.mjs && node e2e-test.mjs",
+    "test:unit": "node --test test/unit.test.mjs",
+    "test:smoke": "node test/app-smoke.mjs",
+    "test:e2e": "node e2e-test.mjs",
     "build": "node build.mjs",
     "build:web": "npx esbuild src/app.js --bundle --format=esm --minify --outfile=bundle.js",
     "build:www": "node build.mjs && cp commons.html www/index.html && npx cap sync android",
