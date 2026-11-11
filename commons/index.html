@@ -74,10 +74,14 @@
               <div class="hud-row"><span>世代</span><b id="hudGen">0000</b></div>
             </div>
 
-            <div class="hud hud-tr">
-              <canvas id="fingerprintGlyph"></canvas>
+            <div class="hud hud-tr" id="hudPet">
+              <div class="pet-hud-mood" id="hudPetMood"><span class="pet-emoji">( •ᴗ• )</span><span class="pet-label">今天很安稳</span></div>
+              <div class="pet-hud-bars" id="hudPetBars"></div>
               <div class="hud-label">专属指纹</div>
-              <div class="fp-code" id="fingerprintCode">0000-0000</div>
+              <div class="fp-mini">
+                <canvas id="fingerprintGlyph"></canvas>
+                <span class="fp-code" id="fingerprintCode">0000-0000</span>
+              </div>
             </div>
 
             <div class="hud hud-bl">
@@ -91,6 +95,7 @@
             </div>
 
             <div class="event-banner" id="eventBanner"></div>
+            <div class="exotic-pill" id="exoticPill" style="display:none"></div>
             <div class="listen-prompt" id="listenPrompt">
               <span class="pulse-dot"></span>
               <span>轻触「♪ 聆听」，让它为你唱一首歌</span>

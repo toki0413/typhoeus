@@ -76,6 +76,34 @@ const ENV_PRESETS = [
   { id: 'low-constraint', label: '环面 · 低约束', env: defaultEnv({ pattern: 'soup', boundary: 'torus', noise: 0.08, constraint: 0.05 }) },
 ];
 
+/* ---- 🌌 外星/极端环境预设（一键切换）---- */
+const EXOTIC_ENVIRONMENTS = [
+  { id: 'exo-primitive',
+    label: '原始地球', emoji: '🌍',
+    desc: '38 亿年前，高扰动是 Turing 不稳定性的温床',
+    env: defaultEnv({ pattern: 'soup', boundary: 'torus', noise: 0.15, constraint: 0.1, timeScale: 2.0 }) },
+  { id: 'exo-venus',
+    label: '金星高压', emoji: '🔥',
+    desc: '时间慢 5×，边界严格，生命活得很慢',
+    env: defaultEnv({ pattern: 'blob', boundary: 'wall', noise: 0, constraint: 0.9, timeScale: 0.2 }) },
+  { id: 'exo-europa',
+    label: '木卫二冰下', emoji: '🧊',
+    desc: '微小热扰动 + 边界松散 → 螺旋波涌现',
+    env: defaultEnv({ pattern: 'ring', boundary: 'torus', noise: 0.05, constraint: 0.2, timeScale: 2.5 }) },
+  { id: 'exo-mars',
+    label: '火星殖民', emoji: '🪐',
+    desc: '低重力 = 边界松散，形态迅速膨胀',
+    env: defaultEnv({ pattern: 'soup', boundary: 'torus', noise: 0.25, constraint: 0.05, timeScale: 2.5 }) },
+  { id: 'exo-saturn',
+    label: '土星环碎片场', emoji: '💍',
+    desc: '极快时间 + 高扰动 → 混沌吸引子主导',
+    env: defaultEnv({ pattern: 'sparse', boundary: 'torus', noise: 0.6, constraint: 0.4, timeScale: 5.0 }) },
+  { id: 'exo-blackhole',
+    label: '黑洞潮汐', emoji: '🕳️',
+    desc: '几乎静止 + 严格边界 → 冻结晶体',
+    env: defaultEnv({ pattern: 'blob', boundary: 'wall', noise: 0, constraint: 1.0, timeScale: 0.05 }) },
+];
+
 const TYPE_COLOR = {
   stable: '#7cffb2',
   periodic: '#57d8ff',
@@ -181,6 +209,7 @@ const state = {
     visible: true,
   },
   lastPetMood: null,  // 用于检测 mood 变化 → console 反馈
+  exoticEnvId: null,  // 当前极端环境 id（null = 无）
 };
 
 /* ------------------------------------------------------------------ */
@@ -493,6 +522,7 @@ function refreshMainMetrics() {
       console.log(`🐾 Pet mood → ${newMood} ${PET_MOOD_EMOJI[newMood]} | snapshot:`, state.pet.state.snapshot());
       toast(`🐾 ${PET_MOOD_LABEL[newMood]} ${PET_MOOD_EMOJI[newMood]}`, 1600);
     }
+    renderPetHUD();
   }
   updateHUD();
   updateStructValues();
@@ -766,9 +796,70 @@ function renderSoundPanel() {
 /* Environment panel                                                  */
 /* ------------------------------------------------------------------ */
 
+function renderPetHUD() {
+  const hudPet = $('#hudPet');
+  const hudPetMood = $('#hudPetMood');
+  const hudPetBars = $('#hudPetBars');
+  if (!hudPet || !state.pet.state) return;
+
+  const p = state.pet.state;
+  const snap = p.snapshot();
+
+  // 情绪 emoji + label
+  const moodEmoji = PET_MOOD_EMOJI[snap.mood] || '';
+  const moodLabel = PET_MOOD_LABEL[snap.mood] || '';
+  if (hudPetMood) hudPetMood.innerHTML = `
+    <span class="pet-emoji">${moodEmoji}</span>
+    <span class="pet-label">${moodLabel}</span>
+    ${state.exoticEnvId ? `<span class="pet-exotic" title="当前极端环境">⚠ 极端</span>` : ''}
+  `;
+
+  // 四状态 bar
+  if (hudPetBars) {
+    hudPetBars.innerHTML = `
+      ${petBar('⚖ 平衡', snap.balance, '#c39bff')}
+      ${petBar('⚗ 均匀', snap.uniform, '#57d8ff')}
+      ${petBar('⚡ 能量', snap.energy, '#ffc46b')}
+      ${petBar('🔥 活跃', snap.activity, '#7cffb2')}
+    `;
+  }
+
+  // 当前极端环境标签（右下角一个小 pill）
+  const exoticPill = $('#exoticPill');
+  if (exoticPill) {
+    if (state.exoticEnvId) {
+      const target = EXOTIC_ENVIRONMENTS.find(x => x.id === state.exoticEnvId);
+      exoticPill.style.display = 'flex';
+      exoticPill.innerHTML = `${target.emoji} ${target.label} <button class="exotic-close" data-exotic-cancel title="切回普通环境">×</button>`;
+    } else {
+      exoticPill.style.display = 'none';
+    }
+  }
+}
+
+function petBar(label, value, color) {
+  const v = Math.round(parseFloat(value) * 100);
+  return `<div class="pet-bar">
+    <div class="pb-label">${label}</div>
+    <div class="pb-track"><div class="pb-fill" style="width:${v}%;background:${color}"></div></div>
+    <div class="pb-val">${v}</div>
+  </div>`;
+}
+
 function renderEnvPanel() {
   const e = state.recipe.env;
   $('#panel-env').innerHTML = `
+    <div class="section-label">🌌 极端 / 外星环境</div>
+    <div class="exotic-row">
+      ${EXOTIC_ENVIRONMENTS.map(x => {
+        const active = (state.exoticEnvId === x.id) ? ' active' : '';
+        return `<button class="exotic-preset${active}" data-exotic="${x.id}" title="${x.desc}">
+          <span class="exotic-emoji">${x.emoji}</span>
+          <span class="exotic-label">${x.label}</span>
+          <span class="exotic-meta">${x.env.timeScale}× · N${Math.round(x.env.noise*100)} · C${Math.round(x.env.constraint*100)}</span>
+        </button>`;
+      }).join('')}
+    </div>
     <div class="section-label">初始形态</div>
     <div class="preset-grid">
       ${Object.entries(PATTERNS).map(([key, p]) => `<button class="preset ${e.pattern === key ? 'active' : ''}" data-pattern="${key}"><b>${p.label}</b><span>${p.desc}</span></button>`).join('')}
@@ -2413,6 +2504,33 @@ function onSoundChange(e) {
 }
 
 function onEnvClick(e) {
+  /* ---- 🌌 极端环境一键切换 ---- */
+  const exotic = e.target.closest('[data-exotic]');
+  if (exotic) {
+    const id = exotic.dataset.exotic;
+    const target = EXOTIC_ENVIRONMENTS.find(x => x.id === id);
+    if (!target) return;
+    // 深拷贝 env（避免 defaultEnv 共享引用）
+    const newEnv = defaultEnv(target.env);
+    // 保持当前 pattern 不变（除非你想完全切），这里用极端预设的 pattern
+    state.recipe.env = newEnv;
+    state.sim.setEnv(newEnv);
+    state.sim.reset();
+    state.exoticEnvId = id;
+    afterEnvReset();
+    renderEnvPanel();
+    toast(`${target.emoji} 切到「${target.label}」· ${target.desc}`, 2600);
+    return;
+  }
+  /* ---- 极端环境右上角取消 ---- */
+  const cancelExotic = e.target.closest('[data-exotic-cancel]');
+  if (cancelExotic) {
+    state.exoticEnvId = null;
+    renderEnvPanel();
+    toast('已切回普通环境');
+    return;
+  }
+
   const pattern = e.target.closest('[data-pattern]');
   if (pattern) {
     state.recipe.env.pattern = pattern.dataset.pattern;

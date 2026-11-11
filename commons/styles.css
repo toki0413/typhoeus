@@ -2327,3 +2327,68 @@ body.motion-off *::after {
   transition-duration: 0.001s !important;
   animation-iteration-count: 0 !important;
 }
+
+/* ========================= */
+/* 🌌 极端环境预设按钮        */
+/* ========================= */
+.exotic-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.exotic-preset {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 8px 10px 6px 10px; min-width: 92px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; color: #cdd2e0;
+  cursor: pointer; transition: all 0.18s ease;
+  font-size: 11px; line-height: 1.2;
+}
+.exotic-preset:hover { background: rgba(195,155,255,0.12); border-color: rgba(195,155,255,0.4); }
+.exotic-preset.active { background: linear-gradient(135deg, rgba(119,95,160,0.45), rgba(80,140,160,0.3)); border-color: rgba(195,155,255,0.7); }
+.exotic-emoji { font-size: 18px; }
+.exotic-label { font-weight: 600; font-size: 12px; color: #e0e4f0; }
+.exotic-meta { font-size: 9px; opacity: 0.6; font-family: ui-monospace, monospace; }
+
+/* 极端环境 Pill（舞台右下角）*/
+#exoticPill {
+  display: none; position: absolute; right: 18px; bottom: 14px; z-index: 5;
+  padding: 6px 12px 6px 10px; border-radius: 20px;
+  background: linear-gradient(135deg, rgba(195,155,255,0.35), rgba(87,216,255,0.25));
+  color: #fff; font-size: 12px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.15);
+  backdrop-filter: blur(10px);
+  gap: 8px; align-items: center;
+}
+.exotic-close {
+  width: 18px; height: 18px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.2); color: #fff; cursor: pointer;
+  font-size: 11px; line-height: 18px; padding: 0;
+}
+.exotic-close:hover { background: rgba(255,255,255,0.35); }
+
+/* ========================= */
+/* 🐾 Pet HUD（hud-tr 面板）   */
+/* ========================= */
+.hud.hud-tr { display: flex; flex-direction: column; gap: 6px; }
+
+.pet-hud-mood {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 10px;
+  background: linear-gradient(135deg, rgba(195,155,255,0.15), rgba(87,216,255,0.08));
+  border: 1px solid rgba(195,155,255,0.25);
+}
+.pet-emoji { font-size: 22px; line-height: 1; }
+.pet-label { font-size: 13px; font-weight: 600; color: #e0d6f0; }
+.pet-exotic { margin-left: auto; font-size: 10px; padding: 2px 6px; border-radius: 8px;
+  background: rgba(255,196,107,0.2); color: #ffc46b; font-weight: 500; }
+
+.pet-hud-bars { display: flex; flex-direction: column; gap: 4px; }
+.pet-bar {
+  display: grid; grid-template-columns: 38px 1fr 26px; align-items: center; gap: 6px;
+  font-size: 10.5px; color: #a0a5b8;
+}
+.pb-label { font-size: 10px; opacity: 0.8; }
+.pb-track { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.07); overflow: hidden; }
+.pb-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+.pb-val { font-size: 10px; text-align: right; font-variant-numeric: tabular-nums; opacity: 0.7; }
+
+.fp-mini { display: flex; align-items: center; gap: 6px; }
+.fp-mini canvas { width: 28px; height: 28px; }
+.fp-mini .fp-code { font-size: 11px; }

@@ -2344,6 +2344,71 @@ body.motion-off *::after {
   animation-iteration-count: 0 !important;
 }
 
+/* ========================= */
+/* 🌌 极端环境预设按钮        */
+/* ========================= */
+.exotic-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.exotic-preset {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 8px 10px 6px 10px; min-width: 92px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; color: #cdd2e0;
+  cursor: pointer; transition: all 0.18s ease;
+  font-size: 11px; line-height: 1.2;
+}
+.exotic-preset:hover { background: rgba(195,155,255,0.12); border-color: rgba(195,155,255,0.4); }
+.exotic-preset.active { background: linear-gradient(135deg, rgba(119,95,160,0.45), rgba(80,140,160,0.3)); border-color: rgba(195,155,255,0.7); }
+.exotic-emoji { font-size: 18px; }
+.exotic-label { font-weight: 600; font-size: 12px; color: #e0e4f0; }
+.exotic-meta { font-size: 9px; opacity: 0.6; font-family: ui-monospace, monospace; }
+
+/* 极端环境 Pill（舞台右下角）*/
+#exoticPill {
+  display: none; position: absolute; right: 18px; bottom: 14px; z-index: 5;
+  padding: 6px 12px 6px 10px; border-radius: 20px;
+  background: linear-gradient(135deg, rgba(195,155,255,0.35), rgba(87,216,255,0.25));
+  color: #fff; font-size: 12px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.15);
+  backdrop-filter: blur(10px);
+  gap: 8px; align-items: center;
+}
+.exotic-close {
+  width: 18px; height: 18px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.2); color: #fff; cursor: pointer;
+  font-size: 11px; line-height: 18px; padding: 0;
+}
+.exotic-close:hover { background: rgba(255,255,255,0.35); }
+
+/* ========================= */
+/* 🐾 Pet HUD（hud-tr 面板）   */
+/* ========================= */
+.hud.hud-tr { display: flex; flex-direction: column; gap: 6px; }
+
+.pet-hud-mood {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 10px;
+  background: linear-gradient(135deg, rgba(195,155,255,0.15), rgba(87,216,255,0.08));
+  border: 1px solid rgba(195,155,255,0.25);
+}
+.pet-emoji { font-size: 22px; line-height: 1; }
+.pet-label { font-size: 13px; font-weight: 600; color: #e0d6f0; }
+.pet-exotic { margin-left: auto; font-size: 10px; padding: 2px 6px; border-radius: 8px;
+  background: rgba(255,196,107,0.2); color: #ffc46b; font-weight: 500; }
+
+.pet-hud-bars { display: flex; flex-direction: column; gap: 4px; }
+.pet-bar {
+  display: grid; grid-template-columns: 38px 1fr 26px; align-items: center; gap: 6px;
+  font-size: 10.5px; color: #a0a5b8;
+}
+.pb-label { font-size: 10px; opacity: 0.8; }
+.pb-track { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.07); overflow: hidden; }
+.pb-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+.pb-val { font-size: 10px; text-align: right; font-variant-numeric: tabular-nums; opacity: 0.7; }
+
+.fp-mini { display: flex; align-items: center; gap: 6px; }
+.fp-mini canvas { width: 28px; height: 28px; }
+.fp-mini .fp-code { font-size: 11px; }
+
 </style>
   </head>
   <body>
@@ -2405,10 +2470,14 @@ body.motion-off *::after {
               <div class="hud-row"><span>世代</span><b id="hudGen">0000</b></div>
             </div>
 
-            <div class="hud hud-tr">
-              <canvas id="fingerprintGlyph"></canvas>
+            <div class="hud hud-tr" id="hudPet">
+              <div class="pet-hud-mood" id="hudPetMood"><span class="pet-emoji">( •ᴗ• )</span><span class="pet-label">今天很安稳</span></div>
+              <div class="pet-hud-bars" id="hudPetBars"></div>
               <div class="hud-label">专属指纹</div>
-              <div class="fp-code" id="fingerprintCode">0000-0000</div>
+              <div class="fp-mini">
+                <canvas id="fingerprintGlyph"></canvas>
+                <span class="fp-code" id="fingerprintCode">0000-0000</span>
+              </div>
             </div>
 
             <div class="hud hud-bl">
@@ -2422,6 +2491,7 @@ body.motion-off *::after {
             </div>
 
             <div class="event-banner" id="eventBanner"></div>
+            <div class="exotic-pill" id="exoticPill" style="display:none"></div>
             <div class="listen-prompt" id="listenPrompt">
               <span class="pulse-dot"></span>
               <span>轻触「♪ 聆听」，让它为你唱一首歌</span>
@@ -7101,6 +7171,50 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
     { id: "ring", label: "\u786C\u58C1 \xB7 \u73AF\u5E26", env: defaultEnv({ pattern: "ring", boundary: "wall", noise: 0.02 }) },
     { id: "low-constraint", label: "\u73AF\u9762 \xB7 \u4F4E\u7EA6\u675F", env: defaultEnv({ pattern: "soup", boundary: "torus", noise: 0.08, constraint: 0.05 }) }
   ];
+  var EXOTIC_ENVIRONMENTS = [
+    {
+      id: "exo-primitive",
+      label: "\u539F\u59CB\u5730\u7403",
+      emoji: "\u{1F30D}",
+      desc: "38 \u4EBF\u5E74\u524D\uFF0C\u9AD8\u6270\u52A8\u662F Turing \u4E0D\u7A33\u5B9A\u6027\u7684\u6E29\u5E8A",
+      env: defaultEnv({ pattern: "soup", boundary: "torus", noise: 0.15, constraint: 0.1, timeScale: 2 })
+    },
+    {
+      id: "exo-venus",
+      label: "\u91D1\u661F\u9AD8\u538B",
+      emoji: "\u{1F525}",
+      desc: "\u65F6\u95F4\u6162 5\xD7\uFF0C\u8FB9\u754C\u4E25\u683C\uFF0C\u751F\u547D\u6D3B\u5F97\u5F88\u6162",
+      env: defaultEnv({ pattern: "blob", boundary: "wall", noise: 0, constraint: 0.9, timeScale: 0.2 })
+    },
+    {
+      id: "exo-europa",
+      label: "\u6728\u536B\u4E8C\u51B0\u4E0B",
+      emoji: "\u{1F9CA}",
+      desc: "\u5FAE\u5C0F\u70ED\u6270\u52A8 + \u8FB9\u754C\u677E\u6563 \u2192 \u87BA\u65CB\u6CE2\u6D8C\u73B0",
+      env: defaultEnv({ pattern: "ring", boundary: "torus", noise: 0.05, constraint: 0.2, timeScale: 2.5 })
+    },
+    {
+      id: "exo-mars",
+      label: "\u706B\u661F\u6B96\u6C11",
+      emoji: "\u{1FA90}",
+      desc: "\u4F4E\u91CD\u529B = \u8FB9\u754C\u677E\u6563\uFF0C\u5F62\u6001\u8FC5\u901F\u81A8\u80C0",
+      env: defaultEnv({ pattern: "soup", boundary: "torus", noise: 0.25, constraint: 0.05, timeScale: 2.5 })
+    },
+    {
+      id: "exo-saturn",
+      label: "\u571F\u661F\u73AF\u788E\u7247\u573A",
+      emoji: "\u{1F48D}",
+      desc: "\u6781\u5FEB\u65F6\u95F4 + \u9AD8\u6270\u52A8 \u2192 \u6DF7\u6C8C\u5438\u5F15\u5B50\u4E3B\u5BFC",
+      env: defaultEnv({ pattern: "sparse", boundary: "torus", noise: 0.6, constraint: 0.4, timeScale: 5 })
+    },
+    {
+      id: "exo-blackhole",
+      label: "\u9ED1\u6D1E\u6F6E\u6C50",
+      emoji: "\u{1F573}\uFE0F",
+      desc: "\u51E0\u4E4E\u9759\u6B62 + \u4E25\u683C\u8FB9\u754C \u2192 \u51BB\u7ED3\u6676\u4F53",
+      env: defaultEnv({ pattern: "blob", boundary: "wall", noise: 0, constraint: 1, timeScale: 0.05 })
+    }
+  ];
   var TYPE_COLOR = {
     stable: "#7cffb2",
     periodic: "#57d8ff",
@@ -7197,8 +7311,10 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
       // PetState 实例，仿真启动时创建
       visible: true
     },
-    lastPetMood: null
+    lastPetMood: null,
     // 用于检测 mood 变化 → console 反馈
+    exoticEnvId: null
+    // 当前极端环境 id（null = 无）
   };
   function deepClone(o) {
     return JSON.parse(JSON.stringify(o));
@@ -7464,6 +7580,7 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
         console.log(`\u{1F43E} Pet mood \u2192 ${newMood} ${PET_MOOD_EMOJI[newMood]} | snapshot:`, state.pet.state.snapshot());
         toast(`\u{1F43E} ${PET_MOOD_LABEL[newMood]} ${PET_MOOD_EMOJI[newMood]}`, 1600);
       }
+      renderPetHUD();
     }
     updateHUD();
     updateStructValues();
@@ -7715,9 +7832,61 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
       <b>\u5468\u671F</b> \u2192 \u8282\u594F\u89C4\u5F8B\u6027\u3002\u6240\u6709\u97F3\u9AD8\u88AB\u7EA6\u675F\u5728\u4E94\u58F0\u97F3\u9636\u5185\uFF0C\u5F00\u7BB1\u5373\u53EF\u542C\u3002
     </p>`;
   }
+  function renderPetHUD() {
+    const hudPet = $("#hudPet");
+    const hudPetMood = $("#hudPetMood");
+    const hudPetBars = $("#hudPetBars");
+    if (!hudPet || !state.pet.state) return;
+    const p = state.pet.state;
+    const snap = p.snapshot();
+    const moodEmoji = PET_MOOD_EMOJI[snap.mood] || "";
+    const moodLabel = PET_MOOD_LABEL[snap.mood] || "";
+    if (hudPetMood) hudPetMood.innerHTML = `
+    <span class="pet-emoji">${moodEmoji}</span>
+    <span class="pet-label">${moodLabel}</span>
+    ${state.exoticEnvId ? `<span class="pet-exotic" title="\u5F53\u524D\u6781\u7AEF\u73AF\u5883">\u26A0 \u6781\u7AEF</span>` : ""}
+  `;
+    if (hudPetBars) {
+      hudPetBars.innerHTML = `
+      ${petBar("\u2696 \u5E73\u8861", snap.balance, "#c39bff")}
+      ${petBar("\u2697 \u5747\u5300", snap.uniform, "#57d8ff")}
+      ${petBar("\u26A1 \u80FD\u91CF", snap.energy, "#ffc46b")}
+      ${petBar("\u{1F525} \u6D3B\u8DC3", snap.activity, "#7cffb2")}
+    `;
+    }
+    const exoticPill = $("#exoticPill");
+    if (exoticPill) {
+      if (state.exoticEnvId) {
+        const target = EXOTIC_ENVIRONMENTS.find((x) => x.id === state.exoticEnvId);
+        exoticPill.style.display = "flex";
+        exoticPill.innerHTML = `${target.emoji} ${target.label} <button class="exotic-close" data-exotic-cancel title="\u5207\u56DE\u666E\u901A\u73AF\u5883">\xD7</button>`;
+      } else {
+        exoticPill.style.display = "none";
+      }
+    }
+  }
+  function petBar(label, value, color) {
+    const v = Math.round(parseFloat(value) * 100);
+    return `<div class="pet-bar">
+    <div class="pb-label">${label}</div>
+    <div class="pb-track"><div class="pb-fill" style="width:${v}%;background:${color}"></div></div>
+    <div class="pb-val">${v}</div>
+  </div>`;
+  }
   function renderEnvPanel() {
     const e = state.recipe.env;
     $("#panel-env").innerHTML = `
+    <div class="section-label">\u{1F30C} \u6781\u7AEF / \u5916\u661F\u73AF\u5883</div>
+    <div class="exotic-row">
+      ${EXOTIC_ENVIRONMENTS.map((x) => {
+      const active = state.exoticEnvId === x.id ? " active" : "";
+      return `<button class="exotic-preset${active}" data-exotic="${x.id}" title="${x.desc}">
+          <span class="exotic-emoji">${x.emoji}</span>
+          <span class="exotic-label">${x.label}</span>
+          <span class="exotic-meta">${x.env.timeScale}\xD7 \xB7 N${Math.round(x.env.noise * 100)} \xB7 C${Math.round(x.env.constraint * 100)}</span>
+        </button>`;
+    }).join("")}
+    </div>
     <div class="section-label">\u521D\u59CB\u5F62\u6001</div>
     <div class="preset-grid">
       ${Object.entries(PATTERNS).map(([key, p]) => `<button class="preset ${e.pattern === key ? "active" : ""}" data-pattern="${key}"><b>${p.label}</b><span>${p.desc}</span></button>`).join("")}
@@ -9204,6 +9373,28 @@ ${opts.hypothesis || "_\u6211\u89C9\u5F97\u8FD9\u79CD\u5F62\u6001\u53EF\u80FD\u6
     if (state.audio) state.audio.setGenome(state.recipe.seed.genome);
   }
   function onEnvClick(e) {
+    const exotic = e.target.closest("[data-exotic]");
+    if (exotic) {
+      const id = exotic.dataset.exotic;
+      const target = EXOTIC_ENVIRONMENTS.find((x) => x.id === id);
+      if (!target) return;
+      const newEnv = defaultEnv(target.env);
+      state.recipe.env = newEnv;
+      state.sim.setEnv(newEnv);
+      state.sim.reset();
+      state.exoticEnvId = id;
+      afterEnvReset();
+      renderEnvPanel();
+      toast(`${target.emoji} \u5207\u5230\u300C${target.label}\u300D\xB7 ${target.desc}`, 2600);
+      return;
+    }
+    const cancelExotic = e.target.closest("[data-exotic-cancel]");
+    if (cancelExotic) {
+      state.exoticEnvId = null;
+      renderEnvPanel();
+      toast("\u5DF2\u5207\u56DE\u666E\u901A\u73AF\u5883");
+      return;
+    }
     const pattern = e.target.closest("[data-pattern]");
     if (pattern) {
       state.recipe.env.pattern = pattern.dataset.pattern;
