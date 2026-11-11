@@ -205,8 +205,10 @@ export class ReactionDiffusionEngine {
     const { w, h } = this;
     const physics = this._physics;
     const diffMult = physics?.diffusionMult ?? PHYSICS_DEFAULTS.multipliers.diffusion;
-    const dtMult = physics?.dtMult ?? PHYSICS_DEFAULTS.multipliers.dt;
-    const globalDecay = physics?.globalDecay ?? 0;
+    // Pet 情绪可乘性微调 dt（B2 反向 Bridge）：happy 节奏快、sick 节奏慢
+    const dtMult = (physics?.dtMult ?? PHYSICS_DEFAULTS.multipliers.dt) * (1 + (physics?._petDtBoost ?? 0));
+    // 环境衰减 + Pet 情绪额外衰减（B2 反向 Bridge，叠加而非覆盖）
+    const globalDecay = (physics?.globalDecay ?? 0) + (physics?._petDecay ?? 0);
     const gDecayU = physics?.globalDecayU ?? PHYSICS_DEFAULTS.multipliers.globalDecayU;
     const gDecayV = physics?.globalDecayV ?? PHYSICS_DEFAULTS.multipliers.globalDecayV;
     const boost = physics?.reactionBoost ?? null;
@@ -229,6 +231,15 @@ export class ReactionDiffusionEngine {
         for (let i = 0; i < w * h; i++) {
           this.v[i] = clampSafe(this.v[i] + intensity * (Math.random() - 0.5) * 2, 0, 1);
         }
+      }
+    }
+
+    // Pet 情绪噪声（B2 反向 Bridge）：开心时偶尔注入小扰动制造生机。
+    // 每 10 步一次、幅度 = _petNoiseBoost，避免每步注入把 Turing 斑图冲掉。
+    const petNoise = physics?._petNoiseBoost ?? 0;
+    if (petNoise > 0 && this.t % 10 === 0) {
+      for (let i = 0; i < w * h; i++) {
+        this.v[i] = clampSafe(this.v[i] + petNoise * (Math.random() - 0.5) * 2, 0, 1);
       }
     }
 

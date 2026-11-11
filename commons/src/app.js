@@ -48,7 +48,7 @@ import { clamp, hashString, mulberry32, proceduralName, toHex, uid } from './rng
 
 /* ---- 科学工具模块（静态 import + 运行时降级） ---- */
 import { runPlayerMC, discretizeField, CPM_DEFAULTS } from './cpm.js';
-import { applyExoticPhysics, computeAudioChain } from './physics.js';
+import { applyExoticPhysics, computeAudioChain, petToPhysicsBridge, crowdFeedbackBridge } from './physics.js';
 import {
   selectiveImperfectionScale, edgeOfChaosKnob, attractorToSonicGenre
 } from './music2.js';
@@ -536,6 +536,13 @@ function refreshMainMetrics() {
     renderPetHUD();
   }
 
+  /* ---- 🧬 B2：Pet → Physics 反向 Bridge（论文 bidirectional bridge）
+     Pet 情绪反向注入物理参数。patch 的字段恒返回（中性为 0），
+     所以重复 Object.assign 是幂等的，不会累积漂移。 ---- */
+  if (state.sim?._physics && state.pet.state) {
+    state.sim.setPhysics(Object.assign(state.sim._physics, petToPhysicsBridge(state.pet.state)));
+  }
+
   /* ===== 🌌 全链打通：env → sim.metrics → Pet mood → music2 (Buehler/Bell/Kolic/Pimenta) → audio ===== */
   try {
     const audioChain = computeAudioChain(
@@ -568,6 +575,15 @@ function refreshMainMetrics() {
       // saveAsDiscovery 已经 handle localStorage 去重
       state.leaderboard = loadLeaderboard();
       state.lastDiscoverySavedAt = now;
+
+      /* ---- 🧬 B3：Crowd Feedback Bridge —— top-N 发现反哺默认环境参数 ----
+         只有新发现进入 top-N 时才真正学习（函数内部判定），
+         学习是 90% 旧默认 + 10% 众包均值的平滑更新。 ---- */
+      const feedback = crowdFeedbackBridge(record);
+      if (feedback?.updated) {
+        toast(`🌍 众包默认已更新（${feedback.seedCount} 条发现）`, 1800);
+      }
+
       // 只在科学发现 tab 打开时才刷新 UI
       const activeTab = document.querySelector('#railTabs button.active')?.dataset.tab;
       if (activeTab === 'science') renderSciencePanel();

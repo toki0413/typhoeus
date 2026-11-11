@@ -49,9 +49,11 @@ const swRegister = `
     }
   </script>`;
 
+// 用函数式 replacer：字符串替换会被解释 $& / $' / $` 等特殊序列，
+// 而压缩后的 JS 里一定出现这些，导致内容被拼接/截断。
 const out = html
-  .replace(LINK_TAG, `<style>\n${css}\n    </style>`)
-  .replace(SCRIPT_TAG, `<script type="module">\n${js}\n  </script>${swRegister}`);
+  .replace(LINK_TAG, () => `<style>\n${css}\n    </style>`)
+  .replace(SCRIPT_TAG, () => `<script type="module">\n${js}\n  </script>${swRegister}`);
 
 await writeFile(`${ROOT}commons.html`, out);
 

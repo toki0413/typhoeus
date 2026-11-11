@@ -256,6 +256,13 @@ export function buildDiscoveryRecord(recipe, metrics, topMatches) {
     fingerprint,
     engine: genome.engine ?? genome.preset ?? 'unknown',
     params: genome,
+    /* 发现时的环境参数——B3 众包学习需要它来平均出"好种子"的环境。
+       缺失时保持 null，由消费方回退到默认值。 */
+    environment: {
+      noise:      Number.isFinite(recipe?.env?.noise)      ? recipe.env.noise      : null,
+      constraint: Number.isFinite(recipe?.env?.constraint) ? recipe.env.constraint : null,
+      timeScale:  Number.isFinite(recipe?.env?.timeScale)  ? recipe.env.timeScale  : null,
+    },
     metrics: {
       lyapunov: +(metrics.lyapunov ?? 0).toFixed(4),
       fractal:  +(metrics.fractal ?? 0).toFixed(4),

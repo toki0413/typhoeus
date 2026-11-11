@@ -329,25 +329,34 @@ export function autoTunePhysics(metrics, currentPhysics) {
  * 而是"观察者的情绪会改变被观察对象的物理"。
  *
  * 返回：physics patch 对象（调用者 Object.assign 到现有 physics）
+ *
+ * 注意：三个字段始终返回（中性时为 0），这样反复 Object.assign 是幂等的——
+ * 心情从 happy 回到 waiting 时旧值会被 0 覆盖，不会残留。
  */
 export function petToPhysicsBridge(petState) {
-  if (!petState || !petState.mood) return {};
+  const mood = petState?.mood ?? null;
 
-  const mood = petState.mood;
-  const patch = {};
+  const patch = {
+    _petDecay: 0,        // 叠加到环境 globalDecay 上的额外衰减（不覆盖环境值）
+    _petDtBoost: 0,      // dtMult 乘性增量：dtMult × (1 + boost)
+    _petNoiseBoost: 0,   // 每 N 步注入到 v 的噪声强度（0~1 尺度）
+    _petInfluence: 'neutral',
+  };
 
   switch (mood) {
     case 'sick':
-      /* Pet 病了 → 物理更"沉重"（globalDecay 微增 + 扩散稍慢）
+      /* Pet 病了 → 物理更"沉重"（衰减 + 节奏放慢）
          直觉：生病时连物理演化都变慢了 */
-      patch.globalDecay = 0.0015;   // 轻微衰减（不影响稳定性）
-      patch._petInfluence = 'sick: decay+diff-';
+      patch._petDecay = 0.0015;   // 轻微衰减（不影响稳定性）
+      patch._petDtBoost = -0.03;
+      patch._petInfluence = 'sick: decay+, dt-';
       break;
 
     case 'sad':
-      /* Pet 伤心 → 物理稍"沉重"（globalDecay 微增）*/
-      patch.globalDecay = 0.0008;
-      patch._petInfluence = 'sad: decay+';
+      /* Pet 伤心 → 物理稍"沉重" */
+      patch._petDecay = 0.0008;
+      patch._petDtBoost = -0.015;
+      patch._petInfluence = 'sad: decay+, dt-';
       break;
 
     case 'waiting':
@@ -362,11 +371,11 @@ export function petToPhysicsBridge(petState) {
       break;
 
     case 'happy':
-      /* Pet 开心 → 物理最活跃（noise 稍增 + dtMult 微增）
+      /* Pet 开心 → 物理最活跃（噪声 + 节奏加快）
          直觉：好心情让演化节奏变快 */
       patch._petNoiseBoost = 0.04;
       patch._petDtBoost = 0.05;
-      patch._petInfluence = 'happy: noise+dt+';
+      patch._petInfluence = 'happy: noise+, dt+';
       break;
 
     default:
@@ -414,10 +423,10 @@ export function crowdFeedbackBridge(newDiscovery) {
     for (const d of topN) {
       const w = Math.pow((d.similarity ?? 50) / 100, 2);
       totalW += w;
-      const e = d.recipe?.env ?? {};
-      envSum.noise     += (e.noise ?? 0.02) * w;
-      envSum.constraint += (e.constraint ?? 0.15) * w;
-      envSum.timeScale += (e.timeScale ?? 1.0) * w;
+      const e = d.environment ?? d.recipe?.env ?? {};
+      envSum.noise     += (Number.isFinite(e.noise)      ? e.noise      : 0.02) * w;
+      envSum.constraint += (Number.isFinite(e.constraint) ? e.constraint : 0.15) * w;
+      envSum.timeScale += (Number.isFinite(e.timeScale)  ? e.timeScale  : 1.0) * w;
     }
     if (totalW === 0) return { updated: false, seedCount: topN.length };
 
