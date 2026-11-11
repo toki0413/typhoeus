@@ -73,6 +73,7 @@ import {
   SCIENCE_VERSION,
 } from './scientific.js';
 import { ENGINE_GRID, ENV_DEFAULTS } from './config.js';
+import { runPlayerMC } from './cpm.js';
 
 export { REACTION_DIFFUSION_PRESETS, SCIENCE_VERSION };
 
@@ -970,6 +971,23 @@ export class ScientificEngine {
       typeLabel: sci.typeLabel,
     };
   }
+
+  /* ==== CPM Monte Carlo — 玩家触发形态调谐 ==== */
+  _labels = null;  // Int8Array, Potts 细胞类型标签（离散化自 v 场）
+  _mcLastResult = null;  // 上一次 MC 运行结果（接受率、能量变化）
+
+  mcStep(steps = 4, params = {}) {
+    if (!this._rd?.vField) return null;
+    // 构造一个"假的 engine 视图"给 runPlayerMC — 它只需要 w, h, vField, uField
+    const view = { w: this.w, h: this.h, vField: this._rd.vField, uField: this._rd.uField };
+    const res = runPlayerMC(view, steps, params);
+    this._labels = res.labels;
+    this._mcLastResult = res;
+    return res;
+  }
+
+  getMCLabels() { return this._labels; }
+  getMCLastResult() { return this._mcLastResult; }
 }
 
 export const SCIENTIFIC_PRESET_LIST = Object.keys(REACTION_DIFFUSION_PRESETS);
