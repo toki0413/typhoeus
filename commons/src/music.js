@@ -76,7 +76,10 @@ export function chordProgressionFor(lyapunov, attrType) {
  * 这样 Pet 状态直接决定整体音量 envelope
  */
 export function dynamics(petState) {
-  if (!petState) return { global: 0.5, voice: 0.55, heartbeat: 0.35 };
+  if (!petState) {
+    /* 无 Pet 时也要给全字段——缺 chordPad/counter/sparkle 会让 amp 变成 NaN */
+    return { global: 0.5, voice: 0.12, heartbeat: 0.18, chordPad: 0.07, counter: 0.35, sparkle: 0.05 };
+  }
   const mood = petState.mood ?? 'content';
   const energy = petState.energy ?? 0.5;
   const moodFactor = {

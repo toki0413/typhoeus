@@ -26,6 +26,7 @@ import {
 import { discretizeField, adhesionEnergy, simulateRD, CPM_DEFAULTS } from '../src/cpm.js';
 import { matchPatternLibrary, buildDiscoveryRecord } from '../src/patterns.js';
 import { getChordNotes } from '../src/music.js';
+import { StructureTracker, findComponents } from '../src/structures.js';
 import { mulberry32, hashString } from '../src/rng.js';
 
 /* ================================================================
@@ -318,6 +319,82 @@ test('music: 所有和弦进行 × 五声音阶都产生有限 MIDI（回归：�
   }
   // 越界音级按半音解释（7 = 纯五度）
   assert.deepEqual(getChordNotes('root', 7, degrees, 3, 60), [67]);
+});
+
+/* ================================================================
+ * structures.js · 结构识别
+ * ================================================================ */
+const W = 20, H = 20;
+const idx = (x, y) => y * W + x;
+function gridOf(cells) {
+  const g = new Uint8Array(W * H);
+  for (const [x, y] of cells) g[idx(x, y)] = 1;
+  return g;
+}
+function conwayStep(g) {
+  const out = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          n += g[((y + dy + H) % H) * W + ((x + dx + W) % W)];
+        }
+      }
+      const alive = g[idx(x, y)];
+      out[idx(x, y)] = alive ? (n === 2 || n === 3 ? 1 : 0) : (n === 3 ? 1 : 0);
+    }
+  }
+  return out;
+}
+
+test('structures: 连通块识别（含环形边界）', () => {
+  const g = gridOf([[0, 0], [1, 0], [W - 1, 0], [5, 5], [6, 5], [5, 6], [6, 6]]);
+  const comps = findComponents(g, W, H);
+  const areas = comps.map((c) => c.area).sort((a, b) => a - b);
+  assert.deepEqual(areas, [3, 4]);
+});
+
+test('structures: 静止块被识别为 still', () => {
+  const tr = new StructureTracker(W, H, { interval: 4, cooldown: 10 });
+  let g = gridOf([[2, 2], [3, 2], [2, 3], [3, 3]]);
+  for (let i = 0; i < 30; i++) {
+    g = conwayStep(g);
+    tr.update(g);
+  }
+  assert.ok(tr.counts.still >= 1, `counts=${JSON.stringify(tr.counts)}`);
+});
+
+test('structures: 闪烁器（period-2）被识别为 oscillator', () => {
+  const tr = new StructureTracker(W, H, { interval: 4, cooldown: 10 });
+  let g = gridOf([[1, 1], [2, 1], [3, 1]]);
+  for (let i = 0; i < 24; i++) {
+    g = conwayStep(g);
+    tr.update(g);
+  }
+  assert.ok(tr.counts.oscillator >= 1, `counts=${JSON.stringify(tr.counts)}`);
+});
+
+test('structures: 滑翔机被识别为 mover', () => {
+  const tr = new StructureTracker(W, H, { interval: 4, cooldown: 10 });
+  let g = gridOf([[1, 0], [2, 1], [0, 2], [1, 2], [2, 2]]);
+  for (let i = 0; i < 32; i++) {
+    g = conwayStep(g);
+    tr.update(g);
+  }
+  assert.ok(tr.counts.mover >= 1, `counts=${JSON.stringify(tr.counts)}`);
+});
+
+test('structures: 出生潮事件 + 空 grid 不炸', () => {
+  const tr = new StructureTracker(W, H);
+  const empty = new Uint8Array(W * H);
+  assert.equal(tr.update(null), null);
+  tr.update(empty);
+  const many = new Uint8Array(W * H);
+  for (let i = 0; i < 40; i++) many[i] = 1;
+  const r = tr.update(many);
+  assert.ok(r.events.some((e) => e.type === 'birthSurge'), JSON.stringify(r.events));
 });
 
 /* ================================================================

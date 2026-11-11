@@ -160,6 +160,7 @@ export class AudioEngine {
     this._type = null;             // 上一次的结构态
     this._registerShift = 0;       // 结构态 → 八度位移（chaotic +1 / stable -1）
     this._scaleDegrees = null;     // 当前音阶（科学引擎用 Buehler，生命引擎用五声）
+    this._structCd = {};           // 结构动机冷却（按类型）
   }
 
   _build() {
@@ -714,7 +715,7 @@ export class AudioEngine {
          pad 音符交替左右声像，避免整个和弦挤在正中；
          和弦音数随生命密度增加 —— 繁盛时和声更厚 */
       const noteCount = Math.max(3, Math.min(chordMidi.length, 3 + Math.round(lifeDensity * 8)));
-      const padAmp = dyn.chordPad * (0.65 + this._intensity * 0.7);
+      const padAmp = (dyn.chordPad ?? 0.07) * (0.65 + this._intensity * 0.7);
       chordMidi.slice(0, noteCount).forEach((midi, ci) => {
         const freq = midiToFreq(midi);
         const pan = (ci % 2 === 0 ? -1 : 1) * (0.18 + 0.1 * (ci % 3));
@@ -811,10 +812,67 @@ export class AudioEngine {
     this._heartbeatTone(midiToFreq(this._rootMidi() - 12), now + 0.02, 0.2);
   }
 
+  /* ================================================================
+   * 🧬 结构动机：把识别出来的具体形态变成可辨认的音乐主题
+   *   still      静止块 → 柔和双音（长音、居中）
+   *   oscillator 振荡器 → 两音交替脉冲
+   *   glider     移动体 → 上行三音 + 声像扫动
+   *   merge      合并   → 同时发声的三音簇
+   *   split      分裂   → 快速下行三音
+   *   birthSurge 出生潮 → 上行琶音（复用 bloom）
+   *   deathSurge 死亡潮 → 低频闷响 + 留白（复用 thin）
+   * ================================================================ */
+  triggerStructure(evt, at) {
+    if (!this.built || !this.enabled || !evt) return;
+    /* at 用于离线渲染（OfflineAudioContext 的 currentTime 恒为 0） */
+    const now = (Number.isFinite(at) ? at : this.ctx.currentTime) + 0.03;
+    const cd = this._structCd;
+    if (now < (cd[evt.type] || 0)) return;
+    cd[evt.type] = now + 1.6;
+
+    switch (evt.type) {
+      case 'glider':
+        [0, 2, 4].forEach((deg, i) => {
+          this._tone(this._degreeFreq(deg, 1), now + i * 0.11, 0.22, 0.085, 'triangle', 0.6,
+            0, -0.55 + i * 0.55);
+        });
+        break;
+      case 'oscillator':
+        [1, 3, 1, 3].forEach((deg, i) => {
+          this._tone(this._degreeFreq(deg, 1), now + i * 0.16, 0.16, 0.07, 'sine', 0.5,
+            0, i % 2 ? 0.22 : -0.22);
+        });
+        break;
+      case 'still':
+        this._tone(this._degreeFreq(0, 0), now, 2.0, 0.05, 'sine', 0.45, 0, 0);
+        this._tone(this._degreeFreq(2, 0), now + 0.05, 1.9, 0.04, 'sine', 0.45, 0, 0);
+        break;
+      case 'merge':
+        [0, 2, 4].forEach((deg, i) => {
+          this._tone(this._degreeFreq(deg, 0), now + 0.02, 1.2, 0.06, 'triangle', 0.55, 0, (i - 1) * 0.5);
+        });
+        break;
+      case 'split':
+        [4, 2, 0].forEach((deg, i) => {
+          this._tone(this._degreeFreq(deg, 1), now + i * 0.1, 0.18, 0.075, 'triangle', 0.55, 0, 0.35 * (1 - i));
+        });
+        break;
+      case 'birthSurge':
+        this._bloom(now);
+        break;
+      case 'deathSurge':
+        this._thin(now);
+        break;
+      default:
+        break;
+    }
+  }
+
   /* ---- Layer 2: Chord pad tone（长 attack，slow rise）---- */
   _chordTone(freq, when, dur, amp = 0.14, wave = 'triangle', pan = 0) {
     if (this.voices > 24) return;
     if (!Number.isFinite(freq) || freq <= 0) return;   // 防御：非法频率不能中断 tick 循环
+    if (!Number.isFinite(amp)) amp = 0.1;              // 防御：NaN 振幅不能进 AudioParam
     const ctx = this.ctx;
     const osc = ctx.createOscillator();
     const filter = ctx.createBiquadFilter();
@@ -911,6 +969,7 @@ export class AudioEngine {
     const ctx = this.ctx;
     if (this.voices > 26) return;
     if (!Number.isFinite(freq) || freq <= 0) return;   // 防御：非法频率直接跳过
+    if (!Number.isFinite(peak)) peak = 0.08;            // 防御：NaN 振幅不能进 AudioParam
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = wave;

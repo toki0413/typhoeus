@@ -58,6 +58,7 @@ import { saveAsDiscovery, buildOpenScienceIssue, loadLeaderboard, rankDiscoverie
 /* ---- Commons-JEPA：形态嵌入空间里的预测（超越 Foldit 的核心武器）---- */
 import { PlayerPredictor, toMorphoEmbedding, jepaSoundFeedback, morphoDistance } from './jepa.js';
 import { PetState, PET_MOOD, PET_MOOD_EMOJI, PET_MOOD_LABEL, petMoodToOverlay, petMoodToAudio } from './pet.js';
+import { StructureTracker } from './structures.js';
 /* ---- UI 子模块（从 app.js 拆出） ---- */
 import { createSciencePanel } from './ui/science-panel.js';
 import { createLineageView } from './ui/lineage.js';
@@ -401,6 +402,8 @@ function resetHistory() {
 function attachRecipe(recipe, opts = {}) {
   state.recipe = normalizeRecipe(recipe);
   state.sim = createEngine(state.recipe.seed.genome, state.recipe.env, state.recipe.rngSeed);
+  /* 结构识别：只对 Conway/Lenia 这类有离散 grid 的引擎启用 */
+  state.structure = state.sim?.grid ? new StructureTracker(state.sim.w, state.sim.h) : null;
   state.metrics = computeMetrics(state.sim);
   if (opts.keepHistory !== true) resetHistory();
   state.lastType = state.metrics.type;
@@ -427,6 +430,7 @@ function attachRecipe(recipe, opts = {}) {
 
 function rebuildSim() {
   state.sim = createEngine(state.recipe.seed.genome, state.recipe.env, state.recipe.rngSeed);
+  state.structure = state.sim?.grid ? new StructureTracker(state.sim.w, state.sim.h) : null;
   state.metrics = computeMetrics(state.sim);
   resetHistory();
   state.lastType = state.metrics.type;
@@ -448,6 +452,11 @@ function stepMain() {
   const res = state.sim.step();
   if (state.audioOn && state.audio) {
     state.audio.pushBirths(state.sim.lastBirths, state.sim.w, state.sim.h);
+  }
+  /* 🧬 结构识别 → 动机：滑翔机/振荡器/静止块/合并分裂/出生死亡潮 */
+  const struct = state.structure?.update(state.sim.grid, performance.now() / 1000);
+  if (struct && struct.events.length && state.audioOn && state.audio) {
+    for (const evt of struct.events) state.audio.triggerStructure(evt);
   }
   state.stepsSinceMetrics++;
   if (state.stepsSinceMetrics >= 5) {
