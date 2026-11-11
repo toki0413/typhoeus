@@ -85,6 +85,10 @@ const TYPE_EVENT_LABEL = {
 /* State                                                              */
 /* ------------------------------------------------------------------ */
 
+// gallery 缩略图呼吸动画循环控制（30fps，离开 commons view 时自动取消）
+let _galleryBreathRafId = null;
+let _galleryLastTick = 0;
+
 const state = {
   lib: loadLibrary(),
   view: 'cultivate',
@@ -877,15 +881,30 @@ function renderCommons() {
     })
     .join('');
 
-  // thumbnails
-  requestAnimationFrame(() => {
-    for (const r of list) {
-      const canvas = grid.querySelector(`canvas[data-thumb="${CSS.escape(r.id)}"]`);
-      if (!canvas) continue;
-      const snap = decodeSnapshot(r.snapshot);
-      drawSnapshot(canvas, snap || placeholderSnapshot(r), 'a');
+  // thumbnails — 持续呼吸动画（30fps，省电且平滑）
+  if (_galleryBreathRafId) cancelAnimationFrame(_galleryBreathRafId);
+  const _breathTick = () => {
+    if (state.view !== 'commons') { _galleryBreathRafId = null; return; }
+    const grid = $('#commonsGrid');
+    if (!grid) return;
+    // throttle 到 ~30fps（每帧至少等 33ms）
+    if (!_galleryLastTick || performance.now() - _galleryLastTick >= 33) {
+      _galleryLastTick = performance.now();
+      const now = _galleryLastTick;
+      for (const r of list) {
+        const canvas = grid.querySelector(`canvas[data-thumb="${CSS.escape(r.id)}"]`);
+        if (!canvas) continue;
+        const snap = decodeSnapshot(r.snapshot);
+        drawSnapshot(canvas, snap || placeholderSnapshot(r), 'a', {
+          now,
+          attrType: r.metrics ? r.metrics.type : 'stable',
+          metrics: r.metrics,
+        });
+      }
     }
-  });
+    _galleryBreathRafId = requestAnimationFrame(_breathTick);
+  };
+  _galleryBreathRafId = requestAnimationFrame(_breathTick);
 
   const user = state.lib.recipes.length;
   const hybrids = state.lib.recipes.filter((r) => r.auto).length;

@@ -63,13 +63,37 @@ import { clamp } from './rng.js';
 //   activity (0-1)→ 颜色微抖动强度：activity×8° hue ± activity×6% sat
 
 export const ATTRACTOR_COLOR = {
-  stable:    { hueOff: 0,   satMul: 0.92, halo: 0.12, blur: 0.8 },
-  periodic:  { hueOff: 0,   satMul: 1.00, halo: 0.20, blur: 0.5, breath: true },
-  chaotic:   { hueOff: 0,   satMul: 1.05, halo: 0.28, blur: 0.0, jitterHue: 22 },
-  drifting:  { hueOff: 50,  satMul: 0.95, halo: 0.18, blur: 0.3, alphaWave: 0.10 },
-  endangered:{ hueOff: -10, satMul: 0.55, halo: 0.05, blur: 0.0, alphaMul: 0.75 },
-  extinct:   { hueOff: 0,   satMul: 0.50, halo: 0.03, blur: 0.0, alphaMul: 0.25 },
+  /* period=呼吸周期(s) | amp=半径幅度(±%) | noise=噪声混合(0-1, 0=纯正弦, 1=完全不规则) */
+  stable:     { hueOff: 0,   satMul: 0.92, halo: 0.12, blur: 0.8, period: 2.5, amp: 0.06, noise: 0.0, haloPeriod: 3.2 },
+  periodic:   { hueOff: 0,   satMul: 1.00, halo: 0.20, blur: 0.5, period: 1.8, amp: 0.12, noise: 0.0, haloPeriod: 2.2 },
+  chaotic:    { hueOff: 0,   satMul: 1.05, halo: 0.28, blur: 0.0, period: 0.6, amp: 0.18, noise: 0.6, haloPeriod: 1.0 },
+  drifting:   { hueOff: 50,  satMul: 0.95, halo: 0.18, blur: 0.3, period: 3.0, amp: 0.14, noise: 0.3, haloPeriod: 3.6 },
+  endangered: { hueOff: -10, satMul: 0.55, halo: 0.05, blur: 0.0, period: 4.0, amp: 0.02, noise: 0.0, haloPeriod: 5.0 },
+  extinct:    { hueOff: 0,   satMul: 0.50, halo: 0.03, blur: 0.0, period: 10,  amp: 0.00, noise: 0.0, haloPeriod: 99 },
 };
+
+/* 伪随机函数：确定性噪声（每个细胞固定相位偏移，且可混 breath） */
+function hashNoise(a, b) {
+  // fast tiny deterministic pseudo-noise
+  const t = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+  return t - Math.floor(t);  // 0..1
+}
+
+/* 呼吸计算：time(ms) + cellHash + attractor 签名 → ±radius % */
+function computeBreath(time, cellHash, aSig, ageFactor = 1) {
+  if (aSig.amp <= 0) return 0;
+  const periodMs = aSig.period * 1000;
+  const phase = (time / periodMs + cellHash) * Math.PI * 2;
+  let breath = Math.sin(phase) * aSig.amp;
+  if (aSig.noise > 0) {
+    // 噪声混合：让 chaotic 不规则
+    const n1 = hashNoise(Math.floor(time / 100), cellHash * 73);
+    const n2 = hashNoise(Math.floor(time / 50) + 1, cellHash * 19);
+    const noise = (n1 - 0.5) + (n2 - 0.5);  // -1..1
+    breath = breath * (1 - aSig.noise) + noise * aSig.noise * aSig.amp;
+  }
+  return breath * ageFactor;  // 年龄因子：新生儿=1，老细胞<1
+}
 
 /* ------------------------------------------------------------------ */
 /* 水彩增强工具                                                        */
@@ -308,8 +332,9 @@ export class StageRenderer {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
+    const aSig = ATTRACTOR_COLOR[(m && m.type) || 'stable'];
     if (sim.kind === 'lenia') this._drawLenia(scale, ox, oy, activity);
-    else this._drawLife(scale, ox, oy, activity, now);
+    else this._drawLife(scale, ox, oy, activity, now, aSig);
 
     /* ====== 芳文社：极淡的虚线网格（几乎看不见） ====== */
     if (!this.compact) this._drawGrid(scale, ox, oy, W, H);
@@ -321,9 +346,9 @@ export class StageRenderer {
   }
 
   /* ============================================================== */
-  /* 芳文社 _drawLife：圆点细胞 + 三层水彩晕染 + 高光 + 呼吸感      */
+  /* 芳文社 _drawLife：圆点细胞 + 三层水彩晕染 + 高光 + 呼吸动效      */
   /* ============================================================== */
-  _drawLife(scale, ox, oy, activity, now) {
+  _drawLife(scale, ox, oy, activity, now, aSig) {
     const { ctx, sim } = this;
     const t = this.tint;
     const w = sim.w;
@@ -348,33 +373,35 @@ export class StageRenderer {
 
     /* ====================================================== */
     /* Layer 1: 超大柔和光晕（lighter 叠加，淡色）           */
-    /* 新生儿 = cell * 2.8 半径 · 最亮                       */
-    /* 老年 = cell * 1.4 半径 · 几乎消失                     */
+    /* 每个细胞独立呼吸，按 ageFactor 减弱                    */
     /* ====================================================== */
     ctx.globalCompositeOperation = 'lighter';
     for (let b = 0; b < Math.min(buckets.length, 5); b++) {
       const fakeAge = b === 0 ? 0 : b === 1 ? 1 : b === 2 ? 2 : b < 5 ? 4 : 20;
       const info = ageBucket(fakeAge, activity);
-      // 光晕半径随年龄缩小：新生儿最大光晕 → 老细胞光晕消失
-      const glowRadius = cell * (b === 0 ? 2.8 : b === 1 ? 2.2 : b === 2 ? 1.8 : 1.5);
-      const glowAlpha = b === 0 ? 0.35 : b === 1 ? 0.18 : b === 2 ? 0.10 : 0.05;
+      // 年龄因子：新生儿=1 青年=0.7 中年=0.4 老年=0.2
+      const ageFactor = b === 0 ? 1.0 : b === 1 ? 0.75 : b === 2 ? 0.55 : b < 5 ? 0.35 : 0.2;
+      // 光晕半径基础值（随年龄缩小）
+      const baseRadius = cell * (b === 0 ? 2.8 : b === 1 ? 2.2 : b === 2 ? 1.8 : 1.5);
+      // 光晕的呼吸周期稍慢于实体（更柔和）
+      const haloSig = { ...aSig, period: aSig.haloPeriod || aSig.period, amp: aSig.amp * 0.55 };
+      const baseAlpha = b === 0 ? 0.35 : b === 1 ? 0.18 : b === 2 ? 0.10 : 0.05;
       for (let p = 0; p < 2; p++) {
         const arr = buckets[b][p];
         if (!arr.length) continue;
-        // 光晕色相偏暖一点（新生儿偏粉，老细胞偏紫）
         const hue = t.hue + b * 3 + (p ? -5 : 5);
-        ctx.fillStyle = `hsla(${hue}, ${info.s}%, ${Math.min(85, info.l + 10)}%, ${glowAlpha})`;
-        // 画一团：把每段 bucket 的坐标先连起来画一团大圆，比逐个画更像水彩晕染
-        // 但为了确定性，还是逐个画 —— 不过加一点点随机抖动让边缘更松散
+        const haloAlphaSig = aSig.halo;
         ctx.beginPath();
         for (let k = 0; k < arr.length; k += 2) {
           const px = ox + arr[k] * cell + cell / 2;
           const py = oy + arr[k + 1] * cell + cell / 2;
-          // 新生儿：呼吸抖动 ±cell*0.12（让它们"在呼吸"）
-          const breath = b === 0
-            ? Math.sin(time * 0.004 + (arr[k] * 13 + arr[k + 1] * 7) % 100 / 10) * cell * 0.08
-            : 0;
-          const r = glowRadius + breath;
+          // 每个细胞自己的呼吸相位（用坐标 hash）
+          const cellHash = (arr[k] * 7 + arr[k + 1] * 13) / 100;
+          const breath = computeBreath(time, cellHash, haloSig, ageFactor);
+          const r = baseRadius + breath * baseRadius;
+          // 呼吸同时微调 alpha：expansion 时更亮，收缩时更暗
+          const alpha = baseAlpha * haloAlphaSig * (1 + breath * 1.2);
+          ctx.fillStyle = `hsla(${hue}, ${info.s}%, ${Math.min(85, info.l + 10)}%, ${Math.max(0.01, alpha)})`;
           ctx.moveTo(px + r, py);
           ctx.arc(px, py, r, 0, Math.PI * 2);
         }
@@ -384,29 +411,28 @@ export class StageRenderer {
 
     /* ====================================================== */
     /* Layer 2: 中层半透明实体圆（lighter 叠加）              */
-    /* 年龄影响半径：新生儿 cell*0.55 → 老年 cell*0.30      */
+    /* 所有年龄都呼吸，但新生儿幅度最大                        */
     /* ====================================================== */
     const hueShift = activity * 6;
     for (let b = 0; b < buckets.length; b++) {
       const fakeAge = b === 0 ? 0 : b === 1 ? 1 : b === 2 ? 2 : b < 5 ? 4 : b < 6 ? 9 : 20;
       const info = ageBucket(fakeAge, activity);
-      // 实体半径：新生儿最大 → 老年缩小
       const bodyRadius = cell * (b === 0 ? 0.55 : b === 1 ? 0.48 : b === 2 ? 0.44 : b < 5 ? 0.38 : 0.30);
-      const alpha = info.a;
+      const ageFactor = b === 0 ? 1.0 : b === 1 ? 0.7 : b === 2 ? 0.5 : b < 5 ? 0.35 : 0.15;
       for (let p = 0; p < 2; p++) {
         const arr = buckets[b][p];
         if (!arr.length) continue;
         const hue = t.hue + b * 3 + hueShift + (p ? 4 : -4);
-        ctx.fillStyle = `hsla(${hue}, ${info.s}%, ${info.l}%, ${alpha})`;
         ctx.beginPath();
         for (let k = 0; k < arr.length; k += 2) {
           const px = ox + arr[k] * cell + cell / 2;
           const py = oy + arr[k + 1] * cell + cell / 2;
-          const breath = b === 0
-            ? Math.sin(time * 0.004 + (arr[k] * 13 + arr[k + 1] * 7) % 100 / 10) * cell * 0.04
-            : 0;
-          ctx.moveTo(px + bodyRadius + breath, py);
-          ctx.arc(px, py, bodyRadius + breath, 0, Math.PI * 2);
+          const cellHash = (arr[k] * 11 + arr[k + 1] * 5) / 100;
+          const breath = computeBreath(time, cellHash, aSig, ageFactor);
+          const r = bodyRadius + breath * bodyRadius;
+          ctx.fillStyle = `hsla(${hue}, ${info.s}%, ${info.l}%, ${info.a})`;
+          ctx.moveTo(px + r, py);
+          ctx.arc(px, py, r, 0, Math.PI * 2);
         }
         ctx.fill();
       }
@@ -582,9 +608,15 @@ export class StageRenderer {
 
 export function drawSnapshot(canvas, snapshot, tintKey = 'a', opts = {}) {
   /* ============================================================== */
-  /* 芳文社水彩圆点快照（三层晕染 + 高光 + 水彩扩散）                  */
+  /* 芳文社水彩圆点快照（三层晕染 + 高光 + 水彩扩散 + 呼吸动效）       */
+  /*                                                                */
+  /* opts.now: performance.now() 毫秒 — 传入则启用持续呼吸；         */
+  /*           不传则画静态缩略图（gallery 首次渲染用）               */
+  /* opts.attrType: attractor type 字符串 — 直接指定签名             */
+  /* opts.metrics: 带 type 的 metrics 对象 — 自动选签名              */
   /* ============================================================== */
   if (!canvas || !snapshot) return;
+  const now = opts.now || performance.now();
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const rect = canvas.getBoundingClientRect();
   const W = Math.max(1, Math.round((rect.width || opts.w || 240) * dpr));
@@ -677,25 +709,28 @@ export function drawSnapshot(canvas, snapshot, tintKey = 'a', opts = {}) {
   const haloAlpha = aSig.halo * (opts._haloMul || 1);
 
   /* ====================================================== */
-  /* Layer 1: 大柔光圆（lighter）—— 水彩晕染扩散层           */
-  /* 值越大光晕越大越亮；值越小光晕几乎不见                    */
+  /* Layer 1: 大柔光圆（lighter）—— 水彩晕染扩散层 + 呼吸    */
   /* ====================================================== */
   ctx.globalCompositeOperation = 'lighter';
-  ctx.filter = `blur(${aSig.blur.toFixed(1)}px)`;    // attractor signature 控制模糊
+  ctx.filter = `blur(${aSig.blur.toFixed(1)}px)`;
+  const haloSig = { ...aSig, period: aSig.haloPeriod || aSig.period, amp: aSig.amp * 0.55 };
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {
       const v = diffused[y * w + x];
       if (!v) continue;
-      // 值 0-255 → 归一化 0-1（值越大越年轻或场越强）
       const norm = clamp(v / 255, 0.05, 1);
       const px = ox + x * cell + cell / 2;
       const py = oy + y * cell + cell / 2;
-      const radius = cell * (1.8 + norm * 1.8);       // 半径 1.8~3.6 cell
-      const alpha = haloAlpha * (0.2 + norm * 0.6);   // alpha 0.2~0.8 × halo alpha
+      const baseRadius = cell * (1.8 + norm * 1.8);
+      const cellHash = (x * 7 + y * 13) / 100;
+      const breath = computeBreath(now, cellHash, haloSig, norm);
+      const radius = baseRadius + breath * baseRadius;
+      const baseAlpha = haloAlpha * (0.2 + norm * 0.6);
+      const alpha = baseAlpha * (1 + breath * 1.2);
       const hue = (t.hue + aSig.hueOff + (x * 7 + y * 13) % 18 - 9 + jitterHue * norm + 360) % 360;
       const sat = 75 * satMul + (norm > 0.7 ? 8 : 0);
       const lum = densityLum + norm * 10;
-      ctx.fillStyle = `hsla(${hue}, ${sat}%, ${lum}%, ${alpha})`;
+      ctx.fillStyle = `hsla(${hue}, ${sat}%, ${lum}%, ${Math.max(0.01, alpha)})`;
       ctx.beginPath();
       ctx.arc(px, py, radius, 0, Math.PI * 2);
       ctx.fill();
@@ -704,19 +739,21 @@ export function drawSnapshot(canvas, snapshot, tintKey = 'a', opts = {}) {
   ctx.filter = 'none';
 
   /* ====================================================== */
-  /* Layer 2: 实体圆（lighter）—— 细胞主体层                   */
-  /* 值越大圆越大越饱和；值越小圆缩小变淡                       */
+  /* Layer 2: 实体圆（lighter）—— 细胞主体层 + 呼吸          */
   /* ====================================================== */
   ctx.globalCompositeOperation = 'lighter';
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {
-      const v = snapshot.data[y * w + x];    // 用原始值（不是扩散值）画实体圆
+      const v = snapshot.data[y * w + x];
       if (!v) continue;
       const norm = clamp(v / 255, 0.1, 1);
       const px = ox + x * cell + cell / 2;
       const py = oy + y * cell + cell / 2;
-      const radius = cell * (0.18 + norm * 0.38);     // 实体圆 0.18~0.56 cell
-      const alpha = 0.55 + norm * 0.35;                // alpha 0.55~0.90
+      const baseRadius = cell * (0.18 + norm * 0.38);
+      const cellHash = (x * 11 + y * 5) / 100;
+      const breath = computeBreath(now, cellHash, aSig, norm);
+      const radius = baseRadius + breath * baseRadius;
+      const alpha = 0.55 + norm * 0.35;
       const hue = (t.hue + aSig.hueOff + (x * 5 + y * 9) % 14 - 7 + jitterHue * norm + 360) % 360;
       const sat = 88 * satMul;
       const lum = densityLum + norm * 15;
