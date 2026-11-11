@@ -61,10 +61,17 @@
 //   strictness 0.72 → 基本严格五声（默认）
 //   strictness 1.0 → 绝对五声（任何音都被纠正到最近的五声）
 
+import { clamp, hashString } from './rng.js';
 import { SCALES } from './engines.js';
-import { clamp } from './rng.js';
 
-export function midiToFreq(m) {
+/* ---- 音乐理论层（music.js）---- */
+import {
+  HEARTBEAT_BPM, CHORD_DENSENESS, CHORD_PROGRESSION,
+  generateMelodyContour, applyVoiceLeading,
+  getChordNotes, jepaToAudioParams,
+} from './music.js';
+
+function midiToFreq(m) {
   return 440 * Math.pow(2, (m - 69) / 12);
 }
 
@@ -97,6 +104,18 @@ export class AudioEngine {
     this.lastMetricsUpdate = 0;
     this.tempoSmoothed = 0.5;
     this._build();
+
+    /* ---- 音乐性增强（v3）状态 ---- */
+    this._heartbeatNext = 0;       // Layer 1: 心跳
+    this._heartbeatBPM = 72;
+    this._chordNext = 0;           // Layer 2: 和弦 pad
+    this._chordRootDegree = 0;
+    this._chordDensity = 'triads';
+    this._chordProgIdx = 0;
+    this._chordIntervalSec = 8;
+    this._melodyContour = null;    // Layer 3: 主旋律
+    this._melodyIdx = 0;
+    this._sparkleNext = 0;         // Layer 4: 水晶闪烁
   }
 
   _build() {
@@ -250,37 +269,70 @@ export class AudioEngine {
     const density = clamp(m.density, 0, 1);
     const entropy = clamp(m.entropy, 0, 1);
     const activity = clamp(m.activity, 0, 1);
-    this.tempoSmoothed = this.tempoSmoothed * 0.92 + (mapping.tempo ?? 0.5) * 0.08;
+    const attractorType = m.type || 'stable';
 
-    /* ---- 科学指标（如果有的话，用它们；否则回退到拓扑映射）---- */
+    /* ---- 科学指标 ---- */
     const lyapunov = m.lyapunov !== undefined ? clamp(m.lyapunov, -0.3, 0.3) : 0;
     const fractal = m.fractal !== undefined ? clamp(m.fractal, 0.5, 2.0) : 1.0;
     const energyTotal = m.energy?.total ?? 1.0;
-    // energy total 通常 0.2 ~ 8.0，归一化到 0~1：低=松弛，高=活跃
     const energyNorm = clamp(Math.log10(energyTotal + 0.01) / 1.0, 0, 1);
 
-    /* ---- drone 层 ---- */
+    /* ---- Layer 1: Heartbeat BPM（物理心率映射）---- */
+    // attractor type → 物理心率范围
+    const targetBPM = HEARTBEAT_BPM[attractorType] ?? 72;
+    // 加 activity 微调（运动 → 心率稍微上去）
+    const withActivity = targetBPM + activity * 25;
+    // 平滑过渡（α=0.08，让心率不要跳变）
+    this._heartbeatBPM = this._heartbeatBPM * 0.92 + withActivity * 0.08;
+
+    /* ---- Layer 2: Chord Pad ---- */
+    const newDensity = CHORD_DENSENESS[attractorType] ?? 'triads';
+    if (newDensity !== this._chordDensity) {
+      this._chordDensity = newDensity;
+    }
+    // chord 替换速率：density 高 → 稳定 → 8秒；density 低 → 活跃 → 2秒
+    const sec = 8 - density * 6;  // 8 → 2
+    this._chordIntervalSec = sec;
+    // 推进 progression（每 update 不一定推进，但给一个基准）
+    if (now > this._chordNext + sec) {
+      this._chordProgIdx = (this._chordProgIdx + 1) % CHORD_PROGRESSION.length;
+      // chordRoot = progression 当前 index 的第一个音
+      this._chordRootDegree = CHORD_PROGRESSION[this._chordProgIdx][0];
+      this._chordNext = now + sec;
+    }
+
+    /* ---- Layer 3: Melody Contour ---- */
+    // 每 16 拍（~8 秒）重新生成一段新的旋律轮廓
+    if (!this._melodyContour || this._melodyIdx >= this._melodyContour.length) {
+      const seed = (hashString(String(attractorType) + String(lyapunov.toFixed(2))) >>> 0) % 1000000;
+      const scale = SCALES[mapping.scale || 'major'];
+      const raw = generateMelodyContour(attractorType, scale.degrees, seed);
+      // Voice leading 修正（稳定态严格，混沌态宽松）
+      const maxJump = attractorType === 'stable' ? 2 : attractorType === 'chaotic' ? 12 : 7;
+      this._melodyContour = applyVoiceLeading(raw, maxJump);
+      this._melodyIdx = 0;
+    }
+
+    /* ---- drone 层（保留原有，但 BPM 改为 heartbeat 驱动）---- */
     const droneLevel = 0.012 + density * 0.32;
-    // 科学引擎时，energy 控制 drone 频率：低能量→厚低音，高能量→明亮高音
-    const energyShift = (0.5 - energyNorm) * 140;  // ±70Hz
+    const energyShift = (0.5 - energyNorm) * 140;
     this.droneGain.gain.setTargetAtTime(mapping.drone === false ? 0.0001 : droneLevel, now, 0.5);
     this.droneFilter.frequency.setTargetAtTime(
       (260 + entropy * 2600 * (0.35 + (mapping.brightness ?? 0.55)) + activity * 500)
-      + energyShift,  // ← 科学指标介入
+      + energyShift,
       now, 0.4,
     );
-    this.lfo.frequency.setTargetAtTime(0.06 + density * 0.5, now, 0.6);
+    // LFO 呼吸节奏也用 heartbeat BPM 同步（让呼吸和心跳同频）
+    this.lfo.frequency.setTargetAtTime(this._heartbeatBPM / 60 / 4, now, 0.6);  // heartbeat BPM / 4 = LFO Hz
 
     /* ---- 延迟/合唱层 ---- */
-    // 科学引擎时，lyapunov 控制延迟反馈的"漂移感"
-    const lyaNorm = (lyapunov + 0.3) / 0.6;  // -0.3~0.3 → 0~1
+    const lyaNorm = (lyapunov + 0.3) / 0.6;
     this.delayWet.gain.setTargetAtTime(0.1 + clamp(m.diameterNorm ?? 0.5, 0, 1) * 0.35, now, 0.8);
     this.delayFb.gain.setTargetAtTime(0.16 + clamp(1 - (m.stability ?? 0.5), 0, 1) * 0.28 + lyaNorm * 0.1, now, 0.8);
 
-    /* ---- 保存给 tick() 的 beat 不规则度 ---- */
-    // Lyapunov → beat 抖动幅度（秒），fractal → 和弦装饰音密度
-    this._beatJitterSec = Math.abs(lyapunov) * 0.15;  // 最大 ±45ms 抖动
-    this._chordality = clamp((fractal - 0.5) / 1.5, 0, 1);  // 0=单音, 1=和弦
+    /* ---- tick() 需要的中间变量 ---- */
+    this._beatJitterSec = Math.abs(lyapunov) * 0.15;
+    this._chordality = clamp((fractal - 0.5) / 1.5, 0, 1);
     this._energyNorm = energyNorm;
 
     this.level = clamp(density * 0.5 + activity * 0.35 + entropy * 0.15 + this._chordality * 0.15, 0, 1);
@@ -302,41 +354,188 @@ export class AudioEngine {
     if (mapping.pulse === false && mapping.drone !== false) return;
 
     const activity = clamp(m.activity, 0, 1);
-    const bpm = 40 + this.tempoSmoothed * 70 + activity * 55;
-    let beat = 60 / bpm / 2;
-    if (m.type === 'chaotic') beat *= 1 + (Math.random() - 0.5) * 0.35;
-    if (m.type === 'stable') beat *= 1.25;
+    const attractorType = m.type || 'stable';
+    const scale = SCALES[mapping.scale || 'major'];
+    const rootMidi = this._rootMidi();
 
-    // after a background tab or long pause, do not replay the missed beats
-    if (this.nextNote < now - 0.4) this.nextNote = now + 0.05;
+    /* ================================================================ */
+    /*  Layer 1: Heartbeat Bass 心跳节拍                                */
+    /*  用 heartbeat BPM（物理心率），每 beat 触发一次心跳音               */
+    /*  心跳音包络：极短 attack + 缓慢 decay（sine 重低音 16-28Hz）         */
+    /* ================================================================ */
+    const beat = 60 / this._heartbeatBPM;  // seconds per heartbeat
+    if (this._heartbeatNext === 0) this._heartbeatNext = now + beat * 0.3;
+
+    // attractor 决定心跳的"是否有第二心音"（stable 更稳，只有一个；chaotic 有两个间隔很近）
+    const hasSplitHeartbeat = attractorType === 'chaotic' || attractorType === 'drifting';
+
+    if (this._heartbeatNext < now + 0.15) {
+      // 心跳音：根音 1 octave 下的 sine + 极短 attack
+      const hz = midiToFreq(rootMidi - 12);  // 低八度
+      this._heartbeatTone(hz, this._heartbeatNext);
+      if (hasSplitHeartbeat) {
+        // 第二心音（轻微）：delay 80ms，音量小
+        this._heartbeatTone(hz * 1.06, this._heartbeatNext + beat * 0.18, 0.25);
+      }
+      this._heartbeatNext += beat;
+      this._heartbeatNext = this._heartbeatNext > now + 5 ? this._heartbeatNext : now + beat;  // 防止漂移
+    }
+
+    /* ================================================================ */
+    /*  Layer 2: Chord Pad  和弦支撑（真正的和声转换）                    */
+    /*  chord 替换间隔由 density 决定                                    */
+    /* ================================================================ */
+    if (this._chordNext === 0) this._chordNext = now + 0.5;
+    if (this._chordNext < now + 0.25) {
+      // 推进 progression
+      this._chordProgIdx = (this._chordProgIdx + 1) % CHORD_PROGRESSION.length;
+      this._chordRootDegree = CHORD_PROGRESSION[this._chordProgIdx][0];
+
+      // 构建和弦
+      const chordMidi = getChordNotes(
+        this._chordDensity,
+        this._chordRootDegree,
+        scale.degrees,
+        mapping.octave ?? 3,
+        rootMidi - 12,   // chord pad 在低八度，听起来是支撑
+      );
+      // 每个和弦音是一个长音（attack 1.5 秒 slow rise）
+      for (const midi of chordMidi) {
+        const freq = midiToFreq(midi);
+        this._chordTone(freq, this._chordNext, this._chordIntervalSec * 0.9);
+      }
+      this._chordNext += this._chordIntervalSec;
+    }
+
+    /* ================================================================ */
+    /*  Layer 3: Lead Pulse  主旋律（有旋律轮廓 + voice leading）          */
+    /*  每 half-beat（heartbeat / 2）触发一个旋律音                      */
+    /*  用 _melodyContour 数组逐拍推进                                   */
+    /* ================================================================ */
+    const melBeat = beat / 2;  // half-beat 旋律节奏（比心跳快一倍）
+    if (this.nextNote === 0 || now > this.nextNote - melBeat) this.nextNote = now + melBeat * 0.3;
 
     const strict = mapping.strictness ?? 0.7;
-    while (this.nextNote < now + 0.12) {
-      if (mapping.pulse !== false) this._scheduleNote(this.nextNote, m, strict);
-      this.nextNote += beat;
+    if (this.nextNote < now + 0.12) {
+      // 心跳 attractor → 旋律音的音高（从 contour 数组选）
+      if (this._melodyContour && this._melodyIdx < this._melodyContour.length) {
+        const degree = this._melodyContour[this._melodyIdx];
+        this._melodyIdx++;
+        const freq = this._degreeFreq(degree, 0);
+        // dur 根据 attractor 类型：stable 长 1.5s，chaotic 短 0.25s
+        const dur = attractorType === 'stable' ? 1.5 : attractorType === 'chaotic' ? 0.28 : 0.7;
+        const amp = 0.055 + m.density * 0.12;
+        this._tone(freq, this.nextNote, dur, amp, mapping.wave || 'triangle', 0.5);
+      }
+      // 保留原有 cell 触发音（新生儿）
+      const cell = this.birthQueue.shift();
+      if (cell) {
+        const degree = Math.floor(cell.x * 5) % 5;
+        const octaveShift = Math.floor((1 - cell.y) * (1 + strict * 2));
+        const freq = this._degreeFreq(degree, octaveShift + 1);  // 高八度：新生儿更亮
+        const amp = 0.1 + Math.random() * 0.05;
+        this._tone(freq, this.nextNote, attractorType === 'stable' ? 1.2 : 0.32, amp, 'triangle', 0.5);
+
+        // Layer 4: Sparkle Crystal — 新生儿水晶闪烁（3 harmonic 谐波）
+        this._emitSparkle(this.nextNote, cell.x, cell.y);
+      }
+      // Lyapunov → beat 抖动（科学指标介入）
+      const jitter = (Math.random() - 0.5) * this._beatJitterSec;
+      this.nextNote += melBeat + jitter;
     }
-    this.level = clamp(this.level * 0.95 + (m.activity * 0.4 + m.density * 0.2) * 0.05, 0, 1);
+    // background tab 保护
+    if (this.nextNote < now - 0.4) this.nextNote = now + melBeat * 0.5;
+
+    this.level = clamp(this.level * 0.95 + (activity * 0.4 + m.density * 0.2) * 0.05, 0, 1);
   }
 
-  _scheduleNote(when, m, strict) {
-    const cell = this.birthQueue.shift();
-    let degree;
-    let octaveShift;
-    let amp;
-    if (cell) {
-      degree = Math.floor(cell.x * 5) % 5;
-      octaveShift = Math.floor((1 - cell.y) * (1 + strict * 2));
-      amp = 0.1 + Math.random() * 0.05;
-    } else {
-      if (Math.random() > 0.18 + (1 - strict) * 0.4) return;
-      const seed = this.noteCounter++;
-      degree = (seed * 3 + Math.floor((m.period || 1) + m.entropy * 5)) % 5;
-      octaveShift = (seed * 2) % 2;
-      amp = 0.055 + m.density * 0.12;
+  /* ---- Layer 1: Heartbeat tone ---- */
+  _heartbeatTone(freq, when, peak = 0.35) {
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, when);
+    // 心跳包络：attack 极短（10ms）→ 峰值 → 缓慢 decay（250ms）
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(peak, when + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.35);
+    osc.connect(gain);
+    gain.connect(this.noteBus);  // 走主通道，有 delay reverb
+    osc.start(when);
+    osc.stop(when + 0.42);
+  }
+
+  /* ---- Layer 2: Chord pad tone（长 attack，slow rise）---- */
+  _chordTone(freq, when, dur) {
+    if (this.voices > 24) return;  // chord 占 voice budget
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 900;   // 柔和的 chord pad 不刺耳
+    filter.Q.value = 0.7;
+    osc.type = 'triangle';          // triangle 波最适合 chord pad
+    osc.frequency.setValueAtTime(freq, when);
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.linearRampToValueAtTime(0.14, when + 1.2);  // 1.2 秒 slow rise
+    g.gain.linearRampToValueAtTime(0.0001, when + dur);
+
+    osc.connect(filter);
+    filter.connect(g);
+    g.connect(this.master);  // chord 直接到 master，不走 delay（太脏）
+    this.voices++;
+    osc.start(when);
+    osc.stop(when + dur + 0.1);
+    osc.onended = () => { this.voices = Math.max(0, this.voices - 1); try { g.disconnect(); } catch {} };
+  }
+
+  /* ---- Layer 4: Sparkle Crystal（3 harmonic 谐波闪烁）---- */
+  _emitSparkle(when, x, y) {
+    if (this.voices > 22) return;
+    const rootMidi = this._rootMidi();
+    const baseHz = midiToFreq(rootMidi + 12);  // 高八度基频
+    const pan = (x - 0.5) * 1.2;               // stereo: -0.6 ~ +0.6 随机分布
+    const amps = [0.12, 0.08, 0.05];            // f, 2f, 3f 能量递减
+    const decays = [0.5, 0.38, 0.28];           // exp decay 时间
+
+    for (let h = 0; h < 3; h++) {
+      const ctx = this.ctx;
+      const osc = ctx.createOscillator();
+      const panNode = ctx.createStereoPanner();
+      panNode.pan.value = pan + (Math.random() - 0.5) * 0.2;
+      osc.type = h === 0 ? 'sine' : 'triangle';   // 基音 sine 最纯，高次 harmonic 用 triangle 更亮
+      osc.frequency.setValueAtTime(baseHz * (h + 1), when);
+
+      const g = ctx.createGain();
+      const a = amps[h];
+      const d = decays[h];
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(a, when + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + d);
+
+      osc.connect(panNode);
+      panNode.connect(g);
+      g.connect(this.noteBus);
+      this.voices++;
+      osc.start(when);
+      osc.stop(when + d + 0.05);
+      osc.onended = () => { this.voices = Math.max(0, this.voices - 1); try { g.disconnect(); } catch {} };
     }
-    const freq = this._degreeFreq(degree, octaveShift);
-    const dur = m.type === 'stable' ? 1.5 : m.type === 'chaotic' ? 0.28 : 0.7;
-    this._tone(freq, when, dur, amp, this.mapping.wave || 'triangle', 0.5);
+  }
+
+  /* ---- Layer 5: JEPA prediction feedback（外部调用）---- */
+  emitJepaFeedback(feedback) {
+    const params = jepaToAudioParams(feedback, SCALES[this.mapping.scale || 'major'].degrees, this._rootMidi());
+    if (!params) return;
+    const now = this.ctx.currentTime + 0.02;
+    for (const midi of params.midiNotes) {
+      const freq = midiToFreq(midi);
+      const wave = params.predictionCorrect ? 'sine' : 'square';  // 正确→纯，错误→粗 square
+      this._tone(freq, now, 0.6, params.loudness, wave, 0.5);
+    }
   }
 
   _degreeFreq(degree, octaveShift = 0) {
