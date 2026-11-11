@@ -2392,3 +2392,283 @@ body.motion-off *::after {
 .fp-mini { display: flex; align-items: center; gap: 6px; }
 .fp-mini canvas { width: 28px; height: 28px; }
 .fp-mini .fp-code { font-size: 11px; }
+
+/* ===========================================================
+   🔬 Science Discovery Panel — 科学发现面板
+   深色萌系主题适配：薰衣草紫底 + 薄荷绿/琥珀点缀
+=========================================================== */
+
+/* ---- Section 容器 ---- */
+.sci-section {
+  margin-bottom: 22px;
+  padding: 14px 14px 12px;
+  background: rgba(195, 155, 255, 0.06);
+  border: 1px solid rgba(195, 155, 255, 0.18);
+  border-radius: 12px;
+  position: relative;
+}
+.sci-section h4 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #e8ddf5;
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sci-section h4::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(195,155,255,0.3), transparent);
+  margin-left: 6px;
+}
+.sci-section .dim {
+  font-size: 11px;
+  line-height: 1.65;
+  color: #9a8fb0;
+  margin-bottom: 8px;
+}
+
+/* ---- 按钮行 ---- */
+.sci-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+.sci-row .btn {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(126, 200, 162, 0.15);
+  border: 1px solid rgba(126, 200, 162, 0.35);
+  color: #a8e0c2;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.sci-row .btn:hover {
+  background: rgba(126, 200, 162, 0.25);
+  transform: translateY(-1px);
+}
+.sci-row .btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+.sci-row .btn.ghost {
+  background: transparent;
+  border-color: rgba(195, 155, 255, 0.3);
+  color: #c5b3e0;
+}
+.sci-row .btn.ghost:hover {
+  background: rgba(195, 155, 255, 0.1);
+}
+.sci-row .btn.tiny { padding: 4px 8px; font-size: 10.5px; }
+
+/* ================ Pattern List（已发表模式匹配） ================ */
+.pattern-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pattern-item {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+}
+.pattern-item::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--mint), var(--lavender));
+  border-radius: 3px 0 0 3px;
+}
+.pattern-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 3px;
+}
+.pattern-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #ede4f8;
+}
+.pattern-sim {
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+.pattern-desc {
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: #a89cbe;
+  margin-bottom: 4px;
+}
+.pattern-diff {
+  font-size: 10px;
+  font-family: Arial, sans-serif;
+  color: #7a8fa5;
+  background: rgba(0,0,0,0.15);
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-block;
+  margin-bottom: 3px;
+}
+.pattern-refs {
+  font-size: 9.5px;
+  opacity: 0.55;
+  font-style: italic;
+}
+
+/* ================ MC Result ================ */
+.mc-result {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 184, 107, 0.08);
+  border: 1px solid rgba(255, 184, 107, 0.25);
+  border-radius: 10px;
+  font-size: 11px;
+  color: #d4b88a;
+}
+.mc-result b {
+  color: #ffc46b;
+  font-weight: 700;
+  font-size: 12.5px;
+}
+.mc-result .dim {
+  margin-top: 3px;
+  margin-bottom: 0;
+  font-size: 10px;
+}
+
+/* ================ Scan Info ================ */
+.scan-info {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(126, 200, 227, 0.08);
+  border: 1px solid rgba(126, 200, 227, 0.25);
+  border-radius: 10px;
+  font-size: 11px;
+  color: #a8c4d8;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: Arial, sans-serif;
+}
+.scan-info div { line-height: 1.55; }
+.scan-axes summary {
+  cursor: pointer;
+  font-size: 11px;
+  padding: 6px 0;
+  user-select: none;
+}
+.scan-axes summary::marker { color: var(--lavender); }
+
+/* ================ Leaderboard List ================ */
+.lb-list {
+  margin-top: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(195,155,255,0.4) transparent;
+}
+.lb-list::-webkit-scrollbar { width: 5px; }
+.lb-list::-webkit-scrollbar-thumb {
+  background: rgba(195,155,255,0.35);
+  border-radius: 3px;
+}
+.lb-row {
+  display: grid;
+  grid-template-columns: 28px 52px 1fr auto;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 10.5px;
+  transition: background 0.15s;
+}
+.lb-row:hover {
+  background: rgba(195, 155, 255, 0.08);
+}
+.lb-rank {
+  font-weight: 700;
+  font-size: 11px;
+  color: #7a6f90;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.lb-row:nth-child(1) .lb-rank { color: #ffc46b; }
+.lb-row:nth-child(2) .lb-rank { color: #d4b88a; }
+.lb-row:nth-child(3) .lb-rank { color: #b8a074; }
+.lb-sim {
+  font-weight: 800;
+  color: #7ec8a2;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.lb-row:nth-child(1) .lb-sim { color: #ffc46b; }
+.lb-row:nth-child(2) .lb-sim { color: #e0d0a0; }
+.lb-tiny {
+  font-family: Arial, sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.2px;
+}
+.lb-time {
+  font-size: 9.5px;
+}
+
+/* ================ OSR body (Open Science Repository) ================ */
+.osr-body {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(195, 155, 255, 0.2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #d0c5e0;
+  max-height: 280px;
+  overflow-y: auto;
+  font-family: 'Menlo', 'Consolas', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.osr-body table { border-collapse: collapse; margin: 6px 0; }
+.osr-body th, .osr-body td {
+  border: 1px solid rgba(195,155,255,0.2);
+  padding: 4px 8px;
+  text-align: left;
+  font-size: 10.5px;
+}
+.osr-body th { background: rgba(195,155,255,0.12); }
+
+/* ================ Heatmap modal ================ */
+#heatmapCanvas {
+  max-width: 100%;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4), 0 0 40px rgba(126, 200, 162, 0.15);
+  display: inline-block;
+  margin: 8px auto;
+}
+
+/* ================ Modal 科学风格 ================ */
+.modal-body .dim a {
+  color: var(--mint);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(126, 200, 162, 0.4);
+  transition: border-color 0.15s;
+}
+.modal-body .dim a:hover {
+  border-bottom-color: var(--mint);
+}
