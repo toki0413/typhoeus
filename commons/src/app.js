@@ -986,12 +986,26 @@ function diagnosisShort(m) {
 }
 
 function placeholderSnapshot(r) {
+  /* 占位快照：用种子名+随机种子生成稳定的伪年龄/场强度数据。
+     让每颗种子即使没有真实快照也能有独特的缩略图水彩感。 */
   const rand = mulberry32(hashString(r.seed.name + r.rngSeed));
   const w = 80;
   const h = 45;
   const data = new Uint8Array(w * h);
-  const density = 0.06 + rand() * 0.18;
-  for (let i = 0; i < data.length; i++) data[i] = rand() < density ? 1 : 0;
+  // 中心点 + 随机散布，让每颗种子结构不同
+  const cx = Math.floor(rand() * w);
+  const cy = Math.floor(rand() * h);
+  const density = 0.08 + rand() * 0.14;
+  const range = 12 + Math.floor(rand() * 10);
+  for (let i = 0; i < data.length; i++) {
+    if (rand() < density) {
+      const x = i % w, y = Math.floor(i / w);
+      const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+      if (dist < range) data[i] = Math.max(1, Math.round(255 * (1 - dist / range) * rand()));
+    }
+  }
+  // 保证不纯白
+  if (!data.some(v => v > 0)) data[Math.floor(rand() * data.length)] = 20;
   return { data, w, h };
 }
 

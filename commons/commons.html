@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Commons · 公地 🌸 用心聆听生命的声音（芳文社版）</title>
+    <title>Commons · 公地 🌸 用心聆听生命的声音</title>
     <meta
       name="description"
       content="Commons 公地：领养、观察、悉心照料一枚小小的生命种子，聆听它用五声音阶为你献上的治愈之歌。"
@@ -3224,7 +3224,7 @@ body.blind-listen .hud-tr {
       return this.grid[i] === 1;
     }
     snapshot(scale = 2) {
-      const { w, h, grid } = this;
+      const { w, h, grid, age } = this;
       const ow = Math.floor(w / scale);
       const oh = Math.floor(h / scale);
       const out = new Uint8Array(ow * oh);
@@ -3233,10 +3233,13 @@ body.blind-listen .hud-tr {
           let v = 0;
           for (let sy = 0; sy < scale; sy++) {
             for (let sx = 0; sx < scale; sx++) {
-              v |= grid[(y * scale + sy) * w + (x * scale + sx)];
+              const i = (y * scale + sy) * w + (x * scale + sx);
+              if (grid[i]) {
+                v = Math.max(v, Math.min(255, age[i] || 1));
+              }
             }
           }
-          out[y * ow + x] = v ? 1 : 0;
+          out[y * ow + x] = v;
         }
       }
       return { data: out, w: ow, h: oh };
@@ -3456,7 +3459,7 @@ body.blind-listen .hud-tr {
               v = Math.max(v, field[(y * scale + sy) * w + (x * scale + sx)]);
             }
           }
-          out[y * ow + x] = v > 0.35 ? 1 : 0;
+          out[y * ow + x] = v > 0.02 ? Math.min(255, Math.round(v * 255)) : 0;
         }
       }
       return { data: out, w: ow, h: oh };
@@ -3988,6 +3991,34 @@ body.blind-listen .hud-tr {
   }
 
   // src/render.js
+  var ATTRACTOR_COLOR = {
+    stable: { hueOff: 0, satMul: 0.92, halo: 0.12, blur: 0.8 },
+    periodic: { hueOff: 0, satMul: 1, halo: 0.2, blur: 0.5, breath: true },
+    chaotic: { hueOff: 0, satMul: 1.05, halo: 0.28, blur: 0, jitterHue: 22 },
+    drifting: { hueOff: 50, satMul: 0.95, halo: 0.18, blur: 0.3, alphaWave: 0.1 },
+    endangered: { hueOff: -10, satMul: 0.55, halo: 0.05, blur: 0, alphaMul: 0.75 },
+    extinct: { hueOff: 0, satMul: 0.5, halo: 0.03, blur: 0, alphaMul: 0.25 }
+  };
+  function watercolorDiffuse(data, w, h, strength = 0.6) {
+    const out = new Uint8Array(data.length);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let sum = 0, count = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            sum += data[ny * w + nx];
+            count++;
+          }
+        }
+        const center = data[y * w + x];
+        const avg = sum / count;
+        out[y * w + x] = Math.round(center * (1 - strength) + avg * strength);
+      }
+    }
+    return out;
+  }
   var TINTS = {
     // 主题 A：樱花粉 × 薰衣草紫（默认）
     a: {
@@ -4418,17 +4449,33 @@ body.blind-listen .hud-tr {
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     const t = TINTS[tintKey] || TINTS.a;
-    ctx.fillStyle = `rgb(${t.bg[0]},${t.bg[1]},${t.bg[2]})`;
+    const type = opts.attrType || opts.metrics && opts.metrics.type || "stable";
+    const aSig = ATTRACTOR_COLOR[type] || ATTRACTOR_COLOR.stable;
+    const activity = opts.metrics ? clamp(opts.metrics.activity, 0, 1) : 0.3;
+    const entropy = opts.metrics ? clamp(opts.metrics.entropy, 0, 1) : 0.3;
+    const density = opts.metrics ? clamp(opts.metrics.density, 0, 1) : 0.4;
+    const cx = W / 2, cy = H / 2;
+    const bgGrad = ctx.createRadialGradient(
+      cx,
+      cy,
+      Math.min(W, H) * 0.05,
+      cx,
+      cy,
+      Math.max(W, H) * 0.9
+    );
+    bgGrad.addColorStop(0, `rgb(${t.bg[0] + 14},${t.bg[1] + 14},${t.bg[2] + 8})`);
+    bgGrad.addColorStop(0.7, `rgb(${t.bg[0]},${t.bg[1]},${t.bg[2]})`);
+    bgGrad.addColorStop(1, `rgb(${Math.max(0, t.bg[0] - 26)},${Math.max(0, t.bg[1] - 20)},${Math.max(0, t.bg[2] - 16)})`);
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
-    const { data, w, h } = snapshot;
-    let minX = w;
-    let minY = h;
-    let maxX = -1;
-    let maxY = -1;
+    const { w, h } = snapshot;
+    let minX = w, minY = h, maxX = -1, maxY = -1;
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        if (!data[y * w + x]) continue;
+        if (!snapshot.data[y * w + x]) continue;
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;
@@ -4437,43 +4484,101 @@ body.blind-listen .hud-tr {
     }
     if (maxX < 0) {
       const c = Math.min(W, H) * 0.22;
-      ctx.strokeStyle = `hsla(${t.hue}, 70%, 55%, 0.35)`;
-      ctx.lineWidth = 1.2;
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = `hsla(${t.hue}, 70%, 70%, 0.08)`;
       ctx.beginPath();
-      ctx.arc(W / 2, H / 2, c, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = `hsla(${t.hue}, 80%, 60%, 0.5)`;
-      ctx.beginPath();
-      ctx.arc(W / 2, H / 2, Math.max(2, c * 0.1), 0, Math.PI * 2);
+      ctx.arc(cx, cy, c * 1.8, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = `hsla(${t.hue}, 75%, 60%, 0.30)`;
+      ctx.lineWidth = Math.max(1, dpr);
+      ctx.beginPath();
+      ctx.arc(cx, cy, c, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = `hsla(${t.hue}, 85%, 62%, 0.7)`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(2, c * 0.22), 0, Math.PI * 2);
+      ctx.fill();
+      const vign = ctx.createRadialGradient(cx, cy, Math.min(W, H) * 0.3, cx, cy, Math.max(W, H) * 0.85);
+      vign.addColorStop(0, "rgba(255,255,255,0)");
+      vign.addColorStop(1, `rgba(${Math.max(0, t.bg[0] - 30)},${Math.max(0, t.bg[1] - 25)},${Math.max(0, t.bg[2] - 22)},0.35)`);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = vign;
+      ctx.fillRect(0, 0, W, H);
       return;
     }
+    const diffused = watercolorDiffuse(snapshot.data, w, h, 0.55);
     const bw = maxX - minX + 1;
     const bh = maxY - minY + 1;
-    const scale = Math.min(W * 0.9 / bw, H * 0.9 / bh);
+    const scale = Math.min(W * 0.85 / bw, H * 0.85 / bh);
     const ox = (W - bw * scale) / 2 - minX * scale;
     const oy = (H - bh * scale) / 2 - minY * scale;
     const cell = Math.max(1, scale);
+    const densityLum = 50 + density * 10;
+    const entropySatMul = 1 - entropy * 0.12;
+    const jitterHue = activity * 8;
+    const satMul = aSig.satMul * entropySatMul;
+    const haloAlpha = aSig.halo * (opts._haloMul || 1);
     ctx.globalCompositeOperation = "lighter";
-    ctx.fillStyle = `hsla(${t.hue}, 82%, 58%, 0.14)`;
+    ctx.filter = `blur(${aSig.blur.toFixed(1)}px)`;
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
-        if (!data[y * w + x]) continue;
-        ctx.fillRect(ox + x * cell - cell, oy + y * cell - cell, cell * 3.2, cell * 3.2);
+        const v = diffused[y * w + x];
+        if (!v) continue;
+        const norm = clamp(v / 255, 0.05, 1);
+        const px = ox + x * cell + cell / 2;
+        const py = oy + y * cell + cell / 2;
+        const radius = cell * (1.8 + norm * 1.8);
+        const alpha = haloAlpha * (0.2 + norm * 0.6);
+        const hue = (t.hue + aSig.hueOff + (x * 7 + y * 13) % 18 - 9 + jitterHue * norm + 360) % 360;
+        const sat = 75 * satMul + (norm > 0.7 ? 8 : 0);
+        const lum = densityLum + norm * 10;
+        ctx.fillStyle = `hsla(${hue}, ${sat}%, ${lum}%, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
+    ctx.filter = "none";
+    ctx.globalCompositeOperation = "lighter";
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
-        if (!data[y * w + x]) continue;
-        const jitter = (x * 13 + y * 7) % 5 / 40;
-        ctx.fillStyle = `hsla(${t.hue + jitter * 40}, 88%, ${58 + jitter * 28}%, 0.92)`;
-        ctx.fillRect(ox + x * cell, oy + y * cell, Math.max(1, cell * 0.9), Math.max(1, cell * 0.9));
+        const v = snapshot.data[y * w + x];
+        if (!v) continue;
+        const norm = clamp(v / 255, 0.1, 1);
+        const px = ox + x * cell + cell / 2;
+        const py = oy + y * cell + cell / 2;
+        const radius = cell * (0.18 + norm * 0.38);
+        const alpha = 0.55 + norm * 0.35;
+        const hue = (t.hue + aSig.hueOff + (x * 5 + y * 9) % 14 - 7 + jitterHue * norm + 360) % 360;
+        const sat = 88 * satMul;
+        const lum = densityLum + norm * 15;
+        ctx.fillStyle = `hsla(${hue}, ${sat}%, ${lum}%, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
     ctx.globalCompositeOperation = "source-over";
-    const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.14, W / 2, H / 2, H * 0.95);
-    vg.addColorStop(0, "rgba(0,0,0,0)");
-    vg.addColorStop(1, "rgba(0,0,0,0.42)");
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const v = snapshot.data[y * w + x];
+        if (!v) continue;
+        const norm = v / 255;
+        if (norm < 0.35) continue;
+        const px = ox + x * cell + cell / 2 - cell * 0.15;
+        const py = oy + y * cell + cell / 2 - cell * 0.15;
+        const radius = cell * (0.08 + norm * 0.1);
+        const alpha = 0.35 + norm * 0.4;
+        ctx.fillStyle = `rgba(255, 248, 252, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(px, py, Math.max(1, radius), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalCompositeOperation = "source-over";
+    const vg = ctx.createRadialGradient(cx, cy, Math.min(W, H) * 0.25, cx, cy, Math.max(W, H) * 0.9);
+    vg.addColorStop(0, "rgba(255,255,255,0)");
+    vg.addColorStop(1, `rgba(${Math.max(0, t.bg[0] - 26)},${Math.max(0, t.bg[1] - 20)},${Math.max(0, t.bg[2] - 16)},0.40)`);
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, W, H);
   }
@@ -5806,8 +5911,18 @@ body.blind-listen .hud-tr {
     const w = 80;
     const h = 45;
     const data = new Uint8Array(w * h);
-    const density = 0.06 + rand() * 0.18;
-    for (let i = 0; i < data.length; i++) data[i] = rand() < density ? 1 : 0;
+    const cx = Math.floor(rand() * w);
+    const cy = Math.floor(rand() * h);
+    const density = 0.08 + rand() * 0.14;
+    const range = 12 + Math.floor(rand() * 10);
+    for (let i = 0; i < data.length; i++) {
+      if (rand() < density) {
+        const x = i % w, y = Math.floor(i / w);
+        const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+        if (dist < range) data[i] = Math.max(1, Math.round(255 * (1 - dist / range) * rand()));
+      }
+    }
+    if (!data.some((v) => v > 0)) data[Math.floor(rand() * data.length)] = 20;
     return { data, w, h };
   }
   function queueProfiles() {

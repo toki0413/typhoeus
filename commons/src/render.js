@@ -30,6 +30,88 @@
 import { clamp } from './rng.js';
 
 /* ------------------------------------------------------------------ */
+/* 状态颜色映射规范：attractor type × 三维度签名                         */
+/* ------------------------------------------------------------------ */
+// 每一种生命状态有一组可预测的颜色签名，让听者/观者能"一眼看出"状态。
+// 规范同时适用于主舞台（StageRenderer）和缩略图（drawSnapshot）。
+//
+// ┌──────────┬─────────────────────────────────────────────────┐
+// │ 状态     │ 颜色签名                                         │
+// ├──────────┼─────────────────────────────────────────────────┤
+// │ stable   │ 主色 hue·不变；saturation 温和 70-80；亮度 55-65 │
+// │ (安睡)   │ 光晕小 α=0.12；边缘软化 Gaussian blur 0.8px       │
+// ├──────────┼─────────────────────────────────────────────────┤
+// │ periodic │ 主色 hue ±3° 呼吸式偏移（慢，~2.5s 周期）        │
+// │ (轻轻呼吸)│ saturation 85-92；光晕 α=0.20；中等软化 0.5px    │
+// ├──────────┼─────────────────────────────────────────────────┤
+// │ chaotic  │ 主色 hue ±22° 快速色变；saturation 92-98 尖扎     │
+// │ (灵动)   │ 每个细胞微色相偏移 ±18°；光晕强 α=0.28；软化 0px │
+// ├──────────┼─────────────────────────────────────────────────┤
+// │ drifting │ 主色整体 hue +50° 方向感偏移                      │
+// │ (漂游)   │ saturation 80；alpha 波动 ±10%（呼吸感漂游）       │
+// ├──────────┼─────────────────────────────────────────────────┤
+// │ endangered│ 主色 hue -10° 偏冷；saturation ×0.55（变灰变淡）  │
+// │ (需要关爱)│ 光晕 α=0.05；整体 alpha ×0.75（淡出感）            │
+// ├──────────┼─────────────────────────────────────────────────┤
+// │ extinct  │ 几乎只剩中心小点；alpha ×0.25；保留一颗安静种子    │
+// │ (休眠)   │ hue 保持当前，极小光晕 α=0.03                     │
+// └──────────┴─────────────────────────────────────────────────┘
+//
+// 三维度动态调节（随 metrics 实时变化）：
+//   density (0-1) → 主色调亮度：density×8+50（越高越亮）
+//   entropy (0-1) → 饱和度偏移：entropy×-12（越混沌饱和度越低）
+//   activity (0-1)→ 颜色微抖动强度：activity×8° hue ± activity×6% sat
+
+export const ATTRACTOR_COLOR = {
+  stable:    { hueOff: 0,   satMul: 0.92, halo: 0.12, blur: 0.8 },
+  periodic:  { hueOff: 0,   satMul: 1.00, halo: 0.20, blur: 0.5, breath: true },
+  chaotic:   { hueOff: 0,   satMul: 1.05, halo: 0.28, blur: 0.0, jitterHue: 22 },
+  drifting:  { hueOff: 50,  satMul: 0.95, halo: 0.18, blur: 0.3, alphaWave: 0.10 },
+  endangered:{ hueOff: -10, satMul: 0.55, halo: 0.05, blur: 0.0, alphaMul: 0.75 },
+  extinct:   { hueOff: 0,   satMul: 0.50, halo: 0.03, blur: 0.0, alphaMul: 0.25 },
+};
+
+/* ------------------------------------------------------------------ */
+/* 水彩增强工具                                                        */
+/* ------------------------------------------------------------------ */
+
+/** 扩散晕染：给 snapshot 数据做 3x3 邻域加权重叠 */
+function watercolorDiffuse(data, w, h, strength = 0.6) {
+  const out = new Uint8Array(data.length);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0, count = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+          sum += data[ny * w + nx];
+          count++;
+        }
+      }
+      const center = data[y * w + x];
+      const avg = sum / count;
+      // 水彩感：混合中心值和邻域平均，让边缘松散
+      out[y * w + x] = Math.round(center * (1 - strength) + avg * strength);
+    }
+  }
+  return out;
+}
+
+/** 高斯模糊（对 offscreen canvas） */
+function blurCanvas(ctx, w, h, sigma = 0.6) {
+  // 用 CSS filter 做高效模糊，sigma 控制强度
+  ctx.filter = `blur(${sigma}px)`;
+  // 需要重新 drawImage 自己到 filter canvas
+  const off = document.createElement('canvas');
+  off.width = w;
+  off.height = h;
+  const octx = off.getContext('2d');
+  // 这个函数需要外部传入 source canvas，占位留给调用处
+  return octx;
+}
+
+/* ------------------------------------------------------------------ */
 /* 芳文社配色板：两个主题                                              */
 /* ------------------------------------------------------------------ */
 // bg: 画布底色（RGB）；hue: 细胞色相；body/accent: 高光色
@@ -499,6 +581,9 @@ export class StageRenderer {
 /* ------------------------------------------------------------------ */
 
 export function drawSnapshot(canvas, snapshot, tintKey = 'a', opts = {}) {
+  /* ============================================================== */
+  /* 芳文社水彩圆点快照（三层晕染 + 高光 + 水彩扩散）                  */
+  /* ============================================================== */
   if (!canvas || !snapshot) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const rect = canvas.getBoundingClientRect();
@@ -507,66 +592,168 @@ export function drawSnapshot(canvas, snapshot, tintKey = 'a', opts = {}) {
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
   const t = TINTS[tintKey] || TINTS.a;
-  ctx.fillStyle = `rgb(${t.bg[0]},${t.bg[1]},${t.bg[2]})`;
+  const type = opts.attrType || (opts.metrics && opts.metrics.type) || 'stable';
+  const aSig = ATTRACTOR_COLOR[type] || ATTRACTOR_COLOR.stable;
+  const activity = opts.metrics ? clamp(opts.metrics.activity, 0, 1) : 0.3;
+  const entropy  = opts.metrics ? clamp(opts.metrics.entropy, 0, 1) : 0.3;
+  const density  = opts.metrics ? clamp(opts.metrics.density, 0, 1) : 0.4;
+
+  /* ====== 径向渐变背景 ====== */
+  const cx = W / 2, cy = H / 2;
+  const bgGrad = ctx.createRadialGradient(
+    cx, cy, Math.min(W, H) * 0.05,
+    cx, cy, Math.max(W, H) * 0.9
+  );
+  bgGrad.addColorStop(0, `rgb(${t.bg[0] + 14},${t.bg[1] + 14},${t.bg[2] + 8})`);
+  bgGrad.addColorStop(0.7, `rgb(${t.bg[0]},${t.bg[1]},${t.bg[2]})`);
+  bgGrad.addColorStop(1, `rgb(${Math.max(0, t.bg[0] - 26)},${Math.max(0, t.bg[1] - 20)},${Math.max(0, t.bg[2] - 16)})`);
+  ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
-  const { data, w, h } = snapshot;
-  // crop to the organism's bounding box so sparse seeds still read as alive
-  let minX = w;
-  let minY = h;
-  let maxX = -1;
-  let maxY = -1;
+  /* ====== 准备数据 + 水彩扩散 ====== */
+  const { w, h } = snapshot;
+  // 先找 bounding box，稀疏种子也能被居中放大
+  let minX = w, minY = h, maxX = -1, maxY = -1;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      if (!data[y * w + x]) continue;
+      if (!snapshot.data[y * w + x]) continue;
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
     }
   }
+
   if (maxX < 0) {
-    // extinct / dormant seed: keep a quiet specimen mark instead of an empty card
+    /* ====== 休眠/绝灭种子：一颗安静的小圆点 + 光环 ====== */
     const c = Math.min(W, H) * 0.22;
-    ctx.strokeStyle = `hsla(${t.hue}, 70%, 55%, 0.35)`;
-    ctx.lineWidth = 1.2;
+    ctx.globalCompositeOperation = 'lighter';
+    // 外围柔和光环
+    ctx.fillStyle = `hsla(${t.hue}, 70%, 70%, 0.08)`;
     ctx.beginPath();
-    ctx.arc(W / 2, H / 2, c, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = `hsla(${t.hue}, 80%, 60%, 0.5)`;
-    ctx.beginPath();
-    ctx.arc(W / 2, H / 2, Math.max(2, c * 0.1), 0, Math.PI * 2);
+    ctx.arc(cx, cy, c * 1.8, 0, Math.PI * 2);
     ctx.fill();
+    // 内环
+    ctx.strokeStyle = `hsla(${t.hue}, 75%, 60%, 0.30)`;
+    ctx.lineWidth = Math.max(1, dpr);
+    ctx.beginPath();
+    ctx.arc(cx, cy, c, 0, Math.PI * 2);
+    ctx.stroke();
+    // 安静小种子
+    ctx.fillStyle = `hsla(${t.hue}, 85%, 62%, 0.7)`;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(2, c * 0.22), 0, Math.PI * 2);
+    ctx.fill();
+    // 淡粉角标（不是黑色）
+    const vign = ctx.createRadialGradient(cx, cy, Math.min(W, H) * 0.3, cx, cy, Math.max(W, H) * 0.85);
+    vign.addColorStop(0, 'rgba(255,255,255,0)');
+    vign.addColorStop(1, `rgba(${Math.max(0, t.bg[0] - 30)},${Math.max(0, t.bg[1] - 25)},${Math.max(0, t.bg[2] - 22)},0.35)`);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = vign;
+    ctx.fillRect(0, 0, W, H);
     return;
   }
+
+  /* ====== 水彩扩散：让边缘松散自然 ====== */
+  const diffused = watercolorDiffuse(snapshot.data, w, h, 0.55);
+
+  /* ====== 裁剪 + 居中 ====== */
   const bw = maxX - minX + 1;
   const bh = maxY - minY + 1;
-  const scale = Math.min((W * 0.9) / bw, (H * 0.9) / bh);
+  const scale = Math.min((W * 0.85) / bw, (H * 0.85) / bh);
   const ox = (W - bw * scale) / 2 - minX * scale;
   const oy = (H - bh * scale) / 2 - minY * scale;
   const cell = Math.max(1, scale);
-  // faint structural field
+
+  /* ====== 颜色签名（结合 attractor 状态 + 三维度动态调节） ====== */
+  const densityLum = 50 + density * 10;            // density→亮度
+  const entropySatMul = 1 - entropy * 0.12;         // entropy→饱和度降低
+  const jitterHue = activity * 8;                    // activity→色相抖动
+  const satMul = aSig.satMul * entropySatMul;
+  const haloAlpha = aSig.halo * (opts._haloMul || 1);
+
+  /* ====================================================== */
+  /* Layer 1: 大柔光圆（lighter）—— 水彩晕染扩散层           */
+  /* 值越大光晕越大越亮；值越小光晕几乎不见                    */
+  /* ====================================================== */
   ctx.globalCompositeOperation = 'lighter';
-  ctx.fillStyle = `hsla(${t.hue}, 82%, 58%, 0.14)`;
+  ctx.filter = `blur(${aSig.blur.toFixed(1)}px)`;    // attractor signature 控制模糊
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {
-      if (!data[y * w + x]) continue;
-      ctx.fillRect(ox + x * cell - cell, oy + y * cell - cell, cell * 3.2, cell * 3.2);
+      const v = diffused[y * w + x];
+      if (!v) continue;
+      // 值 0-255 → 归一化 0-1（值越大越年轻或场越强）
+      const norm = clamp(v / 255, 0.05, 1);
+      const px = ox + x * cell + cell / 2;
+      const py = oy + y * cell + cell / 2;
+      const radius = cell * (1.8 + norm * 1.8);       // 半径 1.8~3.6 cell
+      const alpha = haloAlpha * (0.2 + norm * 0.6);   // alpha 0.2~0.8 × halo alpha
+      const hue = (t.hue + aSig.hueOff + (x * 7 + y * 13) % 18 - 9 + jitterHue * norm + 360) % 360;
+      const sat = 75 * satMul + (norm > 0.7 ? 8 : 0);
+      const lum = densityLum + norm * 10;
+      ctx.fillStyle = `hsla(${hue}, ${sat}%, ${lum}%, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
+  ctx.filter = 'none';
+
+  /* ====================================================== */
+  /* Layer 2: 实体圆（lighter）—— 细胞主体层                   */
+  /* 值越大圆越大越饱和；值越小圆缩小变淡                       */
+  /* ====================================================== */
+  ctx.globalCompositeOperation = 'lighter';
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {
-      if (!data[y * w + x]) continue;
-      const jitter = ((x * 13 + y * 7) % 5) / 40;
-      ctx.fillStyle = `hsla(${t.hue + jitter * 40}, 88%, ${58 + jitter * 28}%, 0.92)`;
-      ctx.fillRect(ox + x * cell, oy + y * cell, Math.max(1, cell * 0.9), Math.max(1, cell * 0.9));
+      const v = snapshot.data[y * w + x];    // 用原始值（不是扩散值）画实体圆
+      if (!v) continue;
+      const norm = clamp(v / 255, 0.1, 1);
+      const px = ox + x * cell + cell / 2;
+      const py = oy + y * cell + cell / 2;
+      const radius = cell * (0.18 + norm * 0.38);     // 实体圆 0.18~0.56 cell
+      const alpha = 0.55 + norm * 0.35;                // alpha 0.55~0.90
+      const hue = (t.hue + aSig.hueOff + (x * 5 + y * 9) % 14 - 7 + jitterHue * norm + 360) % 360;
+      const sat = 88 * satMul;
+      const lum = densityLum + norm * 15;
+      ctx.fillStyle = `hsla(${hue}, ${sat}%, ${lum}%, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
+
+  /* ====================================================== */
+  /* Layer 3: 左上高光点（source-over）—— 眼神光层             */
+  /* 只给值大的点（年轻/强场）；值小的点没高光                    */
+  /* ====================================================== */
   ctx.globalCompositeOperation = 'source-over';
-  const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.14, W / 2, H / 2, H * 0.95);
-  vg.addColorStop(0, 'rgba(0,0,0,0)');
-  vg.addColorStop(1, 'rgba(0,0,0,0.42)');
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      const v = snapshot.data[y * w + x];
+      if (!v) continue;
+      const norm = v / 255;
+      if (norm < 0.35) continue;   // 值小的点没高光
+      const px = ox + x * cell + cell / 2 - cell * 0.15;   // 左上微偏移
+      const py = oy + y * cell + cell / 2 - cell * 0.15;
+      const radius = cell * (0.08 + norm * 0.10);          // 高光点 0.08~0.18 cell
+      const alpha = 0.35 + norm * 0.4;
+      ctx.fillStyle = `rgba(255, 248, 252, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(px, py, Math.max(1, radius), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  /* ====== 淡粉色 vignette（不是黑色）—— 角落更柔和 ====== */
+  ctx.globalCompositeOperation = 'source-over';
+  const vg = ctx.createRadialGradient(cx, cy, Math.min(W, H) * 0.25, cx, cy, Math.max(W, H) * 0.9);
+  vg.addColorStop(0, 'rgba(255,255,255,0)');
+  vg.addColorStop(1, `rgba(${Math.max(0, t.bg[0] - 26)},${Math.max(0, t.bg[1] - 20)},${Math.max(0, t.bg[2] - 16)},0.40)`);
   ctx.fillStyle = vg;
   ctx.fillRect(0, 0, W, H);
 }

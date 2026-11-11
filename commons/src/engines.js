@@ -593,19 +593,27 @@ export class LifeEngine {
   }
 
   snapshot(scale = 2) {
-    const { w, h, grid } = this;
+    /* 返回 Uint8Array，每个字节编码：
+       Conway 系：0 = 死；1-255 = 年龄 (clamp)
+       这样 drawSnapshot 可以按年龄画不同大小的圆，像真实水彩
+    */
+    const { w, h, grid, age } = this;
     const ow = Math.floor(w / scale);
     const oh = Math.floor(h / scale);
     const out = new Uint8Array(ow * oh);
     for (let y = 0; y < oh; y++) {
       for (let x = 0; x < ow; x++) {
-        let v = 0;
+        let v = 0;          // 聚合后的最大值：活细胞 age
         for (let sy = 0; sy < scale; sy++) {
           for (let sx = 0; sx < scale; sx++) {
-            v |= grid[(y * scale + sy) * w + (x * scale + sx)];
+            const i = (y * scale + sy) * w + (x * scale + sx);
+            if (grid[i]) {
+              // 聚合最大年龄，让缩样后结构特征保留：老细胞被优先保留
+              v = Math.max(v, Math.min(255, age[i] || 1));
+            }
           }
         }
-        out[y * ow + x] = v ? 1 : 0;
+        out[y * ow + x] = v;  // 0 = 死；1-255 = 年龄
       }
     }
     return { data: out, w: ow, h: oh };
@@ -835,6 +843,10 @@ export class LeniaEngine {
   }
 
   snapshot(scale = 2) {
+    /* 返回 Uint8Array，每个字节编码：
+       Lenia：0 = 空；1-255 = 场强度 (field * 255 clamp)
+       和 Conway 年龄快照同结构，drawSnapshot 统一处理
+    */
     const { w, h, field } = this;
     const ow = Math.floor(w / scale);
     const oh = Math.floor(h / scale);
@@ -847,7 +859,7 @@ export class LeniaEngine {
             v = Math.max(v, field[(y * scale + sy) * w + (x * scale + sx)]);
           }
         }
-        out[y * ow + x] = v > 0.35 ? 1 : 0;
+        out[y * ow + x] = v > 0.02 ? Math.min(255, Math.round(v * 255)) : 0;
       }
     }
     return { data: out, w: ow, h: oh };
