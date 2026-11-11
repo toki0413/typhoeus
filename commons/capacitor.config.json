@@ -1,0 +1,30 @@
+{
+  "appId": "com.commons.discoveries",
+  "appName": "Commons · 公地",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "backgroundColor": "#1a0f2e",
+    "minSdkVersion": 24
+  },
+  "ios": {
+    "backgroundColor": "#1a0f2e",
+    "statusBarStyle": "DARK",
+    "contentInset": "never"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#1a0f2e",
+      "showSpinner": false
+    },
+    "Keyboard": {
+      "resize": "none",
+      "style": "dark",
+      "resizeOnFullScreen": true
+    }
+  }
+}

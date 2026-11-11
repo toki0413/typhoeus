@@ -1,0 +1,25 @@
+{
+  "name": "commons",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:web": "npx esbuild src/app.js --bundle --format=esm --minify --outfile=bundle.js && echo web built",
+    "build:www": "cp commons.html www/index.html && npx cap sync android",
+    "android:sync": "npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:apk": "cd android && ./gradlew assembleDebug",
+    "ios:add": "npm install @capacitor/ios --save && npx cap add ios",
+    "ios:sync": "cp commons.html www/index.html && npx cap sync ios",
+    "ios:open": "npx cap open ios",
+    "dev": "python3 -m http.server 4173 --bind 0.0.0.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0"
+  }
+}
