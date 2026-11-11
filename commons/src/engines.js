@@ -62,6 +62,18 @@
 //    events: 生命周期事件触发的音色序列
 
 import { clamp, hashInts, mulberry32 } from './rng.js';
+import {
+  ReactionDiffusionEngine,
+  REACTION_DIFFUSION_PRESETS,
+  computeLyapunov,
+  computeFractalDimension,
+  computeFieldEnergy,
+  computeSpatialPeriod,
+  computeScientificMetrics,
+  SCIENCE_VERSION,
+} from './scientific.js';
+
+export { REACTION_DIFFUSION_PRESETS, SCIENCE_VERSION };
 
 export const ENGINE_VERSION = '1.0.0';
 export const GRID_W = 160;
@@ -866,10 +878,84 @@ export class LeniaEngine {
   }
 }
 
+/* ============================================================== */
+/* ScientificEngine（Reaction-Diffusion 包装类）                  */
+/* 接口与 LifeEngine / LeniaEngine 一致，可直接替换                 */
+/* ============================================================== */
+export class ScientificEngine {
+  constructor(genome, env, rngSeed, w = GRID_W, h = GRID_H) {
+    this.w = w;
+    this.h = h;
+    this.kind = 'reaction-diffusion';
+    this.genome = genome;
+    this.env = env;
+    this.rngSeed = rngSeed;
+    const preset = genome.scientific?.preset || 'gs_spots';
+    this._rd = new ReactionDiffusionEngine(w, h, { preset, boundary: env.boundary });
+    this.grid = this._rdSnapshotAsGrid();
+    this.age = new Uint8Array(w * h);
+  }
+
+  _rdSnapshotAsGrid() {
+    const n = this.w * this.h;
+    const g = new Uint8Array(n);
+    const v = this._rd.vField;
+    for (let i = 0; i < n; i++) { g[i] = v[i] > 0.05 ? 1 : 0; }
+    return g;
+  }
+
+  step() {
+    for (let i = 0; i < 2; i++) this._rd.step();
+    this.grid = this._rdSnapshotAsGrid();
+    for (let i = 0; i < this.age.length; i++) {
+      if (this.grid[i]) { this.age[i] = Math.min(250, this.age[i] + 1); }
+      else { this.age[i] = 0; }
+    }
+  }
+
+  reset() { this._rd.reset(this.env.pattern); this.grid = this._rdSnapshotAsGrid(); }
+  setEnv(env) { this.env = env; }
+  applyGenome(genome) {
+    this.genome = genome;
+    if (genome.scientific?.preset) this._rd.setPreset(genome.scientific.preset);
+  }
+
+  snapshot() { return this._rd.snapshot(); }
+
+  metrics() {
+    const v = this._rd.vField;
+    const u = this._rd.uField;
+    const sci = computeScientificMetrics(v, u, this.w, this.h, 'reaction-diffusion');
+    let densitySum = 0;
+    for (let i = 0; i < v.length; i++) densitySum += v[i];
+    const density = densitySum / v.length;
+    return {
+      density,
+      entropy: sci.lyapunov + 1.5,
+      period: sci.spatialPeriod,
+      diameter: sci.fractal * this.w,
+      components: 0,
+      activity: Math.abs(sci.lyapunov) * 3,
+      lyapunov: sci.lyapunov,
+      fractal: sci.fractal,
+      energy: sci.energy,
+      complexity: sci.complexity,
+      attrType: sci.attrType,
+      type: sci.attrType,
+      typeLabel: sci.typeLabel,
+    };
+  }
+}
+
+export const SCIENTIFIC_PRESET_LIST = Object.keys(REACTION_DIFFUSION_PRESETS);
+
 export function createEngine(genome, env, rngSeed, w = GRID_W, h = GRID_H) {
-  return genome.engine === 'lenia'
-    ? new LeniaEngine(genome, env, rngSeed, w, h)
-    : new LifeEngine(genome, env, rngSeed, w, h);
+  const e = (genome.engine || 'life').toLowerCase();
+  if (e === 'lenia') return new LeniaEngine(genome, env, rngSeed, w, h);
+  if (e === 'scientific' || e === 'reaction-diffusion' || e === 'rd') {
+    return new ScientificEngine(genome, env, rngSeed, w, h);
+  }
+  return new LifeEngine(genome, env, rngSeed, w, h);
 }
 
 /* ------------------------------------------------------------------ */

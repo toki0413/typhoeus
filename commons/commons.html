@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Commons · 公地 🌸 用心聆听生命的声音</title>
+    <title>Commons · 科学引擎版 🌸 Turing 反应-扩散 + CPM</title>
     <meta
       name="description"
       content="Commons 公地：领养、观察、悉心照料一枚小小的生命种子，聆听它用五声音阶为你献上的治愈之歌。"
@@ -2666,6 +2666,407 @@ body.motion-off *::after {
     return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
   }
 
+  // src/scientific.js
+  var clampSafe = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+  var REACTION_DIFFUSION_PRESETS = {
+    /* ---- Gray-Scott ---- */
+    gs_spots: {
+      label: "\u6591\u70B9",
+      engine: "grayScott",
+      D_u: 1,
+      D_v: 0.5,
+      f: 0.035,
+      k: 0.065,
+      dt: 1,
+      note: "Gray-Scott \xB7 \u7ECF\u5178\u6591\u70B9\uFF0C\u50CF\u74E2\u866B\u8EAB\u4E0A\u7684\u82B1\u7EB9"
+    },
+    gs_stripes: {
+      label: "\u6761\u7EB9",
+      engine: "grayScott",
+      D_u: 1,
+      D_v: 0.5,
+      f: 0.012,
+      k: 0.05,
+      dt: 1,
+      note: "Gray-Scott \xB7 \u6591\u9A6C\u6761\u7EB9\uFF0C\u6700\u7ECF\u5178\u7684 Turing \u6A21\u5F0F"
+    },
+    gs_maze: {
+      label: "\u8FF7\u5BAB",
+      engine: "grayScott",
+      D_u: 1,
+      D_v: 0.5,
+      f: 0.022,
+      k: 0.051,
+      dt: 1,
+      note: "Gray-Scott \xB7 \u873F\u8712\u8FF7\u5BAB\uFF0C\u50CF\u5927\u8111\u76AE\u5C42"
+    },
+    gs_hex: {
+      label: "\u516D\u8FB9\u5F62",
+      engine: "grayScott",
+      D_u: 1,
+      D_v: 0.5,
+      f: 0.04,
+      k: 0.06,
+      dt: 1,
+      note: "Gray-Scott \xB7 \u5B8C\u7F8E\u516D\u8FB9\u5F62\u8702\u7A9D"
+    },
+    gs_wander: {
+      label: "\u6E38\u8D70\u70B9",
+      engine: "grayScott",
+      D_u: 1,
+      D_v: 0.5,
+      f: 0.01,
+      k: 0.047,
+      dt: 1,
+      note: "Gray-Scott \xB7 \u5C0F\u70B9\u70B9\u81EA\u5DF1\u4F1A\u8DD1"
+    },
+    gs_coral: {
+      label: "\u73CA\u745A",
+      engine: "grayScott",
+      D_u: 1,
+      D_v: 0.5,
+      f: 0.03,
+      k: 0.062,
+      dt: 1,
+      note: "Gray-Scott \xB7 \u73CA\u745A\u72B6\u5206\u679D"
+    },
+    /* ---- FitzHugh-Nagumo ---- */
+    fhn_pulse: {
+      label: "\u795E\u7ECF\u8109\u51B2",
+      engine: "fitzHughNagumo",
+      D_u: 1,
+      D_v: 1,
+      a: 0.7,
+      b: 0.8,
+      c: 10,
+      dt: 0.5,
+      note: "FitzHugh-Nagumo \xB7 \u81EA\u53D1\u8109\u51B2\uFF0C\u50CF\u795E\u7ECF\u653E\u7535"
+    },
+    fhn_spiral: {
+      label: "\u5FC3\u810F\u87BA\u65CB",
+      engine: "fitzHughNagumo",
+      D_u: 1,
+      D_v: 1,
+      a: 0.7,
+      b: 0.8,
+      c: 15,
+      dt: 0.5,
+      note: "FitzHugh-Nagumo \xB7 \u87BA\u65CB\u6CE2\uFF0C\u5FC3\u810F\u7EA4\u98A4\u7684\u6570\u5B66\u6A21\u62DF"
+    },
+    fhn_target: {
+      label: "\u9776\u6CE2",
+      engine: "fitzHughNagumo",
+      D_u: 1,
+      D_v: 1,
+      a: 0.7,
+      b: 0.8,
+      c: 8,
+      dt: 0.5,
+      note: "FitzHugh-Nagumo \xB7 \u540C\u5FC3\u5706\u5411\u5916\u4F20\u64AD"
+    },
+    /* ---- Brusselator ---- */
+    brs_osc: {
+      label: "\u5316\u5B66\u632F\u8361",
+      engine: "brusselator",
+      D_u: 1,
+      D_v: 0.2,
+      A: 2,
+      B: 4.5,
+      dt: 0.1,
+      note: "Brusselator \xB7 \u56FE\u7075\u4E0D\u7A33\u5B9A\u51FA\u73B0\u5316\u5B66\u6CE2"
+    },
+    brs_labyrinth: {
+      label: "\u5316\u5B66\u8FF7\u5BAB",
+      engine: "brusselator",
+      D_u: 1,
+      D_v: 0.1,
+      A: 1.5,
+      B: 3,
+      dt: 0.1,
+      note: "Brusselator \xB7 \u590D\u6742\u7684\u5316\u5B66\u8FF7\u5BAB"
+    }
+  };
+  function laplacian(grid, w, h, x, y, boundary) {
+    let sum = 0;
+    let center = grid[y * w + x];
+    const dirs = [
+      [-1, -1],
+      [0, -1],
+      [1, -1],
+      [-1, 0],
+      [1, 0],
+      [-1, 1],
+      [0, 1],
+      [1, 1]
+    ];
+    const weights = [0.125, 0.25, 0.125, 0.25, 0.25, 0.125, 0.25, 0.125];
+    for (let k = 0; k < 8; k++) {
+      let nx = x + dirs[k][0];
+      let ny = y + dirs[k][1];
+      if (boundary === "torus") {
+        nx = (nx + w) % w;
+        ny = (ny + h) % h;
+      } else {
+        if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+      }
+      sum += grid[ny * w + nx] * weights[k];
+    }
+    return sum - center;
+  }
+  var ReactionDiffusionEngine = class {
+    constructor(w, h, opts = {}) {
+      this.w = w;
+      this.h = h;
+      this.kind = "reaction-diffusion";
+      this.preset = opts.preset || "gs_spots";
+      this.params = { ...REACTION_DIFFUSION_PRESETS[this.preset] };
+      this.boundary = opts.boundary || "torus";
+      this.dt = this.params.dt;
+      this.u = new Float32Array(w * h);
+      this.v = new Float32Array(w * h);
+      this.t = 0;
+      this._initField(opts.pattern || "ring");
+    }
+    setPreset(key) {
+      const p = REACTION_DIFFUSION_PRESETS[key];
+      if (!p) return;
+      this.preset = key;
+      this.params = { ...p };
+      this.dt = p.dt;
+    }
+    /* ---- 播种：中间一个圆环（经典 Gray-Scott 初始条件）---- */
+    _initField(pattern) {
+      const { w, h } = this;
+      this.u.fill(1);
+      this.v.fill(0);
+      const cx = w / 2, cy = h / 2;
+      if (pattern === "ring") {
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const d = Math.hypot(x - cx, y - cy);
+            if (d < Math.min(w, h) * 0.15) this.v[y * w + x] = 1;
+          }
+        }
+      } else if (pattern === "dot") {
+        for (let k = 0; k < 20; k++) {
+          const dx = Math.floor(Math.random() * w);
+          const dy = Math.floor(Math.random() * h);
+          this.v[dy * w + dx] = 1;
+        }
+      } else if (pattern === "soup") {
+        for (let i = 0; i < w * h; i++) {
+          if (Math.random() < 0.05) this.v[i] = 1;
+        }
+      }
+    }
+    reset(pattern) {
+      this.t = 0;
+      this._initField(pattern || "ring");
+    }
+    /* ---- 一步 Euler 积分 ---- */
+    step() {
+      const { w, h } = this;
+      const { D_u, D_v, engine } = this.params;
+      const { boundary, dt, u, v } = this;
+      const u_new = new Float32Array(w * h);
+      const v_new = new Float32Array(w * h);
+      if (engine === "grayScott") {
+        const { f, k } = this.params;
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const lapU = laplacian(u, w, h, x, y, boundary);
+            const lapV = laplacian(v, w, h, x, y, boundary);
+            const uu = u[y * w + x];
+            const vv = v[y * w + x];
+            const uv2 = uu * vv * vv;
+            u_new[y * w + x] = clampSafe(uu + dt * (D_u * lapU - uv2 + f * (1 - uu)), 0, 1);
+            v_new[y * w + x] = clampSafe(vv + dt * (D_v * lapV + uv2 - (f + k) * vv), 0, 1);
+          }
+        }
+      } else if (engine === "fitzHughNagumo") {
+        const { a, b, c } = this.params;
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const lapU = laplacian(u, w, h, x, y, boundary);
+            const lapV = laplacian(v, w, h, x, y, boundary);
+            const uu = u[y * w + x];
+            const vv = v[y * w + x];
+            u_new[y * w + x] = clampSafe(uu + dt * (lapU + c * (uu - uu * uu * uu / 3 + vv)), -2, 2);
+            v_new[y * w + x] = clampSafe(vv + dt * (lapV - (uu - a + b * vv) / c), -2, 2);
+          }
+        }
+      } else if (engine === "brusselator") {
+        const { A, B } = this.params;
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const lapU = laplacian(u, w, h, x, y, boundary);
+            const lapV = laplacian(v, w, h, x, y, boundary);
+            const uu = u[y * w + x];
+            const vv = v[y * w + x];
+            const u2v = uu * uu * vv;
+            u_new[y * w + x] = clampSafe(uu + dt * (D_u * lapU + A + u2v - (B + 1) * uu), 0, 10);
+            v_new[y * w + x] = clampSafe(vv + dt * (D_v * lapV + B * uu - u2v), 0, 10);
+          }
+        }
+      }
+      this.u = u_new;
+      this.v = v_new;
+      this.t += dt;
+    }
+    /* ---- 快照：把 v 场映射为 0-255 Uint8Array ---- */
+    snapshot() {
+      const n = this.w * this.h;
+      const out = new Uint8Array(n);
+      for (let i = 0; i < n; i++) {
+        out[i] = clampSafe(Math.floor(this.v[i] * 255), 0, 255);
+      }
+      return out;
+    }
+    /* ---- 拓扑指标（来自 v 场） ---- */
+    get vField() {
+      return this.v;
+    }
+    get uField() {
+      return this.u;
+    }
+    get totalTime() {
+      return this.t;
+    }
+  };
+  function computeLyapunov(v, w, h) {
+    let sum = 0;
+    let n = 0;
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const idx = y * w + x;
+        const center = Math.abs(v[idx]);
+        if (center < 0.015) continue;
+        const neighbors = (v[idx - 1] + v[idx + 1] + v[idx - w] + v[idx + w]) / 4;
+        const lap = Math.abs(neighbors - v[idx]);
+        const ratio = lap / Math.max(center, 0.015);
+        sum += Math.log10(ratio + 1e-3);
+        n++;
+      }
+    }
+    if (!n) return 0;
+    return sum / n;
+  }
+  function computeFractalDimension(v, w, h, threshold = 0.5) {
+    const sizes = [32, 16, 8, 4, 2];
+    const logs = [];
+    for (const s of sizes) {
+      let count = 0;
+      for (let y = 0; y < h; y += s) {
+        for (let x = 0; x < w; x += s) {
+          let hit = false;
+          for (let dy = 0; dy < s && !hit; dy++) {
+            for (let dx = 0; dx < s && !hit; dx++) {
+              const idx = (y + dy) * w + (x + dx);
+              if (idx < v.length && v[idx] > threshold) hit = true;
+            }
+          }
+          if (hit) count++;
+        }
+      }
+      if (count > 0) logs.push([Math.log(1 / s), Math.log(count)]);
+    }
+    if (logs.length < 2) return 1;
+    const n = logs.length;
+    let sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (const [lx, ly] of logs) {
+      sx += lx;
+      sy += ly;
+      sxx += lx * lx;
+      sxy += lx * ly;
+    }
+    const denom = n * sxx - sx * sx;
+    if (Math.abs(denom) < 1e-10) return 1;
+    const slope = (n * sxy - sx * sy) / denom;
+    return clampSafe(slope, 0.5, 2);
+  }
+  function computeFieldEnergy(u, v, w, h) {
+    let gradSum = 0;
+    let nonlinSum = 0;
+    let n = 0;
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const idx = y * w + x;
+        const gx_u = (u[idx + 1] - u[idx - 1]) / 2;
+        const gy_u = (u[idx + w] - u[idx - w]) / 2;
+        const gx_v = (v[idx + 1] - v[idx - 1]) / 2;
+        const gy_v = (v[idx + w] - v[idx - w]) / 2;
+        gradSum += gx_u * gx_u + gy_u * gy_u + gx_v * gx_v + gy_v * gy_v;
+        const uu = u[idx], vv = v[idx];
+        nonlinSum += uu * vv * vv;
+        n++;
+      }
+    }
+    if (!n) return { gradEnergy: 0, interactionEnergy: 0, total: 0 };
+    return {
+      gradEnergy: gradSum / n,
+      interactionEnergy: nonlinSum / n,
+      total: (gradSum + nonlinSum) / n
+    };
+  }
+  function computeSpatialPeriod(v, w, h) {
+    const thresh = 0.01;
+    let maxOffset = 1;
+    let maxCorr = 0;
+    const maxSearch = Math.min(w, h) / 4;
+    for (let d = 2; d < maxSearch; d++) {
+      let corr = 0;
+      let norm = 0;
+      for (let y = 0; y < h - d; y++) {
+        for (let x = 0; x < w - d; x++) {
+          corr += v[y * w + x] * v[y * w + x + d];
+          norm += 1;
+        }
+      }
+      corr /= norm || 1;
+      if (corr > maxCorr) {
+        maxCorr = corr;
+        maxOffset = d;
+      }
+    }
+    return maxOffset;
+  }
+  function computeScientificMetrics(v, u, w, h, engineType) {
+    const lyapunov = computeLyapunov(v, w, h);
+    const fractal = computeFractalDimension(v, w, h, 0.3);
+    const energy = u ? computeFieldEnergy(u, v, w, h) : { gradEnergy: 0, interactionEnergy: 0, total: 0 };
+    const spatialPeriod = computeSpatialPeriod(v, w, h);
+    let attrType;
+    if (lyapunov > 0.15) attrType = "chaotic";
+    else if (lyapunov > 0.02) attrType = "periodic";
+    else if (lyapunov > -0.01) attrType = "stable";
+    else attrType = "stable";
+    let complexity;
+    if (fractal > 1.6) complexity = "\u9AD8\u5EA6\u590D\u6742";
+    else if (fractal > 1.3) complexity = "\u4E2D\u7B49\u590D\u6742";
+    else if (fractal > 1.1) complexity = "\u4F4E\u590D\u6742\u5EA6";
+    else complexity = "\u7B80\u5355";
+    return {
+      engine: engineType,
+      lyapunov,
+      // Lyapunov 指数：量化混沌
+      fractal,
+      // 分形维数：量化复杂度
+      energy,
+      // 自由能密度
+      spatialPeriod,
+      // 空间周期（格）
+      attrType,
+      // 吸引子类型
+      complexity,
+      // 复杂度描述
+      typeLabel: {
+        chaotic: "\u6DF7\u6C8C\u5438\u5F15\u5B50",
+        periodic: "\u5468\u671F\u5438\u5F15\u5B50",
+        stable: "\u7A33\u5B9A\u5438\u5F15\u5B50"
+      }[attrType] || "\u672A\u77E5"
+    };
+  }
+
   // src/engines.js
   var ENGINE_VERSION = "1.0.0";
   var GRID_W = 160;
@@ -3475,8 +3876,85 @@ body.motion-off *::after {
       return { data: out, w: ow, h: oh };
     }
   };
+  var ScientificEngine = class {
+    constructor(genome, env, rngSeed, w = GRID_W, h = GRID_H) {
+      this.w = w;
+      this.h = h;
+      this.kind = "reaction-diffusion";
+      this.genome = genome;
+      this.env = env;
+      this.rngSeed = rngSeed;
+      const preset = genome.scientific?.preset || "gs_spots";
+      this._rd = new ReactionDiffusionEngine(w, h, { preset, boundary: env.boundary });
+      this.grid = this._rdSnapshotAsGrid();
+      this.age = new Uint8Array(w * h);
+    }
+    _rdSnapshotAsGrid() {
+      const n = this.w * this.h;
+      const g = new Uint8Array(n);
+      const v = this._rd.vField;
+      for (let i = 0; i < n; i++) {
+        g[i] = v[i] > 0.05 ? 1 : 0;
+      }
+      return g;
+    }
+    step() {
+      for (let i = 0; i < 2; i++) this._rd.step();
+      this.grid = this._rdSnapshotAsGrid();
+      for (let i = 0; i < this.age.length; i++) {
+        if (this.grid[i]) {
+          this.age[i] = Math.min(250, this.age[i] + 1);
+        } else {
+          this.age[i] = 0;
+        }
+      }
+    }
+    reset() {
+      this._rd.reset(this.env.pattern);
+      this.grid = this._rdSnapshotAsGrid();
+    }
+    setEnv(env) {
+      this.env = env;
+    }
+    applyGenome(genome) {
+      this.genome = genome;
+      if (genome.scientific?.preset) this._rd.setPreset(genome.scientific.preset);
+    }
+    snapshot() {
+      return this._rd.snapshot();
+    }
+    metrics() {
+      const v = this._rd.vField;
+      const u = this._rd.uField;
+      const sci = computeScientificMetrics(v, u, this.w, this.h, "reaction-diffusion");
+      let densitySum = 0;
+      for (let i = 0; i < v.length; i++) densitySum += v[i];
+      const density = densitySum / v.length;
+      return {
+        density,
+        entropy: sci.lyapunov + 1.5,
+        period: sci.spatialPeriod,
+        diameter: sci.fractal * this.w,
+        components: 0,
+        activity: Math.abs(sci.lyapunov) * 3,
+        lyapunov: sci.lyapunov,
+        fractal: sci.fractal,
+        energy: sci.energy,
+        complexity: sci.complexity,
+        attrType: sci.attrType,
+        type: sci.attrType,
+        typeLabel: sci.typeLabel
+      };
+    }
+  };
+  var SCIENTIFIC_PRESET_LIST = Object.keys(REACTION_DIFFUSION_PRESETS);
   function createEngine(genome, env, rngSeed, w = GRID_W, h = GRID_H) {
-    return genome.engine === "lenia" ? new LeniaEngine(genome, env, rngSeed, w, h) : new LifeEngine(genome, env, rngSeed, w, h);
+    const e = (genome.engine || "life").toLowerCase();
+    if (e === "lenia") return new LeniaEngine(genome, env, rngSeed, w, h);
+    if (e === "scientific" || e === "reaction-diffusion" || e === "rd") {
+      return new ScientificEngine(genome, env, rngSeed, w, h);
+    }
+    return new LifeEngine(genome, env, rngSeed, w, h);
   }
   function bfsComponent(start, isAlive, w, h, visited, queue) {
     let head = 0;
