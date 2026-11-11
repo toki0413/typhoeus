@@ -3,9 +3,11 @@
 
 import {
   ATTRACTOR_GLYPH,
+  BOUNDARIES,
   ENGINE_VERSION,
   LENIA_PRESETS,
   LIFE_PRESETS,
+  NEIGHBORHOODS,
   PATTERNS,
   ROOT_NAMES,
   SCALES,
@@ -554,12 +556,11 @@ function renderRulePanel() {
         <div class="field-head"><label>存活 S</label><span class="val">邻居数</span></div>
         <div class="chip-row">${surviveChips}</div>
       </div>
-      <div class="section-label">邻域</div>
+      <div class="section-label">邻域类型</div>
       <div class="segmented">
-        <button data-neighborhood="8" class="${g.life.neighborhood === 8 ? 'active' : ''}">Moore · 8</button>
-        <button data-neighborhood="4" class="${g.life.neighborhood === 4 ? 'active' : ''}">von Neumann · 4</button>
+        ${Object.entries(NEIGHBORHOODS).map(([n, info]) => `<button data-neighborhood="${n}" class="${g.life.neighborhood === parseInt(n) ? 'active' : ''}">${info.label.split('·')[0].trim()}</button>`).join('')}
       </div>
-      <p class="hint">规则在运行中即时生效。改变出生/存活集合，会立刻改变生命下一步的去向。</p>`;
+      <p class="hint">规则集在运行中即时生效。<b>Moore 8</b> 最经典，<b>Hex 6</b> 细腻，<b>von Neumann 4</b> 范围小但精致。</p>`;
   } else {
     bodyHTML = `
       <div class="section-label">规则集</div>
@@ -636,12 +637,15 @@ function renderEnvPanel() {
   $('#panel-env').innerHTML = `
     <div class="section-label">初始形态</div>
     <div class="preset-grid">
-      ${Object.entries(PATTERNS).map(([key, label]) => `<button class="preset ${e.pattern === key ? 'active' : ''}" data-pattern="${key}"><b>${label}</b><span>${key}</span></button>`).join('')}
+      ${Object.entries(PATTERNS).map(([key, p]) => `<button class="preset ${e.pattern === key ? 'active' : ''}" data-pattern="${key}"><b>${p.label}</b><span>${p.desc}</span></button>`).join('')}
     </div>
     <div class="section-label">边界条件</div>
+    <div class="preset-grid">
+      ${Object.entries(BOUNDARIES).map(([key, b]) => `<button class="preset ${e.boundary === key ? 'active' : ''}" data-boundary="${key}"><b>${b.label}</b><span>${b.desc}</span></button>`).join('')}
+    </div>
+    <div class="section-label">邻域类型 · Conway 系适用</div>
     <div class="segmented">
-      <button data-boundary="torus" class="${e.boundary === 'torus' ? 'active' : ''}">环面 · 无限</button>
-      <button data-boundary="wall" class="${e.boundary === 'wall' ? 'active' : ''}">硬壁 · 有限</button>
+      ${Object.entries(NEIGHBORHOODS).map(([n, info]) => `<button data-neighborhood="${n}" class="${state.recipe.seed.genome.life.neighborhood === parseInt(n) ? 'active' : ''}">${info.label.split('·')[0].trim()}</button>`).join('')}
     </div>
     <div class="section-label">扰动与资源</div>
     ${sliderHTML('噪声扰动', Math.round(e.noise * 100), 0, 30, 0.5, 'data-env-param="noise"', '%')}
@@ -653,8 +657,8 @@ function renderEnvPanel() {
       <button class="ghost" data-action="reseed-env">按此环境重新播种</button>
     </div>
     <p class="hint">
-      约束强度会抑制噪声与扰动；资源节律按周期注入营养。改变初始形态或边界会重新播种，
-      配方与随机种子保持不变，因此结果可复现。
+      <b>约束强度</b>（0-100%）抑制噪声和扰动。<b>资源节律</b>按周期注入营养。
+      改变形态或边界会重新播种，但随机种子不变，所以同颗种子在不同家里会长成不同样子。
     </p>`;
 }
 
@@ -907,7 +911,7 @@ function renderEnvRecipes() {
       : '';
     return `<div class="env-card">
       <div class="env-name">${esc(e.label)}<span class="env-fp">${fp}</span></div>
-      <div class="env-spec">${PATTERNS[e.env.pattern]} · ${BOUNDARY_LABEL[e.env.boundary]}<br>噪声 ${Math.round(e.env.noise * 100)}% · 约束 ${Math.round(e.env.constraint * 100)}%${res}</div>
+      <div class="env-spec">${PATTERNS[e.env.pattern].label} · ${BOUNDARY_LABEL[e.env.boundary]}<br>噪声 ${Math.round(e.env.noise * 100)}% · 约束 ${Math.round(e.env.constraint * 100)}%${res}</div>
       <div class="env-actions">
         <button data-env-apply="${e.id}">应用到当前</button>
         <button data-env-hatch="${e.id}">以此孵化</button>
@@ -1086,7 +1090,7 @@ function hatchRandom(opts = {}) {
     },
     env,
     rngSeed: hash,
-    note: `随机孵化 · ${PATTERNS[env.pattern]} · ${BOUNDARY_LABEL[env.boundary]}`,
+    note: `随机孵化 · ${PATTERNS[env.pattern].label} · ${BOUNDARY_LABEL[env.boundary]}`,
   };
   attachRecipe(rec);
   state.events = [];
@@ -1096,7 +1100,7 @@ function hatchRandom(opts = {}) {
   toast(`随机孵出了一颗小心心 ♡「${name.zh}」`, 'ok');
 }
 
-const BOUNDARY_LABEL = { torus: '环面', wall: '硬壁' };
+const BOUNDARY_LABEL = { torus: BOUNDARIES.torus.label, wall: BOUNDARIES.wall.label };
 
 /* ------------------------------------------------------------------ */
 /* Actions                                                            */
@@ -2130,7 +2134,7 @@ function onEnvClick(e) {
     state.sim.reset();
     afterEnvReset();
     renderEnvPanel();
-    toast(`初始形态：${PATTERNS[pattern.dataset.pattern]}`);
+    toast(`初始形态：${PATTERNS[pattern.dataset.pattern].label}`);
     return;
   }
   const boundary = e.target.closest('[data-boundary]');

@@ -1,5 +1,65 @@
 // Sound layer: life state -> pentatonic, real-time sonification.
 // Sound is the audible interface of the organism, not decoration.
+//
+// ========== 完整映射公式与数值范围 ==========
+//
+// 【持续低音 Drone 声部】（低频呼吸感背景）
+//   音量         = 0.012 + density * 0.32
+//                  density 0 → 0.012  (近静音)
+//                  density 1 → 0.332  (中等强度)
+//                  默认关闭: 0.0001
+//
+//   LFO 频率     = 0.06 + density * 0.5  Hz
+//                  控制低音包络的呼吸速度
+//                  很稳(0.06Hz, ~17秒一周期) → 呼吸(0.56Hz, ~1.8秒)
+//
+//   滤波器中心频率 = 260 + entropy * 2600 * (0.35 + brightness) + activity * 500
+//                  entropy 0 → ~260Hz (温柔低音)
+//                  entropy 1 → 最高到 ~4270Hz (明亮尖锐)
+//                  entropy 是"温柔度"：越高越结构化，但也可能尖锐
+//
+// 【脉冲音符 Pulse 声部】（节拍驱动的主声部）
+//   基础 BPM      = 40 + tempoSmoothed * 70 + activity * 55
+//                  activity 0 → 40 BPM (非常慢)
+//                  activity 1 → 165 BPM (急促)
+//                  tempoSmoothed 是 mapping.tempo 的指数平滑值 (α=0.08)
+//                  beat 间隔 = 60 / BPM / 2 秒 (八分音符节拍)
+//
+//   状态修正:
+//     chaotic  → beat *= 1 + (random-0.5) * 0.35  节拍微微飘移
+//     stable   → beat *= 1.25                      节拍放慢、更稳
+//
+//   音高（随机但在五声内）:
+//     degree = (seed * 3 + floor((period||1) + entropy*5)) % 5
+//     period 是生命自己的呼吸周期（代），影响音高的稳定性
+//
+//   音量          = 0.055 + density * 0.12
+//
+// 【生命周期事件音色序列 EVENT_NOTES】
+//   每个事件触发后播放一串音符（相对根音的半音偏移）
+//   stable     → [0, +3]           温和的小三度下行
+//   periodic   → [0, +2, +4]       五声上升确认节奏
+//   chaotic    → [0, +2, +4, +3, +1]  快速螺旋，表现混乱
+//   endangered → [0, -2]           下沉双音，温柔预警
+//   extinct    → [+4, +2, 0, -2]   持续下行，渐渐消失
+//   reproduction → [0, +2, +4, +5] 庆祝式上升琶音
+//   drifting   → [0, +2]           柔和双音，无方向性
+//
+// 【整体电平 Level】
+//   level = density * 0.5 + activity * 0.35 + entropy * 0.15
+//   密度占主导，活跃度其次，温柔度最弱
+//   level 用于平滑衰减（×0.95/帧），避免爆音
+//
+// 【滤波器 chain 设计】
+//   noteBus (主音符) → BPF [300-4200Hz] → 发送到 delay (0.35)
+//   delay chain → LPF 1600Hz + feedback 0.26 + wet 0.22
+//   主信号 → DynamicsCompressor (threshold -20dB, ratio 5)
+//   全部输出 → StereoPanner (compare 模式 A=-0.62, B=+0.62)
+//
+// 【五声音阶约束 Strictness】
+//   strictness 0.2 → 偶尔出现非五声音（装饰音/过渡音）
+//   strictness 0.72 → 基本严格五声（默认）
+//   strictness 1.0 → 绝对五声（任何音都被纠正到最近的五声）
 
 import { SCALES } from './engines.js';
 import { clamp } from './rng.js';

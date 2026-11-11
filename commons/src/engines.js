@@ -1,5 +1,65 @@
 // Life layer: Conway / rule variants / simplified Lenia.
 // Deterministic given (genome, environment, rngSeed). Includes structural metrics.
+//
+// ========== 参数表（完整范围） ==========
+//
+// 【生命引擎规则集 LIFE_PRESETS】
+//  birth / survive: 整数数组，每个元素是邻居计数 (0-8 / 0-6 取决于邻域)
+//    Moore 8 邻域: 周围 8 格中活细胞计数（经典 Conway 系）
+//    von Neumann 4 邻域: 上下左右 4 格
+//    Hex 6 邻域: 六边形 6 邻居
+//  neighborhood: 4 | 6 | 8
+//
+// 【Lenia 连续场参数 LENIA_PRESETS】
+//  mu (生长中心): 0.05 ~ 0.40
+//    场值 > mu 时生长，< mu 时衰减。决定"舒适密度"。
+//    0.10 以下: 群落稀疏、呼吸感
+//    0.15 ~ 0.20: 最适合涌现稳定结构
+//    0.25 以上: 高阈值、快速结晶/收缩
+//  sigma (生长宽度): 0.006 ~ 0.050
+//    高斯核的宽容度。越大越平滑、越宽容；越小越尖锐、越挑剔。
+//  radius (核半径 R): 2 ~ 6 格
+//    生长核的物理半径（格数）。R 越大，最大尺寸越大。
+//  dt (时间步): 0.03 ~ 0.18
+//    每帧前进的仿真量。越小越慢、越细腻；越大越快、越粗糙。
+//
+// 【环境参数 defaultEnv】
+//  pattern: 'soup'|'sparse'|'glider'|'oscillator'|'blob'|'ring'|'cross'
+//    初始播种形态。
+//  boundary: 'torus'|'wall'
+//    toru 环面（左边接右边、上边接下边）；wall 硬壁（边缘是死细胞）
+//  noise: 0 ~ 0.15
+//    运行中每帧注入的随机扰动。0 = 纯净；0.05+ = 湍流会增加。
+//  resource.rate: 0 ~ 0.25
+//    营养注入强度（Lenia 适用）。0.08+ 会让群落更有活力、密度上升。
+//  resource.period: 20 ~ 200 代
+//    营养脉冲周期。0 = 无脉冲。周期性注入会引起结构呼吸式涨落。
+//  constraint: 0 ~ 1
+//    整体约束强度。越高越稳定但越不容易涌现新结构。
+//  timeScale: 0.25 ~ 3
+//    仿真速度倍率。
+//
+// 【声音映射 genome.mapping】
+//  root: 0-11（C ~ B 的半音索引）
+//  octave: 0-7（音区，越大越高）
+//  scale: 'major'|'minor'|'lydian'
+//    大调五声 [0,2,4,7,9] 宫商角徵羽（温暖明亮）
+//    小调五声 [0,3,5,7,10] 羽宫商角徵（幽深柔和）
+//    利底亚 [0,2,6,7,9]（明亮悬浮、梦幻）
+//  wave: 'sine'|'triangle'|'sawtooth'|'square'
+//    音色波形。sine 最圆润、最治愈；saw/square 更尖锐。
+//  register: 0-1
+//    音区偏移。0.5 = 中央；0 偏低；1 偏高。
+//  brightness: 0.1-1
+//    滤波器中心频率偏移。越高越尖锐明亮；越低越温柔。
+//  tempo: 0.1-1
+//    基础节奏速度。换算 BPM = 40 + tempo*70 + activity*55。
+//  strictness: 0.2-1
+//    五声音阶约束强度。越高越严格，不会出现非五声音。
+//  drone/pulse/events: boolean
+//    drone: 持续低音，密度驱动音量
+//    pulse: 脉冲音符，活跃度驱动密度
+//    events: 生命周期事件触发的音色序列
 
 import { clamp, hashInts, mulberry32 } from './rng.js';
 
@@ -7,48 +67,155 @@ export const ENGINE_VERSION = '1.0.0';
 export const GRID_W = 160;
 export const GRID_H = 90;
 
+/* ------------------------------------------------------------------ */
+/* Conway 系规则集：Bx/Sy 记法                                         */
+/* ------------------------------------------------------------------ */
+// birth = 出生所需邻居数数组（活着的邻居有这些数时会出生）
+// survive = 存活所需邻居数数组（已经活着的，有这些数就继续活）
+
 export const LIFE_PRESETS = {
-  conway: { label: '康威', birth: [3], survive: [2, 3], note: 'B3/S23 · 经典生命' },
-  highlife: { label: '高生命', birth: [3, 6], survive: [2, 3], note: 'B36/S23 · 会自我复制' },
-  daynight: { label: '昼夜', birth: [3, 6, 7, 8], survive: [3, 4, 6, 7, 8], note: 'B3678/S34678 · 对称与湍流' },
-  seeds: { label: '种子', birth: [2], survive: [], note: 'B2/S · 爆炸式扩散' },
-  maze: { label: '迷宫', birth: [3], survive: [1, 2, 3, 4, 5], note: 'B3/S12345 · 长走廊' },
-  coral: { label: '珊瑚', birth: [3], survive: [4, 5, 6, 7, 8], note: 'B3/S45678 · 缓慢生长' },
-  replicator: { label: '复制者', birth: [1, 3, 5, 7], survive: [1, 3, 5, 7], note: 'B1357/S1357 · 自我复制' },
+  conway:    { label: '康威·经典', birth: [3],         survive: [2, 3],
+               note: 'B3/S23 · 最经典的生命；会出现滑翔机、振荡器、稳定块',
+               neighborhood: 8, pattern: 'soup', boundary: 'torus' },
+  highlife:  { label: '高生命',    birth: [3, 6],      survive: [2, 3],
+               note: 'B36/S23 · 会自我复制；在随机汤里容易长出稳定的复制结构',
+               neighborhood: 8, pattern: 'soup', boundary: 'torus' },
+  daynight:  { label: '昼夜',      birth: [3, 6, 7, 8], survive: [3, 4, 6, 7, 8],
+               note: 'B3678/S34678 · 对称与湍流；边界处最活跃',
+               neighborhood: 8, pattern: 'soup', boundary: 'torus' },
+  seeds:     { label: '种子',      birth: [2],         survive: [],
+               note: 'B2/S · 爆炸式扩散；来得猛、去得快',
+               neighborhood: 8, pattern: 'sparse', boundary: 'torus' },
+  maze:      { label: '迷宫',      birth: [3],         survive: [1, 2, 3, 4, 5],
+               note: 'B3/S12345 · 沿硬壁长走廊；在 wall 边界下特别漂亮',
+               neighborhood: 8, pattern: 'oscillator', boundary: 'wall' },
+  coral:     { label: '珊瑚',      birth: [3],         survive: [4, 5, 6, 7, 8],
+               note: 'B3/S45678 · 缓慢生长；边界处最活跃，适合做"家"的环境',
+               neighborhood: 8, pattern: 'soup', boundary: 'wall' },
+  replicator:{ label: '复制者',    birth: [1, 3, 5, 7], survive: [1, 3, 5, 7],
+               note: 'B1357/S1357 · 所有活细胞都会自我复制；呈棋盘状增长',
+               neighborhood: 8, pattern: 'blob', boundary: 'torus' },
+  wireworld: { label: '导线世界',  birth: [2],         survive: [0, 2],
+               note: 'B2/S02 · 会出现电子、二极管逻辑；偏工程感',
+               neighborhood: 8, pattern: 'soup', boundary: 'torus' },
+  gnarl:     { label: '缠绕',      birth: [1],         survive: [1],
+               note: 'B1/S1 · 对角线式生长；永远在动但不会消失',
+               neighborhood: 8, pattern: 'cross', boundary: 'torus' },
+  coag:      { label: '凝结',      birth: [3, 4, 6],   survive: [0, 1, 2, 3, 4, 6, 7, 8],
+               note: 'B346/S01234678 · 凝结成大团簇；边界粗糙',
+               neighborhood: 8, pattern: 'blob', boundary: 'torus' },
+  starwars:  { label: '星球大战',  birth: [2],         survive: [0, 2, 5],
+               note: 'B2/S025 · 会出现小型飞船形状；偏科幻',
+               neighborhood: 8, pattern: 'glider', boundary: 'torus' },
+  mazectric: { label: '电迷宫',    birth: [3],         survive: [1, 2, 3, 4],
+               note: 'B3/S1234 · 迷宫和电路的混合；线条会分叉又汇合',
+               neighborhood: 8, pattern: 'oscillator', boundary: 'torus' },
 };
+
+/* ------------------------------------------------------------------ */
+/* Lenia 连续场：环状核 × 高斯生长                                       */
+/* ------------------------------------------------------------------ */
+// mu / sigma / radius / dt 四参数决定连续场生长。
+// 场值 > mu 时细胞生长，< mu 时衰减。sigma 控制宽容度。
+// radius 是生长核半径（格数）；dt 是每帧仿真步长。
 
 export const LENIA_PRESETS = {
-  bloom: { label: '绽放', mu: 0.16, sigma: 0.025, radius: 4, dt: 0.1, note: '稀疏群落 · 呼吸' },
-  tide: { label: '潮汐', mu: 0.12, sigma: 0.02, radius: 6, dt: 0.08, note: '宽核 · 缓慢涌动' },
-  coral: { label: '珊瑚', mu: 0.18, sigma: 0.03, radius: 5, dt: 0.08, note: '高阈值 · 结晶' },
-  vortex: { label: '涡旋', mu: 0.12, sigma: 0.02, radius: 5, dt: 0.1, note: '软核 · 流动' },
+  bloom:  { label: '绽放',  mu: 0.16, sigma: 0.025, radius: 4, dt: 0.10,
+            note: 'μ0.16·σ0.025·R4 · 稀疏群落 · 呼吸慢而稳',
+            pattern: 'blob',  boundary: 'torus' },
+  tide:   { label: '潮汐',  mu: 0.12, sigma: 0.020, radius: 6, dt: 0.08,
+            note: 'μ0.12·σ0.020·R6 · 宽核软壳 · 缓慢涌动如潮汐',
+            pattern: 'soup',  boundary: 'torus' },
+  coral:  { label: '珊瑚',  mu: 0.18, sigma: 0.030, radius: 5, dt: 0.08,
+            note: 'μ0.18·σ0.030·R5 · 高阈值 · 结晶体般缓慢生长',
+            pattern: 'ring',  boundary: 'wall'  },
+  vortex: { label: '涡旋',  mu: 0.12, sigma: 0.020, radius: 5, dt: 0.10,
+            note: 'μ0.12·σ0.020·R5 · 软核流动 · 会自己旋转起来',
+            pattern: 'blob',  boundary: 'torus' },
+  nebula: { label: '星云',  mu: 0.14, sigma: 0.032, radius: 4, dt: 0.12,
+            note: 'μ0.14·σ0.032·R4 · 宽容度高 · 像星云一样扩散',
+            pattern: 'soup',  boundary: 'torus' },
+  frond:  { label: '蕨叶',  mu: 0.10, sigma: 0.018, radius: 5, dt: 0.07,
+            note: 'μ0.10·σ0.018·R5 · 细长丝状物 · 长得慢但优雅',
+            pattern: 'sparse',boundary: 'wall'  },
+  shell:  { label: '贝壳',  mu: 0.20, sigma: 0.022, radius: 5, dt: 0.09,
+            note: 'μ0.20·σ0.022·R5 · 高阈值结晶 · 贝壳般的同心环',
+            pattern: 'ring',  boundary: 'wall'  },
 };
 
+/* ------------------------------------------------------------------ */
+/* 初始形态：播种时用                                                   */
+/* ------------------------------------------------------------------ */
 export const PATTERNS = {
-  soup: '随机汤',
-  sparse: '稀疏孢子',
-  glider: '滑翔群',
-  oscillator: '振荡阵列',
-  blob: '原生团块',
-  ring: '环带',
-  cross: '十字脉',
+  soup:      { label: '随机汤',         desc: '整张画布随机填满细胞' },
+  sparse:    { label: '稀疏孢子',       desc: '随机撒几点，适合爆炸式规则' },
+  glider:    { label: '滑翔群',         desc: '一小群滑翔机形状，会自己飞' },
+  oscillator:{ label: '振荡阵列',       desc: '成排的闪烁方块，适合迷宫类' },
+  blob:      { label: '原生团块',       desc: '中间一坨密密集集的细胞' },
+  ring:      { label: '环带',           desc: '一个空心圆环' },
+  cross:     { label: '十字脉',         desc: '两条交叉的横线和竖线' },
 };
 
-export const BOUNDARIES = { torus: '环面', wall: '硬壁' };
+/* ------------------------------------------------------------------ */
+/* 边界条件                                                             */
+/* ------------------------------------------------------------------ */
+export const BOUNDARIES = {
+  torus: { label: '环面', desc: '左边接右边、上边接下边，像个甜甜圈' },
+  wall:  { label: '硬壁', desc: '边缘都是死细胞，会影响边界生长方向' },
+};
 
+/* ------------------------------------------------------------------ */
+/* 音阶（全部五声音阶，严格 5 音）                                       */
+/* ------------------------------------------------------------------ */
+// degrees: 相对根音的半音偏移。全部是 5 音。
 export const SCALES = {
-  major: { label: '大调五声', degrees: [0, 2, 4, 7, 9], note: '宫商角徵羽' },
-  minor: { label: '小调五声', degrees: [0, 3, 5, 7, 10], note: '羽宫商角徵' },
-  lydian: { label: '利底亚五声', degrees: [0, 2, 6, 7, 9], note: '明亮悬浮' },
+  major:  { label: '大调五声',  degrees: [0, 2, 4, 7, 9],  note: '宫·商·角·徵·羽 · 温暖明亮' },
+  minor:  { label: '小调五声',  degrees: [0, 3, 5, 7, 10], note: '羽·宫·商·角·徵 · 幽深柔和' },
+  lydian: { label: '利底亚五声', degrees: [0, 2, 6, 7, 9],  note: '明亮悬浮 · 梦幻感' },
 };
 
 export const ROOT_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
 
+/* ------------------------------------------------------------------ */
+/* 邻域：影响出生/存活计数的邻居范围                                     */
+/* ------------------------------------------------------------------ */
+export const NEIGHBORHOODS = {
+  4:  { label: 'von Neumann · 4 邻', desc: '上下左右 4 格，更细腻但范围小' },
+  6:  { label: 'Hex · 6 邻',         desc: '六边形网格，介乎 4 和 8 之间' },
+  8:  { label: 'Moore · 8 邻',       desc: '经典，全部 8 格都算邻居' },
+};
+
+/* ------------------------------------------------------------------ */
+/* 环境扰动策略                                                         */
+/* ------------------------------------------------------------------ */
+export const CONSTRAINT_MODES = {
+  low:    { label: '宽容',    constraint: 0.15, note: '允许更多噪声涌现新结构' },
+  normal: { label: '平衡',    constraint: 0.35, note: '默认值' },
+  strict: { label: '严格',    constraint: 0.65, note: '更稳定，不容易变' },
+  glass:  { label: '封印',    constraint: 0.85, note: '几乎不会变，像玻璃' },
+};
+
+export const NOISE_MODES = {
+  pure:    { label: '纯净',   noise: 0.00, note: '零扰动，听纯净的生命声' },
+  whisper: { label: '呢喃',   noise: 0.02, note: '很轻微的背景扰动' },
+  breath:  { label: '呼吸',   noise: 0.05, note: '能感觉到结构在动' },
+  wind:    { label: '风',     noise: 0.10, note: '明显的湍流感' },
+  storm:   { label: '风暴',   noise: 0.15, note: '剧烈扰动，结构不断打散重组' },
+};
+
 export function defaultGenome(engine = 'life', preset = 'conway') {
+  const lifePreset = LIFE_PRESETS[preset] || LIFE_PRESETS.conway;
   const genome = {
     engine,
-    life: { birth: [3], survive: [2, 3], neighborhood: 8, preset: 'conway' },
-    lenia: { mu: 0.16, sigma: 0.025, radius: 4, dt: 0.1, preset: 'bloom' },
+    life: {
+      birth: lifePreset.birth.slice(),
+      survive: lifePreset.survive.slice(),
+      neighborhood: lifePreset.neighborhood || 8,
+      preset,
+    },
+    lenia: {
+      mu: 0.16, sigma: 0.025, radius: 4, dt: 0.1, preset: 'bloom',
+    },
     mapping: {
       root: 0,
       octave: 3,
@@ -74,6 +241,7 @@ export function applyLifePreset(genome, key) {
   genome.engine = 'life';
   genome.life.birth = p.birth.slice();
   genome.life.survive = p.survive.slice();
+  genome.life.neighborhood = p.neighborhood || 8;
   genome.life.preset = key;
 }
 

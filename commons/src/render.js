@@ -1,40 +1,78 @@
 // Visual layer: one visual grammar, procedurally rendered from life state.
 // Colour / form / opacity / boundary / event signatures are defined once and reused.
+//
+// ========== 芳文社风格画风说明 ==========
+// 参考：《K-ON!》《点兔》《樱Trick》《请问您今天要来点兔子吗》
+// 特征：清透粉彩色、圆润柔和、柔光光晕、萌系呼吸感。
+//
+// 【颜色板】TINTS
+//   tint a 樱花粉主题：bg [250,232,242] → hue 340 (粉) / hue2 290 (紫)
+//   tint b 薰衣草紫主题：bg [238,226,252] → hue 280 (紫) / hue2 200 (蓝)
+//
+// 【细胞年龄颜色 AGE_BUCKETS】
+//   出生 → 幼 → 青年 → 成熟 → 老年
+//   整体亮度 ≥ 50（最老也是柔和的淡色，不进入暗区）
+//   s 饱和度 70-92（清新不扎眼）
+//
+// 【Lenia 连续场渐变色 LENIA_RAMP】
+//   ramp A 樱花·薄荷：从深紫 → 粉 → 薄荷 → 奶油白
+//   ramp B 薰衣草·蜜桃：从深紫 → 洋红 → 蜜桃 → 暖白
+//
+// 【trail fade（残影残留）】
+//   从黑色背景淡出 → 改为从 TINT 背景色淡出
+//   life fade = 0.30（较明显的残影，可爱）
+//   lenia fade = 0.16（连续场需要更干净）
+//
+// 【glow（光晕）】
+//   叠加模式 'lighter'：新生儿有明显外发光（粉紫色）
+//   老细胞也有，但更淡、更弥散
 
 import { clamp } from './rng.js';
 
+/* ------------------------------------------------------------------ */
+/* 芳文社配色板：两个主题                                              */
+/* ------------------------------------------------------------------ */
+// bg: 画布底色（RGB）；hue: 细胞色相；body/accent: 高光色
+
 const TINTS = {
+  // 主题 A：樱花粉 × 薰衣草紫（默认）
   a: {
-    bg: [5, 8, 12],
-    hue: 156,
-    hue2: 190,
-    accent: '#7cffb2',
-    accent2: '#57d8ff',
-    body: [126, 255, 178],
+    bg: [250, 232, 242],        // 淡樱花粉底
+    hue: 340,                    // 主细胞色相：粉红
+    hue2: 285,                   // 次色相：薰衣草紫
+    accent: '#ff8eb5',           // 少女粉
+    accent2: '#c59df2',          // 薰衣草紫
+    body: [255, 170, 200],       // 粉白身体色
   },
+  // 主题 B：晴空蓝 × 蜜桃橙
   b: {
-    bg: [11, 7, 12],
-    hue: 36,
-    hue2: 332,
-    accent: '#ffc46b',
-    accent2: '#c39bff',
-    body: [255, 196, 107],
+    bg: [236, 238, 250],        // 淡薰衣草粉底
+    hue: 280,                    // 主细胞色相：薰衣草
+    hue2: 40,                    // 次色相：蜜桃
+    accent: '#a8d8ea',           // 晴空蓝
+    accent2: '#ffb89e',          // 蜜糖橙
+    body: [180, 160, 230],       // 淡紫身体色
   },
 };
 
+/* ------------------------------------------------------------------ */
+/* Lenia 连续场渐变色（5 节点）                                          */
+/* ------------------------------------------------------------------ */
+// ramp A：樱花 × 薄荷 × 奶油（治愈）
 const LENIA_RAMP_A = [
-  [10, 18, 40],
-  [18, 78, 92],
-  [43, 196, 168],
-  [150, 255, 176],
-  [240, 255, 236],
+  [240, 220, 248],   // 淡薰衣草 (0)
+  [220, 180, 230],   // 薰衣草紫 (0.25)
+  [255, 170, 200],   // 樱花粉 (0.5)
+  [240, 210, 200],   // 蜜桃奶 (0.75)
+  [255, 248, 250],   // 奶油白 (1)
 ];
+// ramp B：薰衣草 × 蜜桃 × 暖白
 const LENIA_RAMP_B = [
-  [26, 10, 30],
-  [92, 30, 82],
-  [206, 70, 120],
-  [255, 186, 92],
-  [255, 244, 220],
+  [225, 210, 245],   // 淡紫 (0)
+  [200, 170, 230],   // 薰衣草 (0.25)
+  [255, 185, 200],   // 粉橘 (0.5)
+  [255, 220, 185],   // 蜜桃 (0.75)
+  [255, 248, 245],   // 暖白 (1)
 ];
 
 function rampColor(ramp, t) {
@@ -50,14 +88,20 @@ function rampColor(ramp, t) {
   ];
 }
 
+/* ------------------------------------------------------------------ */
+/* 细胞年龄颜色 HSL（芳文社明亮调）                                      */
+/* ------------------------------------------------------------------ */
+// 所有阶段亮度 ≥ 50，最老也是柔和的淡色（不进入暗黑色区）
+// l: 亮度  s: 饱和度  a: 透明度
+
 const AGE_BUCKETS = [
-  { max: 0, l: 86, s: 82, a: 1 },
-  { max: 1, l: 74, s: 92, a: 0.96 },
-  { max: 2, l: 64, s: 88, a: 0.9 },
-  { max: 4, l: 54, s: 82, a: 0.82 },
-  { max: 9, l: 44, s: 74, a: 0.7 },
-  { max: 19, l: 35, s: 66, a: 0.56 },
-  { max: Infinity, l: 27, s: 58, a: 0.4 },
+  { max: 0,   l: 92, s: 88, a: 1.0 },    // 新生儿：最亮的粉白色
+  { max: 1,   l: 82, s: 90, a: 0.98 },   // 幼崽：粉彩色
+  { max: 2,   l: 72, s: 92, a: 0.94 },   // 青年：最鲜明的粉紫
+  { max: 4,   l: 64, s: 88, a: 0.88 },   // 成熟
+  { max: 9,   l: 56, s: 82, a: 0.80 },   // 中年
+  { max: 19,  l: 50, s: 74, a: 0.68 },   // 老年
+  { max: Infinity, l: 48, s: 66, a: 0.55 }, // 最老：柔和灰紫
 ];
 
 function ageBucket(age, activity) {
@@ -70,8 +114,10 @@ function ageBucket(age, activity) {
   }
   const b = AGE_BUCKETS[idx];
   return {
-    l: clamp(b.l + (activity > 0.5 ? 5 : 0), 0, 100),
-    s: b.s,
+    // activity 高 3% 亮度，让活跃的细胞更亮
+    l: clamp(b.l + (activity > 0.5 ? 4 : 0), 20, 98),
+    // 年龄越大饱和度降得越多，显得"疲惫"但不阴暗
+    s: clamp(b.s - Math.min(20, age * 0.3), 30, 100),
     a: b.a,
   };
 }
@@ -152,8 +198,9 @@ export class StageRenderer {
     const m = this.metrics;
     const activity = m ? clamp(m.activity, 0, 1) : 0.2;
 
-    // trail fade — the organism leaves an afterimage
-    const fade = sim.kind === 'lenia' ? 0.16 : 0.3;
+    // 芳文社：用 TINT 背景色做 trail fade（不是黑色），
+    // 这样残留是柔和的粉紫色，不会污染明亮的舞台。
+    const fade = sim.kind === 'lenia' ? 0.16 : 0.30;
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = `rgba(${t.bg[0]},${t.bg[1]},${t.bg[2]},${fade})`;
     ctx.fillRect(0, 0, W, H);
@@ -233,10 +280,10 @@ export class StageRenderer {
       }
     }
 
-    // newborn sparkle
+    // 芳文社：新生儿 sparkle 改为樱花粉白色，更治愈
     ctx.globalCompositeOperation = 'lighter';
     const newborns = buckets[0];
-    ctx.fillStyle = `rgba(240,255,248,${0.28 + activity * 0.22})`;
+    ctx.fillStyle = `rgba(255, 230, 240, ${0.28 + activity * 0.22})`;
     const s = Math.max(1, cell * 0.5);
     for (let p = 0; p < 2; p++) {
       const arr = newborns[p];
@@ -258,6 +305,7 @@ export class StageRenderer {
     const data = this.imgData.data;
     const ramp = this.tintKey === 'b' ? LENIA_RAMP_B : LENIA_RAMP_A;
     const boost = 0.82 + activity * 0.3;
+    // 芳文社：边缘增强用粉紫色系 (edgeR=e*100, edgeG=e*50, edgeB=e*110)
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = y * w + x;
@@ -268,9 +316,9 @@ export class StageRenderer {
         const c = rampColor(ramp, Math.pow(clamp(v * boost, 0, 1), 0.84));
         const e = edge * 0.42;
         const p = i * 4;
-        data[p] = Math.min(255, c[0] + e * 130);
-        data[p + 1] = Math.min(255, c[1] + e * 130);
-        data[p + 2] = Math.min(255, c[2] + e * 130);
+        data[p] = Math.min(255, c[0] + e * 100);
+        data[p + 1] = Math.min(255, c[1] + e * 50);
+        data[p + 2] = Math.min(255, c[2] + e * 110);
         data[p + 3] = v < 0.035 ? 0 : Math.min(255, 36 + v * 250 + edge * 90);
       }
     }
@@ -289,7 +337,8 @@ export class StageRenderer {
 
   _drawGrid(scale, ox, oy, W, H) {
     const { ctx, sim } = this;
-    ctx.strokeStyle = 'rgba(255,255,255,0.028)';
+    // 芳文社：网格线改为粉紫色虚线，更可爱，不扎眼
+    ctx.strokeStyle = 'rgba(255, 142, 181, 0.08)';
     ctx.lineWidth = 1;
     const step = Math.max(8, Math.round(sim.w / 15) * scale);
     ctx.beginPath();
