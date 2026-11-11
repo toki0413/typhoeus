@@ -531,7 +531,6 @@ function refreshMainMetrics() {
     const newMood = state.pet.state.updateFromMetrics(m, state.recipe.env.timeScale || 1);
     if (newMood !== state.lastPetMood) {
       state.lastPetMood = newMood;
-      console.log(`🐾 Pet mood → ${newMood} ${PET_MOOD_EMOJI[newMood]} | snapshot:`, state.pet.state.snapshot());
       toast(`🐾 ${PET_MOOD_LABEL[newMood]} ${PET_MOOD_EMOJI[newMood]}`, 1600);
     }
     renderPetHUD();
@@ -2860,11 +2859,9 @@ function onEnvClick(e) {
     );
     if (physicsObj?._nonScientific) {
       /* 🔴 Attention 审计修复：非科学引擎收到明确降级标记 → toast 提示用户 */
-      console.warn(`⚠️ ${physicsObj._reason}`);
       toast(`⚠️ 此引擎是 ${state.recipe.seed.engine} 系，极端物理参数仅作用于科学引擎（反应-扩散）。环境 slider 已生效。`, 3200, 'warn');
     } else if (physicsObj && state.sim.setPhysics) {
       state.sim.setPhysics(physicsObj);
-      console.log(`🧪 Exotic physics injected → ${target.label} | D×${physicsObj.diffusionMult ?? 1} | dt×${physicsObj.dtMult ?? 1}${physicsObj.reactionBoost ? ` | f×${physicsObj.reactionBoost.fMult ?? 1}/k×${physicsObj.reactionBoost.kMult ?? 1}` : ''}${physicsObj.perturbation ? ` | perturbation=${physicsObj.perturbation.rate}步/${physicsObj.perturbation.intensity}` : ''}`);
     }
 
     state.exoticEnvId = id;
@@ -3002,13 +2999,6 @@ function debouncedJepaFeedback(paramKey, newValue, genome) {
     return parts.join(' + ') || '小幅抖动';
   })();
 
-  console.log('[JEPA 直觉训练]', {
-    param: paramKey, val: newValue,
-    distance: d.toFixed(3),
-    direction: label,
-    predictorTrained: j.predictor.size,
-    predictionError: predictionError?.toFixed(3),
-  });
 
   // ⑨ toast 给玩家反馈（简洁，不刷屏）
   const icon = !feedback.meaningful ? '·' : (predictionError !== null && predictionError < 0.15 ? '✓' : '→');
@@ -3026,7 +3016,6 @@ function handleSciAction(action) {
     const mc = runPlayerMC(state.sim, 4, { temperature: 0.2, nTypes: 6 });
     const deltaStr = mc.energyDelta < 0 ? `✓ 能量下降 ${(-mc.energyDelta).toFixed(0)}` : `ΔE=${mc.energyDelta.toFixed(0)}`;
     toast(`CPM MC 完成：接受率 ${(mc.acceptedRate*100).toFixed(1)}% | ${deltaStr}`);
-    console.log('[CPM]', { acceptedRate: mc.acceptedRate, energyBefore: mc.energyBefore.toFixed(1), energyAfter: mc.energyAfter.toFixed(1), usedField: mc.usedField });
     state.sciMCResult = mc;
     return;
   }
@@ -3035,9 +3024,7 @@ function handleSciAction(action) {
     const matches = matchPatternLibrary(m);
     state.sciMatches = matches;
     toast(`📚 模式匹配 Top-1：${matches[0]?.label ?? '—'} ${matches[0]?.similarity ?? 0}%`);
-    console.log('[Pattern Match]', matches.map(m => `${m.label} ${m.similarity}% → ${m.refs?.[0]}`));
     // 在控制台打印详细匹配，方便玩家复制
-    console.table(matches.map(m => ({ label: m.label, similarity: m.similarity, refs: m.refs?.[0], engine: m.engine })));
     return;
   }
   if (action === 'scan' && runParameterScan) {
@@ -3054,11 +3041,6 @@ function handleSciAction(action) {
     ).then(result => {
       state.sciScanResult = result;
       toast(`扫描完成：最佳点 E=${result.bestPoint.energy.toFixed(3)}`);
-      console.log('[Scan Result]', {
-        best: { params: result.bestPoint.params, energy: result.bestPoint.energy },
-        worst: { params: result.worstPoint.params, energy: result.worstPoint.energy },
-        gridSize: `${result.Nx}×${result.Ny}`,
-      });
     }).catch(err => { toast('❌ 扫描失败：' + err.message); console.error(err); });
     return;
   }
@@ -3069,13 +3051,8 @@ function handleSciAction(action) {
     state.sciDiscovery = rec;
     const issue = buildOpenScienceIssue ? buildOpenScienceIssue(rec) : null;
     toast(`⭐ 已保存到本地开放科学仓库（${loadLeaderboard().length} 条）`);
-    console.log('[Discovery Saved]', { fingerprint: rec.fingerprint, topMatch: rec.patternMatches?.[0] });
     if (issue) {
       // 把 body 写入剪贴板（如果可能）并打印
-      console.log('\n==== 开放科学 GitHub Issue ====');
-      console.log('标题:', issue.title);
-      console.log('URL :', issue.url);
-      console.log('Body:\n', issue.body);
       try { navigator.clipboard?.writeText(issue.body); toast('📋 Issue body 已复制到剪贴板'); } catch {}
     }
     return;

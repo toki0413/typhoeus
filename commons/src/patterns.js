@@ -246,14 +246,16 @@ export function matchPatternLibrary(metrics) {
  * 包含：引擎参数、科学指标、模式匹配、音频指纹（简化：hash of genome）
  */
 export function buildDiscoveryRecord(recipe, metrics, topMatches) {
-  const fingerprint = simpleHash(JSON.stringify(recipe.seed.genome));
+  // 兼容两种 recipe schema: 新 { seed: { genome: {...} } } 和 旧 { seed: {...} }
+  const genome = recipe?.seed?.genome ?? recipe?.seed ?? {};
+  const fingerprint = simpleHash(JSON.stringify(genome));
   return {
     schema: 'commons.discovery.v1',
     version: '2.0.0',
     timestamp: new Date().toISOString(),
     fingerprint,
-    engine: recipe.seed.genome.engine,
-    params: recipe.seed.genome,
+    engine: genome.engine ?? genome.preset ?? 'unknown',
+    params: genome,
     metrics: {
       lyapunov: +(metrics.lyapunov ?? 0).toFixed(4),
       fractal:  +(metrics.fractal ?? 0).toFixed(4),
@@ -273,8 +275,9 @@ export function buildDiscoveryRecord(recipe, metrics, topMatches) {
 function simpleHash(str) {
   // FNV-1a 32-bit
   let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
+  const s = typeof str === 'string' ? str : String(str ?? 'null');
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
     h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
   }
   return '0x' + h.toString(16).padStart(8, '0');

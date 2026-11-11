@@ -21,11 +21,28 @@ const LB_KEY = 'commons.leaderboard.v1';
 const OSR_REPO_URL = 'https://github.com/commons-org/discoveries/issues/new';
 
 /**
+ * 安全 localStorage 包装 — Node mjs / 隐私模式 / 禁用 cookie 时静默降级为内存 Map
+ * 生产成熟度修复：之前 L62 clearLeaderboard 直接 localStorage.removeItem 会 throw ReferenceError
+ */
+let _memFallback = null;
+function safeStorage() {
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage) return localStorage;
+  } catch (_) { /* 某些环境访问 localStorage 也会 throw */ }
+  if (!_memFallback) _memFallback = new Map();
+  return {
+    getItem: (k) => _memFallback.get(k) ?? null,
+    setItem: (k, v) => { _memFallback.set(k, String(v)); },
+    removeItem: (k) => { _memFallback.delete(k); },
+  };
+}
+
+/**
  * 读取本地 leaderboard
  */
 export function loadLeaderboard() {
   try {
-    const raw = localStorage.getItem(LB_KEY);
+    const raw = safeStorage().getItem(LB_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -42,7 +59,7 @@ export function saveDiscovery(record) {
   else lb.unshift(record);         // 新的放最前
   // 最多保留 200 条
   while (lb.length > 200) lb.pop();
-  localStorage.setItem(LB_KEY, JSON.stringify(lb));
+  try { safeStorage().setItem(LB_KEY, JSON.stringify(lb)); } catch { /* 静默失败 */ }
   return lb;
 }
 
@@ -51,7 +68,7 @@ export function saveDiscovery(record) {
  */
 export function deleteDiscovery(fingerprint) {
   const lb = loadLeaderboard().filter(r => r.fingerprint !== fingerprint);
-  localStorage.setItem(LB_KEY, JSON.stringify(lb));
+  try { safeStorage().setItem(LB_KEY, JSON.stringify(lb)); } catch { /* 静默失败 */ }
   return lb;
 }
 
@@ -59,7 +76,7 @@ export function deleteDiscovery(fingerprint) {
  * 清空
  */
 export function clearLeaderboard() {
-  localStorage.removeItem(LB_KEY);
+  try { safeStorage().removeItem(LB_KEY); } catch { /* 静默失败 */ }
 }
 
 /**
@@ -118,7 +135,7 @@ export function importDiscoveries(jsonStr) {
     if (idx >= 0) { lb[idx] = r; updated++; }
     else { lb.unshift(r); added++; }
   }
-  localStorage.setItem(LB_KEY, JSON.stringify(lb));
+  try { safeStorage().setItem(LB_KEY, JSON.stringify(lb)); } catch { /* 静默失败 */ }
   return { ok: true, added, updated, total: lb.length };
 }
 
