@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<!-- Source version (ES modules, needs a local static server). Single-file build: commons.html -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Commons · 公地 — 人工生命培育与聆听</title>
+    <meta
+      name="description"
+      content="Commons 公地：领养、观察、照料生命种子，并聆听生命状态实时合成的声音。"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%237cffb2' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%237cffb2'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="ambient" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <button class="brand" data-view="cultivate" aria-label="回到培育台">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.4" />
+          <circle cx="12" cy="12" r="2.6" fill="currentColor" />
+        </svg>
+        <span class="brand-word">COMMONS <em>公 地</em></span>
+      </button>
+      <nav class="nav" id="nav">
+        <button data-view="cultivate" class="active">培育台</button>
+        <button data-view="commons">公地</button>
+        <button data-view="compare">对比聆听</button>
+        <button data-view="lineage">谱系</button>
+      </nav>
+      <div class="top-actions">
+        <button id="researchBtn" class="ghost tiny" title="匿名科研数据记录（默认关闭）">
+          <span class="dot"></span><span id="researchLabel">匿名数据 · 关</span>
+        </button>
+        <button id="audioBtn" class="sound-btn" aria-pressed="false">
+          <span class="eq"><i></i><i></i><i></i><i></i></span>
+          <span id="audioLabel">聆听</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="view-cultivate" class="view active">
+      <section class="cultivate">
+        <div class="stage-column">
+          <div class="stage-head">
+            <div class="species">
+              <div class="eyebrow">CURRENT ORGANISM · 当前生命</div>
+              <h1 id="speciesName">—</h1>
+              <div class="species-sub">
+                <span id="speciesLatin">—</span>
+                <span class="sep">/</span>
+                <span id="speciesRule">—</span>
+              </div>
+            </div>
+            <div class="badges" id="stageBadges"></div>
+          </div>
+
+          <div class="stage" id="stageHost">
+            <canvas id="stageCanvas"></canvas>
+            <div class="stage-grid" aria-hidden="true"></div>
+            <div class="stage-vignette" aria-hidden="true"></div>
+            <div class="stage-bracket tl" aria-hidden="true"></div>
+            <div class="stage-bracket tr" aria-hidden="true"></div>
+            <div class="stage-bracket bl" aria-hidden="true"></div>
+            <div class="stage-bracket br" aria-hidden="true"></div>
+
+            <div class="hud hud-tl">
+              <div class="hud-label">STATE</div>
+              <div class="hud-big" id="hudState">观察中</div>
+              <div class="hud-row"><span>世代</span><b id="hudGen">0000</b></div>
+            </div>
+
+            <div class="hud hud-tr">
+              <canvas id="fingerprintGlyph"></canvas>
+              <div class="hud-label">FINGERPRINT</div>
+              <div class="fp-code" id="fingerprintCode">0000-0000</div>
+            </div>
+
+            <div class="hud hud-bl">
+              <div class="hud-label">STRUCTURE · 结构</div>
+              <div class="hud-metrics" id="hudMetrics"></div>
+            </div>
+
+            <div class="hud hud-br">
+              <div class="eq big" id="hudEq"><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="hud-label" id="hudSound">静音 · 点击聆听</div>
+            </div>
+
+            <div class="event-banner" id="eventBanner"></div>
+            <div class="listen-prompt" id="listenPrompt">
+              <span class="pulse-dot"></span>
+              <span>轻触「聆听」，让结构发出声音</span>
+            </div>
+          </div>
+
+          <div class="transport">
+            <div class="transport-left">
+              <button id="playBtn" class="primary">暂停</button>
+              <button id="stepBtn" class="icon-btn" title="单步推进">▸❙</button>
+              <label class="speed">
+                <span>速度</span>
+                <input id="speedRange" type="range" min="0.25" max="3" step="0.05" value="1" />
+                <b id="speedVal">1.0×</b>
+              </label>
+            </div>
+            <div class="transport-right">
+              <button data-action="hatch" class="ghost">随机孵化</button>
+              <button data-action="mutate" class="ghost" title="轻微突变当前基因">分裂</button>
+              <button data-action="save" class="primary soft">保存到公地</button>
+              <button data-action="share" class="ghost">分享</button>
+              <button data-action="hybrid" class="ghost">杂交</button>
+            </div>
+          </div>
+
+          <div class="timeline">
+            <div class="timeline-head">
+              <span>生命周期 / LIFECYCLE</span>
+              <span id="timelineCount">0 事件</span>
+            </div>
+            <div class="timeline-track" id="timelineTrack">
+              <div class="timeline-empty">尚无事件。稳定、周期、混沌、濒危与繁殖会在此留下痕迹。</div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="rail">
+          <div class="rail-tabs" id="railTabs">
+            <button data-tab="rule" class="active">规则</button>
+            <button data-tab="sound">声音</button>
+            <button data-tab="env">环境</button>
+            <button data-tab="struct">结构</button>
+          </div>
+          <div class="rail-body">
+            <section class="panel active" id="panel-rule"></section>
+            <section class="panel" id="panel-sound"></section>
+            <section class="panel" id="panel-env"></section>
+            <section class="panel" id="panel-struct"></section>
+          </div>
+          <div class="rail-foot">
+            <div class="recipe-line"><span>配方</span><code id="recipeCode">—</code></div>
+            <div class="recipe-line"><span>引擎</span><code id="engineCode">AL-1.0.0</code></div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <main id="view-commons" class="view">
+      <header class="view-head">
+        <div class="view-title">
+          <div class="eyebrow">THE COMMONS · 生命公地</div>
+          <h2>领养一枚种子，或把此刻留下</h2>
+          <p>
+            公地保存完整配方：生命种子 + 环境 + 随机种子 + 引擎版本，并附结构指纹。
+            同一生命在不同环境下会长出不同表型，发出不同声音。
+          </p>
+        </div>
+        <div class="commons-tools">
+          <label class="search">
+            <input id="commonsSearch" type="search" placeholder="搜索名字 / 规则 / 世代" />
+          </label>
+          <select id="commonsSort" class="select">
+            <option value="new">最近收录</option>
+            <option value="active">最活跃</option>
+            <option value="stable">最稳定</option>
+            <option value="kin">与当前最亲</option>
+          </select>
+          <button id="commonsHatch" class="primary">随机孵化</button>
+        </div>
+      </header>
+      <div class="commons-stats" id="commonsStats"></div>
+
+      <section class="env-section">
+        <div class="env-head">
+          <div>
+            <div class="eyebrow">ENVIRONMENT RECIPES · 环境配方</div>
+            <h3>环境也是孵化配方</h3>
+          </div>
+          <p>同一生命种子放进不同环境，会长出不同表型、发出不同声音。领养一个环境，或用它孵化当前种子。</p>
+        </div>
+        <div class="env-grid" id="envGallery"></div>
+      </section>
+
+      <div class="seed-grid" id="commonsGrid"></div>
+      <div class="commons-foot">
+        <div>
+          <span class="dot muted"></span>
+          缩略图默认使用代表性环境下的结构指纹快照。仅高价值种子开放定制封面。
+        </div>
+        <button id="clearLocal" class="ghost tiny">清空本地收录</button>
+      </div>
+    </main>
+
+    <main id="view-compare" class="view">
+      <header class="view-head">
+        <div class="view-title">
+          <div class="eyebrow">COMPARATIVE LISTENING · 对比聆听</div>
+          <h2>把两只生命放进同一副耳朵</h2>
+          <p>A 在左声道，B 在右声道。系统同步放大结构差异，但最终判断仍交给聆听。</p>
+        </div>
+        <div class="compare-controls">
+          <div class="segmented" id="compareMode">
+            <button data-mode="seed" class="active">同环境 · 异种子</button>
+            <button data-mode="env">同种子 · 异环境</button>
+          </div>
+          <button id="compareAudio" class="primary">同步聆听</button>
+          <button id="comparePlay" class="ghost">暂停</button>
+        </div>
+      </header>
+      <div class="compare-grid">
+        <article class="compare-card" data-side="a">
+          <div class="compare-top">
+            <div class="side-tag">A · 左声道</div>
+            <select id="compareSeedA" class="select seed-select"></select>
+            <select id="compareEnvA" class="select env-select"></select>
+          </div>
+          <div class="compare-stage">
+            <canvas id="compareCanvasA"></canvas>
+            <div class="compare-badge" id="compareBadgeA">—</div>
+          </div>
+          <div class="compare-metrics" id="compareMetricsA"></div>
+        </article>
+        <article class="compare-card" data-side="b">
+          <div class="compare-top">
+            <div class="side-tag b">B · 右声道</div>
+            <select id="compareSeedB" class="select seed-select"></select>
+            <select id="compareEnvB" class="select env-select"></select>
+          </div>
+          <div class="compare-stage">
+            <canvas id="compareCanvasB"></canvas>
+            <div class="compare-badge" id="compareBadgeB">—</div>
+          </div>
+          <div class="compare-metrics" id="compareMetricsB"></div>
+        </article>
+      </div>
+      <div class="compare-insight" id="compareInsight"></div>
+    </main>
+
+    <main id="view-lineage" class="view">
+      <header class="view-head">
+        <div class="view-title">
+          <div class="eyebrow">LINEAGE · 谱系</div>
+          <h2>每一次杂交都留下基因与声音的交叉</h2>
+          <p>谱系记录双亲、世代与配方。你可以回到任一代，继续照料或再次杂交。</p>
+        </div>
+        <button id="lineageHybrid" class="primary">从当前生命开始杂交</button>
+      </header>
+      <div class="lineage-summary" id="lineageSummary"></div>
+      <div class="lineage-tree" id="lineageTree"></div>
+    </main>
+
+    <div id="toastLayer" class="toast-layer"></div>
+    <div id="modalLayer" class="modal-layer hidden"></div>
+
+    <div id="intro" class="intro hidden">
+      <div class="intro-card">
+        <svg class="intro-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.2" />
+          <circle cx="12" cy="12" r="2.4" fill="currentColor" />
+        </svg>
+        <div class="eyebrow">A LIVING COMMONS</div>
+        <h2>先听，再看。</h2>
+        <p>
+          Commons 是一座人工生命公地。你领养的不是一张图，而是一套会呼吸的规则。
+          它的结构可以被测量，但它真正活着的样子，需要你听。
+        </p>
+        <ol class="intro-steps">
+          <li><b>领养</b><span>从公地取一枚种子，或让系统随机孵化。</span></li>
+          <li><b>聆听</b><span>生命状态实时映射为五声音阶：密度是音量，熵是亮度，活跃度是节奏。</span></li>
+          <li><b>照料</b><span>调整规则、映射与环境，听见它如何改变。</span></li>
+          <li><b>留下</b><span>保存配方与结构指纹，与他人对比、杂交。</span></li>
+        </ol>
+        <div class="intro-actions">
+          <button id="introListen" class="primary">边听边开始</button>
+          <button id="introSilent" class="ghost">先静音观察</button>
+        </div>
+        <div class="intro-foot">无需账号 · 配方保存在本地 · 匿名数据默认关闭</div>
+      </div>
+    </div>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
