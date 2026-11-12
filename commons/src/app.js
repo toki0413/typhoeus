@@ -2897,6 +2897,8 @@ function bindUI() {
   });
   $('#panel-env').addEventListener('click', onEnvClick);
   $('#panel-env').addEventListener('input', onEnvInput);
+  /* 极端环境徽标在舞台上，不在环境面板内，需要单独绑定取消事件 */
+  $('#exoticPill')?.addEventListener('click', onEnvClick);
 
   $('#stageHost').addEventListener('click', () => {
     if (!state.audioOn) {
@@ -3265,6 +3267,19 @@ function onSoundChange(e) {
   if (state.audio) state.audio.setGenome(state.recipe.seed.genome);
 }
 
+/* 当前生命真正使用的反应-扩散子类型。
+ * 优先读运行中的 RD 参数，避免 scientific 预设只存了 preset 时被误判成非科学引擎。 */
+function currentScienceEngineType() {
+  const sim = state.sim;
+  if (sim?.kind === 'reaction-diffusion' && sim._rd?.params?.engine) {
+    return sim._rd.params.engine;
+  }
+  const sci = state.recipe.seed.genome.scientific || {};
+  if (sci.engineType) return sci.engineType;
+  const preset = sci.preset && REACTION_DIFFUSION_PRESETS[sci.preset];
+  return preset?.engine || state.recipe.seed.genome.engine;
+}
+
 function onEnvClick(e) {
   /* ---- 🌌 极端环境一键切换 ---- */
   const exotic = e.target.closest('[data-exotic]');
@@ -3283,9 +3298,9 @@ function onEnvClick(e) {
     /* ===== 物理注入：physics.js → ScientificEngine._physics → step() 真实扩散/反应 ===== */
     const physicsObj = applyExoticPhysics(
       newEnv,
-      state.recipe.seed.scientific?.engineType || state.recipe.seed.engine,
-      state.sim.width,
-      state.sim.height
+      currentScienceEngineType(),
+      state.sim.w,
+      state.sim.h
     );
     if (physicsObj?._nonScientific) {
       /* 🔴 Attention 审计修复：非科学引擎收到明确降级标记 → toast 提示用户 */
@@ -3328,6 +3343,16 @@ function onEnvClick(e) {
   const pattern = e.target.closest('[data-pattern]');
   if (pattern) {
     state.recipe.env.pattern = pattern.dataset.pattern;
+    /* 挑战产出的生命带有自定义种子 mask；用户主动换初始形态时，
+     * mask 会让“初始形态”按钮看起来失效，所以这里显式清掉。 */
+    const sci = state.recipe.seed.genome.scientific;
+    if (sci?.mask) {
+      delete sci.mask;
+      delete sci.maskW;
+      delete sci.maskH;
+      state.sim.applyGenome?.(state.recipe.seed.genome);
+      markGenomeChanged();
+    }
     state.sim.setEnv(state.recipe.env);
     state.sim.reset();
     afterEnvReset();
@@ -3539,9 +3564,9 @@ function onEnvInput(e) {
     env._exoticId = state.exoticEnvId;  // 确保 marker 在
     const physicsObj = applyExoticPhysics(
       env,
-      state.recipe.seed.scientific?.engineType || state.recipe.seed.engine,
-      state.sim.width,
-      state.sim.height
+      currentScienceEngineType(),
+      state.sim.w,
+      state.sim.h
     );
     if (physicsObj) {
       state.sim.setPhysics(physicsObj);

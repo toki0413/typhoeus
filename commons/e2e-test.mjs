@@ -60,7 +60,7 @@ const ENVS = [
 
 const before = sim.metrics();
 for (const exo of ENVS) {
-  const physics = applyExoticPhysics({ ...exo.env, _exoticId: exo.id }, 'grayScott', sim.width, sim.height);
+  const physics = applyExoticPhysics({ ...exo.env, _exoticId: exo.id }, 'grayScott', sim.w, sim.h);
   if (physics) sim.setPhysics(physics);
   for (let i = 0; i < 200; i++) sim.step();
   const m2 = sim.metrics();

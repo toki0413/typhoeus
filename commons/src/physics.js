@@ -55,6 +55,10 @@ export function applyExoticPhysics(env, engineType, w, h) {
     };
   }
 
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    throw new Error(`applyExoticPhysics: 需要有效的网格宽高，收到 ${w}×${h}`);
+  }
+
   return preset.transform(env, engineType, w, h);
 }
 
