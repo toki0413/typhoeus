@@ -239,6 +239,8 @@ export function createSciencePanel({ state, toast, openModal, downloadJSON, appl
 
     let html = '';
 
+    html += `<div class="sci-intro"><b>看懂它</b> · 这些是解释，不是新的任务：把“它现在的样子”翻译成可比较的数字。</div>`;
+
     /* ---- 指标说明：明确这些是估计量，避免过度声称 ---- */
     html += `<div class="sci-glossary">
       <b>指标说明</b>：${SCIENCE_METRIC_LABELS.lyapunov.symbol} = ${SCIENCE_METRIC_LABELS.lyapunov.note}；

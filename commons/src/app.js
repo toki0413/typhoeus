@@ -2609,7 +2609,8 @@ function downloadJSON(filename, obj) {
 function switchView(view) {
   const prev = state.view;
   state.view = view;
-  for (const btn of $$('#nav button')) btn.classList.toggle('active', btn.dataset.view === view);
+  const navKey = view === 'compare' ? 'cultivate' : view;
+  for (const btn of $$('#nav button')) btn.classList.toggle('active', btn.dataset.view === navKey);
   for (const v of ['cultivate', 'commons', 'compare', 'puzzle', 'lineage']) {
     $(`#view-${v}`)?.classList.toggle('active', v === view);
   }
@@ -2629,6 +2630,8 @@ function bindUI() {
   }
   $('#audioBtn').addEventListener('click', () => setAudio(!state.audioOn));
   $('#researchBtn').addEventListener('click', openResearchModal);
+  $('#openCompare')?.addEventListener('click', () => switchView('compare'));
+  $('#compareBack')?.addEventListener('click', () => switchView('cultivate'));
 
   $('#playBtn').addEventListener('click', () => {
     state.playing = !state.playing;

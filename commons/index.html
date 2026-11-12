@@ -35,9 +35,8 @@
       </button>
       <nav class="nav" id="nav">
         <button data-view="cultivate" class="active">培育台</button>
-        <button data-view="commons">种子花园</button>
-        <button data-view="compare">双耳聆听</button>
-        <button data-view="puzzle">解谜</button>
+        <button data-view="puzzle">挑战</button>
+        <button data-view="commons">花园</button>
         <button data-view="lineage">家谱</button>
       </nav>
       <div class="top-actions">
@@ -64,7 +63,10 @@
                 <span id="speciesRule">—</span>
               </div>
             </div>
-            <div class="badges" id="stageBadges"></div>
+            <div class="stage-links">
+              <div class="badges" id="stageBadges"></div>
+              <button id="openCompare" class="btn ghost tiny" title="把当前生命放进双耳对比">♪ 双耳对比</button>
+            </div>
           </div>
 
           <div class="stage" id="stageHost">
@@ -147,7 +149,7 @@
             <button data-tab="sound">♪ 歌声</button>
             <button data-tab="env">家的环境</button>
             <button data-tab="struct">它的样子</button>
-            <button data-tab="science">科学发现</button>
+            <button data-tab="science">看懂它</button>
           </div>
           <div class="rail-body">
             <section class="panel active" id="panel-rule"></section>
@@ -216,6 +218,7 @@
           <div class="eyebrow">BINAURAL LISTENING · 双耳聆听</div>
           <h2>把两颗小心心放进同一副耳朵</h2>
           <p>A 在左耳朵，B 在右耳朵。系统会轻轻放大它们的差异，但最终的感受，交给你的心 ♪</p>
+          <button id="compareBack" class="btn ghost tiny compare-back">← 回培育台</button>
         </div>
         <div class="compare-controls">
           <div class="segmented" id="compareMode">

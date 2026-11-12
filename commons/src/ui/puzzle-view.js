@@ -701,9 +701,9 @@ export function createPuzzleView({ state, toast }) {
     root.innerHTML = `
       <header class="view-head">
         <div class="view-title">
-          <div class="eyebrow">PATTERN PUZZLES · 斑图解谜</div>
-          <h2>用最少的墨，种出目标斑图</h2>
-          <p>你负责空间布局，机器只做局部调参。画种子 → 预览 → Wiggle / Shake → 提交评分。</p>
+          <div class="eyebrow">FORM CHALLENGES · 形态挑战</div>
+          <h2>用最少的墨，种出目标形态</h2>
+          <p>花园里的形态考试：画种子 → 预览 → Wiggle / Shake → 提交。挑战成绩单独保存，不影响你正在养的生命。</p>
         </div>
         <span class="puzzle-source">合成标定关卡 · 非实验数据</span>
       </header>
