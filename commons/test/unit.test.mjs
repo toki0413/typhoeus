@@ -20,6 +20,7 @@ import {
   applyExoticPhysics,
 } from '../src/physics.js';
 import { defaultEnv, defaultGenome } from '../src/engines.js';
+import * as config from '../src/config.js';
 import {
   selectiveImperfectionScale, edgeOfChaosKnob, attractorToSonicGenre, rhythmComplexity,
 } from '../src/music2.js';
@@ -63,12 +64,30 @@ test('format: 标签表覆盖 6 种结构态', () => {
   assert.ok(diagnosisShort({ type: 'chaotic' }).length > 0);
 });
 
-test('instruments: 默认编制为 10 个声部的默认音色', () => {
+test('instruments: 默认编制为 11 个声部的默认音色', () => {
   const inst = defaultGenome('life', 'conway').mapping.instruments;
-  assert.equal(Object.keys(inst).length, 10);
+  assert.equal(Object.keys(inst).length, 11);
   assert.equal(inst.arp, 'pluck');
+  assert.equal(inst.lead, 'lead');
   assert.equal(inst.bell, 'bell');
   assert.ok(Object.values(inst).every((v) => typeof v === 'string' && v.length > 0));
+});
+
+test('mixer: 默认中性且旧配方可补齐', () => {
+  const { DEFAULT_MIXER, normalizeMixer } = config;
+  const mx = defaultGenome('life', 'conway').mapping.mixer;
+  assert.equal(Object.keys(mx.parts).length, 11);
+  assert.equal(mx.master, 1);
+  assert.equal(mx.parts.lead.gain, 1);
+  assert.equal(mx.parts.lead.send, 0);
+
+  const fixed = normalizeMixer({ master: 9, tempo: 0.1, parts: { lead: { gain: 3, oct: 9, pan: -4 } } });
+  assert.equal(fixed.master, 1.5);
+  assert.equal(fixed.tempo, 0.5);
+  assert.equal(fixed.parts.lead.gain, 1.5);
+  assert.equal(fixed.parts.lead.oct, 2);
+  assert.equal(fixed.parts.lead.pan, -1);
+  assert.equal(fixed.parts.pad.gain, DEFAULT_MIXER.parts.pad.gain);
 });
 
 /* ================================================================

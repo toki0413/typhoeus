@@ -2760,3 +2760,88 @@ input[type="range"] { accent-color: var(--pink); }
   color: #fff !important;
 }
 .preset.active span { opacity: 0.82; }
+
+/* ============================================================
+   专业混音台 · 构成主义通道条
+   ============================================================ */
+.modal-card.mixer-modal { width: min(1040px, 96vw); }
+
+.mixer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 8px 10px;
+  border: 1.5px solid var(--text);
+  background: var(--surface);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.mixer-summary .solo-flag { color: var(--pink); font-weight: 800; }
+
+.mixer-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.mixer-presets .preset { min-width: 104px; }
+
+.mixer-global {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.mixer-global .mix-ctl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1.5px solid var(--text);
+  background: var(--surface);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.mixer-global .mix-ctl input[type="range"] { flex: 1; min-width: 0; margin: 0; }
+.mixer-global .mix-val { min-width: 42px; text-align: right; font-family: var(--num); }
+
+.mixer-table { display: flex; flex-direction: column; }
+.mix-head, .mix-row {
+  display: grid;
+  grid-template-columns: 78px minmax(96px, 1.2fr) 28px 28px repeat(4, minmax(64px, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+.mix-head {
+  padding: 0 2px 6px;
+  border-bottom: 1.5px solid var(--text);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+}
+.mix-row { padding: 6px 2px; border-bottom: 1px solid var(--line); }
+.mix-row.mute { opacity: 0.45; }
+.mix-name { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; }
+.mix-row .select { width: 100%; font-size: 12px; padding: 4px 6px; }
+.mix-btn {
+  height: 26px;
+  border: 1.5px solid var(--text);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  color: var(--text);
+}
+.mix-btn.on { background: var(--text); color: #fff; }
+.mix-btn.solo.on { background: var(--pink); color: #fff; }
+
+.mix-ctl.mini { display: flex; flex-direction: column; gap: 1px; align-items: stretch; }
+.mix-ctl.mini .mix-cap { font-size: 9px; letter-spacing: 0.08em; color: var(--dim); line-height: 1; }
+.mix-ctl.mini input[type="range"] { width: 100%; margin: 0; }
+.mix-ctl.mini .mix-val { font-size: 10px; text-align: center; font-family: var(--num); line-height: 1; }
+
+@media (max-width: 760px) {
+  .mix-head, .mix-row {
+    grid-template-columns: 54px minmax(72px, 1fr) 26px 26px repeat(4, minmax(46px, 1fr));
+    gap: 5px;
+  }
+  .mixer-global { grid-template-columns: 1fr; }
+  .mix-name { font-size: 11px; }
+}

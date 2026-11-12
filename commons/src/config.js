@@ -190,6 +190,7 @@ export const AUDIO_CONSTANTS = {
 export const INSTRUMENT_PARTS = [
   { key: 'heart',   label: '心跳',     def: 'heart',   opts: ['heart', 'triangle', 'square', 'off'] },
   { key: 'drone',   label: '低音床',   def: 'drone',   opts: ['drone', 'triangle', 'sawtooth', 'off'] },
+  { key: 'lead',    label: '主旋律',   def: 'lead',    opts: ['lead', 'flute', 'epiano', 'triangle', 'square', 'off'] },
   { key: 'pad',     label: '和弦 Pad', def: 'pad',     opts: ['pad', 'sine', 'sawtooth', 'off'] },
   { key: 'strings', label: '弦乐',     def: 'strings', opts: ['strings', 'choir', 'triangle', 'off'] },
   { key: 'choir',   label: '人声',     def: 'choir',   opts: ['choir', 'strings', 'flute', 'off'] },
@@ -203,6 +204,7 @@ export const INSTRUMENT_PARTS = [
 export const INSTRUMENT_VOICE_LABELS = {
   off: '关闭',
   heart: '心跳', drone: '低音床', pad: '和弦 Pad', strings: '弦乐', choir: '人声',
+  lead: '主旋律',
   pluck: '竖琴', flute: '长笛', marimba: '马林巴', epiano: '电钢', bell: '钟琴',
   reed: '簧片', shimmer: '微光',
   sine: '正弦', triangle: '三角', sawtooth: '锯齿', square: '方波',
@@ -210,6 +212,141 @@ export const INSTRUMENT_VOICE_LABELS = {
 
 /* 默认编制：每个声部用各自的默认音色 */
 export const DEFAULT_INSTRUMENTS = Object.fromEntries(INSTRUMENT_PARTS.map((p) => [p.key, p.def]));
+
+/* ---- 专业混音台：每个声部一条通道（增益 / 声像 / 八度 / 混响发送 / M / S）----
+ * gain  0.0 – 1.5（0 dB = 1.0）
+ * pan   -1.0（左）– +1.0（右）
+ * oct   -2 – +2（整八度移调）
+ * send  0 – 1（送入全局延迟/混响总线）
+ * 默认全部为中性值，因此旧配方听起来不会有任何变化。 */
+export const DEFAULT_MIXER = {
+  master: 1,
+  tempo: 1,
+  reverb: 0.5,
+  parts: Object.fromEntries(INSTRUMENT_PARTS.map((p) => [p.key, {
+    gain: 1, pan: 0, oct: 0, send: 0, mute: false, solo: false,
+  }])),
+};
+
+const _clamp = (v, lo, hi, fallback) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
+};
+
+/* 容错归一化：旧配方 / 手写配方缺字段时补齐，并把越界值夹回安全范围。 */
+export function normalizeMixer(mx) {
+  const src = mx && typeof mx === 'object' ? mx : {};
+  const out = {
+    master: _clamp(src.master, 0, 1.5, DEFAULT_MIXER.master),
+    tempo: _clamp(src.tempo, 0.5, 2, DEFAULT_MIXER.tempo),
+    reverb: _clamp(src.reverb, 0, 1, DEFAULT_MIXER.reverb),
+    parts: {},
+  };
+  for (const p of INSTRUMENT_PARTS) {
+    const d = DEFAULT_MIXER.parts[p.key];
+    const s = src.parts?.[p.key] || {};
+    out.parts[p.key] = {
+      gain: _clamp(s.gain, 0, 1.5, d.gain),
+      pan: _clamp(s.pan, -1, 1, d.pan),
+      oct: Math.round(_clamp(s.oct, -2, 2, d.oct)),
+      send: _clamp(s.send, 0, 1, d.send),
+      mute: !!s.mute,
+      solo: !!s.solo,
+    };
+  }
+  return out;
+}
+
+/* ---- 一键编制预设：同时改写音色与混音台 ---- */
+export const MIXER_PRESETS = [
+  {
+    key: 'minimal',
+    label: '极简',
+    note: '心跳 · 主旋律 · 钟琴',
+    instruments: {
+      heart: 'heart', drone: 'off', lead: 'triangle', pad: 'off', strings: 'off',
+      choir: 'off', arp: 'off', flute: 'off', marimba: 'off', bell: 'bell', shimmer: 'off',
+    },
+    mixer: {
+      master: 1, tempo: 0.9, reverb: 0.4,
+      parts: {
+        heart: { gain: 0.75, pan: 0, oct: 0, send: 0 },
+        lead: { gain: 0.9, pan: 0.1, oct: 0, send: 0.2 },
+        bell: { gain: 0.7, pan: -0.25, oct: 0, send: 0.35 },
+      },
+    },
+  },
+  {
+    key: 'chamber',
+    label: '室内乐',
+    note: '弦乐 · 长笛 · 竖琴',
+    instruments: {
+      heart: 'off', drone: 'drone', lead: 'flute', pad: 'pad', strings: 'strings',
+      choir: 'choir', arp: 'pluck', flute: 'reed', marimba: 'marimba', bell: 'off', shimmer: 'off',
+    },
+    mixer: {
+      master: 1, tempo: 1, reverb: 0.6,
+      parts: {
+        drone: { gain: 0.35, pan: 0, oct: -1, send: 0.1 },
+        lead: { gain: 0.9, pan: 0, oct: 0, send: 0.3 },
+        pad: { gain: 0.65, pan: 0, oct: 0, send: 0.25 },
+        strings: { gain: 0.8, pan: -0.2, oct: 0, send: 0.3 },
+        choir: { gain: 0.45, pan: 0.25, oct: 0, send: 0.4 },
+        arp: { gain: 0.7, pan: -0.1, oct: 0, send: 0.3 },
+        flute: { gain: 0.75, pan: 0.15, oct: 0, send: 0.35 },
+        marimba: { gain: 0.65, pan: 0, oct: 0, send: 0.2 },
+      },
+    },
+  },
+  {
+    key: 'chaos',
+    label: '混沌',
+    note: '锯齿 · 高频 · 大混响',
+    instruments: {
+      heart: 'square', drone: 'sawtooth', lead: 'sawtooth', pad: 'sawtooth', strings: 'sawtooth',
+      choir: 'choir', arp: 'pluck', flute: 'reed', marimba: 'epiano', bell: 'bell', shimmer: 'shimmer',
+    },
+    mixer: {
+      master: 0.9, tempo: 1.3, reverb: 0.85,
+      parts: {
+        heart: { gain: 0.7, pan: 0, oct: -1, send: 0.2 },
+        drone: { gain: 0.5, pan: 0, oct: -1, send: 0.3 },
+        lead: { gain: 0.8, pan: 0, oct: 1, send: 0.55 },
+        pad: { gain: 0.55, pan: -0.3, oct: 0, send: 0.5 },
+        strings: { gain: 0.5, pan: 0.35, oct: 0, send: 0.5 },
+        choir: { gain: 0.4, pan: -0.5, oct: 0, send: 0.6 },
+        arp: { gain: 0.75, pan: 0.45, oct: 1, send: 0.55 },
+        flute: { gain: 0.7, pan: -0.4, oct: 1, send: 0.5 },
+        marimba: { gain: 0.6, pan: 0.5, oct: 1, send: 0.45 },
+        bell: { gain: 0.55, pan: -0.6, oct: 0, send: 0.7 },
+        shimmer: { gain: 0.65, pan: 0.6, oct: 1, send: 0.75 },
+      },
+    },
+  },
+  {
+    key: 'bells',
+    label: '钟琴',
+    note: '钟琴 · 马林巴 · 电钢',
+    instruments: {
+      heart: 'heart', drone: 'drone', lead: 'epiano', pad: 'sine', strings: 'off',
+      choir: 'off', arp: 'marimba', flute: 'bell', marimba: 'bell', bell: 'bell', shimmer: 'bell',
+    },
+    mixer: {
+      master: 1, tempo: 0.85, reverb: 0.9,
+      parts: {
+        heart: { gain: 0.35, pan: 0, oct: -1, send: 0.1 },
+        drone: { gain: 0.25, pan: 0, oct: -1, send: 0.2 },
+        lead: { gain: 0.7, pan: 0, oct: 0, send: 0.45 },
+        pad: { gain: 0.35, pan: 0, oct: 0, send: 0.35 },
+        arp: { gain: 0.65, pan: -0.2, oct: 0, send: 0.45 },
+        flute: { gain: 0.5, pan: 0.3, oct: 1, send: 0.6 },
+        marimba: { gain: 0.7, pan: 0.1, oct: 0, send: 0.5 },
+        bell: { gain: 0.85, pan: -0.3, oct: 0, send: 0.7 },
+        shimmer: { gain: 0.55, pan: 0.4, oct: 1, send: 0.8 },
+      },
+    },
+  },
+];
 
 /* ---- defaultEnv() 默认值 ---- */
 export const ENV_DEFAULTS = {

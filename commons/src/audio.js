@@ -63,7 +63,7 @@
 
 import { clamp, hashString } from './rng.js';
 import { SCALES } from './engines.js';
-import { AUDIO_CONSTANTS, INSTRUMENT_PARTS } from './config.js';
+import { AUDIO_CONSTANTS, INSTRUMENT_PARTS, DEFAULT_MIXER, normalizeMixer } from './config.js';
 
 /* 声部默认音色（玩家未选择时使用） */
 const PART_DEFAULT = Object.fromEntries(INSTRUMENT_PARTS.map((p) => [p.key, p.def]));
@@ -116,6 +116,10 @@ export class AudioEngine {
     this.built = false;
     this.lastMetricsUpdate = 0;
     this.tempoSmoothed = 0.5;
+    /* ---- 专业混音台：默认中性，不改动原有听感 ---- */
+    this.mixer = normalizeMixer(DEFAULT_MIXER);
+    this._userTempo = 1;
+    this._reverbScale = 1;
     /* ---- 🌌 全链 audioChain: env → sim.metrics → Pet mood → music2 → audio ---- */
     this._audioChain = null;
     this._build();
@@ -190,8 +194,13 @@ export class AudioEngine {
     this.air.frequency.value = 2800;
     this.air.gain.value = 3;
 
+    /* ---- 主控推子（混音台 master）---- */
+    this.masterTrim = ctx.createGain();
+    this.masterTrim.gain.value = 1;
+
     this.master.connect(this.air);
-    this.air.connect(this.compressor);
+    this.air.connect(this.masterTrim);
+    this.masterTrim.connect(this.compressor);
     this.compressor.connect(this.panner);
     this.panner.connect(this.destination);
 
@@ -220,6 +229,25 @@ export class AudioEngine {
     this.noteBus.connect(this.noteSend);
     this.noteSend.connect(this.delay);
 
+    /* ================================================================
+     * 混音台通道条：每个声部独立 输入 → 增益 → 声像 → 主控
+     *                                        └→ 发送 → 全局延迟/混响
+     * 乐器的内部声像保留，通道声像再叠加一层，形成"轨道 + 总线"结构。
+     * ================================================================ */
+    this.partBuses = {};
+    for (const p of INSTRUMENT_PARTS) {
+      const input = ctx.createGain();
+      const gain = ctx.createGain();
+      const busPan = ctx.createStereoPanner();
+      const send = ctx.createGain();
+      input.connect(gain);
+      gain.connect(busPan);
+      busPan.connect(this.master);
+      gain.connect(send);
+      send.connect(this.delay);
+      this.partBuses[p.key] = { input, gain, panner: busPan, send };
+    }
+
     // drone
     this.droneGain = ctx.createGain();
     this.droneGain.gain.value = 0.0001;
@@ -227,7 +255,10 @@ export class AudioEngine {
     this.droneFilter.type = 'lowpass';
     this.droneFilter.frequency.value = 900;
     this.droneFilter.Q.value = 0.7;
-    this.droneGain.connect(this.droneFilter);
+    /* 低音床的通道声像（混音台控制），在 drone 总线层面统一偏移 */
+    this.dronePan = ctx.createStereoPanner();
+    this.droneGain.connect(this.dronePan);
+    this.dronePan.connect(this.droneFilter);
     this.droneFilter.connect(this.master);
 
     this.drones = [
@@ -273,6 +304,72 @@ export class AudioEngine {
     this.mapping = genome.mapping;
     if (!this.built) return;
     this._tuneDrone();
+    if (genome.mapping?.mixer) this.setMixer(genome.mapping.mixer);
+  }
+
+  /* ---- 混音台 ---- */
+  _mix(part) {
+    const d = DEFAULT_MIXER.parts[part]
+      || { gain: 1, pan: 0, oct: 0, send: 0, mute: false, solo: false };
+    return this.mixer?.parts?.[part] || d;
+  }
+
+  /* 任意声部处于 solo 时，其余声部自动静音 */
+  _anySolo() {
+    return INSTRUMENT_PARTS.some((p) => this._mix(p.key).solo);
+  }
+
+  _audible(part) {
+    const m = this._mix(part);
+    if (m.mute) return false;
+    return !this._anySolo() || !!m.solo;
+  }
+
+  /* 声部通道输入：乐器发声节点统一接到这里 */
+  _bus(part) {
+    return this.partBuses?.[part]?.input || this.noteBus;
+  }
+
+  /* 混音台的八度移调（每个声部独立） */
+  _applyOct(freq, part) {
+    if (!part) return freq;
+    return freq * Math.pow(2, this._mix(part).oct || 0);
+  }
+
+  /* 混音台参数应用：增益 / 声像 / 发送 / 独奏静音 / 主控 / 混响 / 速度 */
+  setMixer(mixer) {
+    this.mixer = normalizeMixer(mixer);
+    if (!this.built) return;
+    const now = this.ctx.currentTime;
+    for (const p of INSTRUMENT_PARTS) {
+      const bus = this.partBuses[p.key];
+      if (!bus) continue;
+      const c = this._mix(p.key);
+      const on = this._audible(p.key);
+      bus.gain.gain.setTargetAtTime(on ? c.gain : 0, now, 0.02);
+      bus.panner.pan.setTargetAtTime(clamp(c.pan, -1, 1), now, 0.02);
+      bus.send.gain.setTargetAtTime(clamp(c.send, 0, 1), now, 0.05);
+    }
+    this.masterTrim.gain.setTargetAtTime(clamp(this.mixer.master, 0, 1.5), now, 0.04);
+    this._userTempo = this.mixer.tempo;
+    /* reverb 0 → 0.4×，0.5 → 1.0×（原状），1 → 1.6× */
+    this._reverbScale = 0.4 + this.mixer.reverb * 1.2;
+    this._tuneDrone();
+    this._applyDroneMix();
+  }
+
+  /* 低音床也吃混音台增益 / 声像 / 静音 */
+  _applyDroneMix() {
+    if (!this.built) return;
+    const now = this.ctx.currentTime;
+    const c = this._mix('drone');
+    const density = clamp(this.metrics?.density ?? 0, 0, 1);
+    const on = this.mapping?.drone !== false
+      && this._voice('drone') !== 'off'
+      && this._audible('drone');
+    const level = (0.012 + density * 0.32) * clamp(c.gain, 0, 1.5);
+    this.droneGain.gain.setTargetAtTime(on ? level : 0.0001, now, 0.25);
+    this.dronePan.pan.setTargetAtTime(clamp(c.pan, -1, 1), now, 0.05);
   }
 
   _rootMidi() {
@@ -288,31 +385,36 @@ export class AudioEngine {
     return PART_DEFAULT[part] || 'off';
   }
 
-  /* 统一发声入口：把音色 id 分发到具体合成器 */
-  _play(voice, freq, when, { dur = 0.4, amp = 0.05, pan = 0 } = {}) {
+  /* 统一发声入口：把音色 id 分发到具体合成器（part 决定走哪条通道条） */
+  _play(part, voice, freq, when, { dur = 0.4, amp = 0.05, pan = 0, oct = 0, wave = null } = {}) {
     if (voice === 'off' || !Number.isFinite(freq) || freq <= 0) return;
+    if (!this._audible(part)) return;
+    const f = this._applyOct(freq, part) * Math.pow(2, oct);
     switch (voice) {
       case 'sine': case 'triangle': case 'sawtooth': case 'square':
-        this._tone(freq, when, dur, amp, voice, 0.5, 0, pan); break;
-      case 'pluck': this._pluck(freq, when, amp, pan); break;
-      case 'strings': this._stringPad(freq, when, dur, amp, pan); break;
-      case 'choir': this._choir(freq, when, dur, amp, pan); break;
-      case 'flute': this._flute(freq, when, dur, amp, pan); break;
-      case 'marimba': this._marimba(freq, when, amp, pan); break;
-      case 'epiano': this._epiano(freq, when, dur, amp, pan); break;
-      case 'bell': this._bell(freq, when, amp, pan); break;
-      case 'reed': this._reed(freq, when, dur, amp, pan); break;
-      case 'shimmer': this._tone(freq, when, 1.6, amp, 'sine', 0.85, 0, pan); break;
-      case 'pad': this._chordTone(freq, when, dur, amp, this.mapping?.wave || 'triangle', pan); break;
-      case 'heart': this._heartbeatTone(freq, when, amp); break;
-      case 'drone': this._tone(freq, when, dur, amp, 'sine', 0.3, 0, pan); break;
-      default: this._tone(freq, when, dur, amp, 'triangle', 0.5, 0, pan); break;
+        this._tone(f, when, dur, amp, voice, 0.5, 0, pan, part); break;
+      case 'lead':
+        this._tone(f, when, dur, amp, wave || this.mapping?.wave || 'triangle', 0.5, 0, pan, part); break;
+      case 'pluck': this._pluck(f, when, amp, pan, part); break;
+      case 'strings': this._stringPad(f, when, dur, amp, pan, part); break;
+      case 'choir': this._choir(f, when, dur, amp, pan, part); break;
+      case 'flute': this._flute(f, when, dur, amp, pan, part); break;
+      case 'marimba': this._marimba(f, when, amp, pan, part); break;
+      case 'epiano': this._epiano(f, when, dur, amp, pan, part); break;
+      case 'bell': this._bell(f, when, amp, pan, part); break;
+      case 'reed': this._reed(f, when, dur, amp, pan, part); break;
+      case 'shimmer': this._tone(f, when, 1.6, amp, 'sine', 0.85, 0, pan, part); break;
+      case 'pad': this._chordTone(f, when, dur, amp, this.mapping?.wave || 'triangle', pan, part); break;
+      case 'heart': this._heartbeatTone(f, when, amp, part); break;
+      case 'drone': this._tone(f, when, dur, amp, 'sine', 0.3, 0, pan, part); break;
+      default: this._tone(f, when, dur, amp, 'triangle', 0.5, 0, pan, part); break;
     }
   }
 
   _tuneDrone() {
     const now = this.ctx.currentTime;
-    const rootHz = midiToFreq(this._rootMidi());
+    const oct = this._mix('drone').oct || 0;
+    const rootHz = midiToFreq(this._rootMidi()) * Math.pow(2, oct);
     for (const d of this.drones) {
       d.osc.frequency.setTargetAtTime(rootHz * d.ratio, now, 0.4);
     }
@@ -534,7 +636,8 @@ export class AudioEngine {
     const droneLevel = 0.012 + density * 0.32;
     const energyShift = (0.5 - energyNorm) * 140;
     const droneVoice = this._voice('drone');
-    const droneOn = mapping.drone !== false && droneVoice !== 'off';
+    const droneMix = this._mix('drone');
+    const droneOn = mapping.drone !== false && droneVoice !== 'off' && this._audible('drone');
     if (droneVoice !== 'off') {
       const isWave = ['sine', 'triangle', 'sawtooth', 'square'].includes(droneVoice);
       for (const dr of this.drones) {
@@ -542,7 +645,9 @@ export class AudioEngine {
         if (dr.osc.type !== w) dr.osc.type = w;
       }
     }
-    this.droneGain.gain.setTargetAtTime(droneOn ? droneLevel : 0.0001, now, 0.5);
+    this.droneGain.gain.setTargetAtTime(
+      droneOn ? droneLevel * clamp(droneMix.gain, 0, 1.5) : 0.0001, now, 0.5,
+    );
     this.droneFilter.frequency.setTargetAtTime(
       (260 + entropy * 2600 * (0.35 + (mapping.brightness ?? 0.55)) + activity * 500)
       + energyShift,
@@ -632,15 +737,15 @@ export class AudioEngine {
     /*  [8] chordProgression   — Lyapunov → 动态和声进度                 */
     /* ================================================================ */
 
-    const rawBPM = this._baseHeartbeatBPM * this._tempoMultiplier;
+    const rawBPM = this._baseHeartbeatBPM * this._tempoMultiplier * (this._userTempo || 1);
     this._heartbeatBPM = this._heartbeatBPM * AC.heartbeat.smoothRatioOld + rawBPM * AC.heartbeat.smoothRatioNew;
 
     const effectiveTemp = Math.min(1.0, this._baseChaosTemp + this._petTensionOffset);
     mapping.strictness = clamp(1 - effectiveTemp * AC.strictness.chaosCoef, AC.strictness.min, AC.strictness.max);
 
-    const finalWet = 0.4 * this._metricsWet + 0.6 * this._targetWet;
-    const finalFb  = 0.4 * this._metricsFb  + 0.6 * this._targetFb;
-    this.delayWet.gain.setTargetAtTime(finalWet, now, 0.5);
+    const finalWet = (0.4 * this._metricsWet + 0.6 * this._targetWet) * (this._reverbScale ?? 1);
+    const finalFb  = clamp((0.4 * this._metricsFb + 0.6 * this._targetFb) * (this._reverbScale ?? 1), 0, 0.8);
+    this.delayWet.gain.setTargetAtTime(clamp(finalWet, 0, 0.85), now, 0.5);
     this.delayFb.gain.setTargetAtTime(finalFb, now, 0.5);
 
     /* ---- 音乐性增强：5 个新维度 ---- */
@@ -683,14 +788,14 @@ export class AudioEngine {
       // Attention 音乐性增强：音量 × dyn.heartbeat（Pet mood → pp ↔ ff）
       const hz = midiToFreq(rootMidi - 12);  // 低八度
       if (heartVoice === 'heart') {
-        this._heartbeatTone(hz, this._heartbeatNext, dyn.heartbeat);
+        this._heartbeatTone(hz, this._heartbeatNext, dyn.heartbeat, 'heart');
         if (hasSplitHeartbeat) {
-          this._heartbeatTone(hz * 1.06, this._heartbeatNext + beat * 0.18, dyn.heartbeat * 0.25);
+          this._heartbeatTone(hz * 1.06, this._heartbeatNext + beat * 0.18, dyn.heartbeat * 0.25, 'heart');
         }
       } else {
-        this._play(heartVoice, hz, this._heartbeatNext, { dur: 0.42, amp: dyn.heartbeat });
+        this._play('heart', heartVoice, hz, this._heartbeatNext, { dur: 0.42, amp: dyn.heartbeat });
         if (hasSplitHeartbeat) {
-          this._play(heartVoice, hz * 1.06, this._heartbeatNext + beat * 0.18, { dur: 0.3, amp: dyn.heartbeat * 0.25 });
+          this._play('heart', heartVoice, hz * 1.06, this._heartbeatNext + beat * 0.18, { dur: 0.3, amp: dyn.heartbeat * 0.25 });
         }
       }
       this._heartbeatNext += beat;
@@ -728,26 +833,26 @@ export class AudioEngine {
       chordMidi.slice(0, noteCount).forEach((midi, ci) => {
         if (padVoice === 'off') return;
         const pan = (ci % 2 === 0 ? -1 : 1) * (0.18 + 0.1 * (ci % 3));
-        this._play(padVoice, midiToFreq(midi), this._chordNext, { dur: chordSec * 0.9, amp: padAmp, pan });
+        this._play('pad', padVoice, midiToFreq(midi), this._chordNext, { dur: chordSec * 0.9, amp: padAmp, pan });
       });
       this._chordTones = chordMidi;
       /* 低音根音：给和声一个地基（与 pad 同八度，避免掉到 30Hz 以下听不见） */
-      this._tone(midiToFreq(chordMidi[0]), this._chordNext + 0.02, chordSec * 1.05, 0.055, 'sine', 0.3, 0, 0);
+      this._tone(this._applyOct(midiToFreq(chordMidi[0]), 'pad'), this._chordNext + 0.02, chordSec * 1.05, 0.055, 'sine', 0.3, 0, 0, 'pad');
       /* 弦乐铺底：根音 + 五音，慢起慢落，给和弦加身体 */
       const stringsVoice = this._voice('strings');
       if (stringsVoice !== 'off' && this._intensity > 0.3) {
-        this._play(stringsVoice, midiToFreq(chordMidi[0]), this._chordNext, { dur: chordSec * 1.15, amp: 0.03, pan: -0.35 });
-        this._play(stringsVoice, midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)]), this._chordNext, { dur: chordSec * 1.15, amp: 0.022, pan: 0.35 });
+        this._play('strings', stringsVoice, midiToFreq(chordMidi[0]), this._chordNext, { dur: chordSec * 1.15, amp: 0.03, pan: -0.35 });
+        this._play('strings', stringsVoice, midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)]), this._chordNext, { dur: chordSec * 1.15, amp: 0.022, pan: 0.35 });
       }
       /* 人声 Pad：更繁盛时加入，像远处合唱 */
       const choirVoice = this._voice('choir');
       if (choirVoice !== 'off' && this._intensity > 0.42) {
-        this._play(choirVoice, midiToFreq(chordMidi[0] + 12), this._chordNext, { dur: chordSec * 1.1, amp: 0.018, pan: -0.5 });
-        this._play(choirVoice, midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)] + 12), this._chordNext, { dur: chordSec * 1.1, amp: 0.014, pan: 0.5 });
+        this._play('choir', choirVoice, midiToFreq(chordMidi[0] + 12), this._chordNext, { dur: chordSec * 1.1, amp: 0.018, pan: -0.5 });
+        this._play('choir', choirVoice, midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)] + 12), this._chordNext, { dur: chordSec * 1.1, amp: 0.014, pan: 0.5 });
       }
       /* 高八度叠层：繁盛时让和弦更"满" */
       if (padVoice !== 'off' && this._intensity > 0.35) {
-        this._play(padVoice, midiToFreq(chordMidi[0] + 12), this._chordNext, { dur: chordSec * 0.9, amp: padAmp * 0.45, pan: 0.3 });
+        this._play('pad', padVoice, midiToFreq(chordMidi[0] + 12), this._chordNext, { dur: chordSec * 0.9, amp: padAmp * 0.45, pan: 0.3 });
       }
       this._chordNext += chordSec;
     }
@@ -759,7 +864,7 @@ export class AudioEngine {
       const pool = this._chordTones;
       const midi = pool[this._arpIdx % pool.length] + (this._arpIdx % 5 === 4 ? 24 : 12);
       this._arpIdx++;
-      this._play(arpVoice, midiToFreq(midi), now + 0.01, { dur: 0.42, amp: 0.045, pan: this._arpIdx % 2 ? 0.32 : -0.32 });
+      this._play('arp', arpVoice, midiToFreq(midi), now + 0.01, { dur: 0.42, amp: 0.045, pan: this._arpIdx % 2 ? 0.32 : -0.32 });
     }
 
     /* Layer 2c: 高频微光 —— 稀疏的高八度纯音（不是噪声） */
@@ -770,7 +875,7 @@ export class AudioEngine {
         const degs = this._scaleDegrees || scale.degrees;
         const deg = Math.floor(Math.random() * degs.length);
         const oct = Math.random() < 0.5 ? 2 : 3;
-        this._play(shimmerVoice, this._degreeFreq(deg, oct), now + 0.04, { dur: 1.6, amp: 0.05, pan: Math.random() * 1.4 - 0.7 });
+        this._play('shimmer', shimmerVoice, this._degreeFreq(deg, oct), now + 0.04, { dur: 1.6, amp: 0.05, pan: Math.random() * 1.4 - 0.7 });
       }
     }
 
@@ -782,9 +887,9 @@ export class AudioEngine {
         const degs = this._scaleDegrees || scale.degrees;
         const deg = Math.floor(Math.random() * degs.length);
         const pan = Math.random() * 1.2 - 0.6;
-        this._play(bellVoice, this._degreeFreq(deg, 2), now + 0.05, { dur: 2.0, amp: 0.05, pan });
+        this._play('bell', bellVoice, this._degreeFreq(deg, 2), now + 0.05, { dur: 2.0, amp: 0.05, pan });
         if (Math.random() < 0.4) {
-          this._play(bellVoice, this._degreeFreq((deg + 2) % degs.length, 2), now + 0.38, { dur: 1.6, amp: 0.035, pan: -pan * 0.7 });
+          this._play('bell', bellVoice, this._degreeFreq((deg + 2) % degs.length, 2), now + 0.38, { dur: 1.6, amp: 0.035, pan: -pan * 0.7 });
         }
       }
     }
@@ -806,8 +911,12 @@ export class AudioEngine {
         const freq = this._degreeFreq(degree, octShift);
         const dur = attractorType === 'stable' ? 1.5 : attractorType === 'chaotic' ? 0.28 : 0.7;
         const amp = dyn.voice;
-        /* Attention 音乐性增强：wave 来自 waves.melody（Pet mood wave）*/
-        this._tone(freq, this.nextNote, dur, amp, waves.melody, 0.5);
+        /* Attention 音乐性增强：wave 来自 waves.melody（Pet mood wave）；
+           主旋律走独立通道，混音台可单独推子 / 静音 / 换音色 */
+        const leadVoice = this._voice('lead');
+        if (leadVoice !== 'off') {
+          this._play('lead', leadVoice, freq, this.nextNote, { dur, amp, wave: waves.melody });
+        }
 
         /* Counter-melody：生命繁盛 + 混沌度高时 +1 声部（巴赫复调）*/
         if (nVoices >= 2 && this._intensity > 0.38 && attractorType !== 'endangered' && attractorType !== 'extinct') {
@@ -819,7 +928,7 @@ export class AudioEngine {
           const counterDur = dur * 0.8;
           const fluteVoice = this._voice('flute');
           if (fluteVoice !== 'off') {
-            this._play(fluteVoice, counterFreq, this.nextNote, { dur: counterDur, amp: counterAmp * 0.7, pan: 0.42 });
+            this._play('flute', fluteVoice, counterFreq, this.nextNote, { dur: counterDur, amp: counterAmp * 0.7, pan: 0.42 });
           }
         }
       }
@@ -833,11 +942,11 @@ export class AudioEngine {
         const amp = dyn.sparkle + Math.random() * 0.02;
         const marimbaVoice = this._voice('marimba');
         if (marimbaVoice !== 'off') {
-          this._play(marimbaVoice, freq, this.nextNote, { dur: 0.32, amp: amp * 1.1, pan: (cell.x - 0.5) * 1.2 });
+          this._play('marimba', marimbaVoice, freq, this.nextNote, { dur: 0.32, amp: amp * 1.1, pan: (cell.x - 0.5) * 1.2 });
         }
 
         // Layer 4: Sparkle Crystal — 新生儿水晶闪烁
-        this._emitSparkle(this.nextNote, cell.x, cell.y);
+        this._emitSparkle(this.nextNote, cell.x, cell.y, 'lead');
       }
       // Lyapunov → beat 抖动
       const jitter = (Math.random() - 0.5) * this._beatJitterSec;
@@ -849,30 +958,33 @@ export class AudioEngine {
   }
 
   /* ---- Layer 1: Heartbeat tone ---- */
-  _heartbeatTone(freq, when, peak = 0.35) {
+  _heartbeatTone(freq, when, peak = 0.35, part = 'heart') {
+    if (!this._audible(part)) return;
     const ctx = this.ctx;
     if (!Number.isFinite(freq) || freq <= 0) return;   // 防御：非法频率直接跳过
+    const f = freq * Math.pow(2, this._mix(part).oct || 0);
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, when);
+    osc.frequency.setValueAtTime(f, when);
     // 心跳包络：attack 极短（10ms）→ 峰值 → 缓慢 decay（250ms）
     gain.gain.setValueAtTime(0.0001, when);
     gain.gain.exponentialRampToValueAtTime(peak, when + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.35);
     osc.connect(gain);
-    gain.connect(this.noteBus);  // 走主通道，有 delay reverb
+    gain.connect(this._bus(part));  // 走声部通道（有 delay send）
     osc.start(when);
     osc.stop(when + 0.42);
   }
 
   /* ---- 生命涌现：种群增长 → 上行琶音（bloom）---- */
-  _bloom(now) {
+  _bloom(now, part = 'arp') {
     if (!this.built || !this.enabled) return;
+    if (!this._audible(part)) return;
     const degrees = [0, 2, 4, 3];
     degrees.forEach((deg, i) => {
-      const f = this._degreeFreq(deg, 1);
-      this._tone(f, now + 0.02 + i * 0.13, 0.24, 0.075, 'triangle', 0.7, 0, i % 2 ? 0.45 : -0.45);
+      const f = this._applyOct(this._degreeFreq(deg, 1), part);
+      this._tone(f, now + 0.02 + i * 0.13, 0.24, 0.075, 'triangle', 0.7, 0, i % 2 ? 0.45 : -0.45, part);
     });
   }
 
@@ -880,7 +992,7 @@ export class AudioEngine {
   _thin(now) {
     if (!this.built || !this.enabled) return;
     this._gateUntil = now + 1.2;
-    this._heartbeatTone(midiToFreq(this._rootMidi() - 12), now + 0.02, 0.2);
+    this._heartbeatTone(midiToFreq(this._rootMidi() - 12), now + 0.02, 0.2, 'heart');
   }
 
   /* ================================================================
@@ -905,36 +1017,36 @@ export class AudioEngine {
       case 'glider': {
         const v = this._voice('marimba');
         if (v !== 'off') [0, 2, 4].forEach((deg, i) => {
-          this._play(v, this._degreeFreq(deg, 1), now + i * 0.11, { dur: 0.3, amp: 0.07, pan: -0.55 + i * 0.55 });
+          this._play('marimba', v, this._degreeFreq(deg, 1), now + i * 0.11, { dur: 0.3, amp: 0.07, pan: -0.55 + i * 0.55 });
         });
         break;
       }
       case 'oscillator': {
         const v = this._voice('flute');
         if (v !== 'off') [1, 3, 1, 3].forEach((deg, i) => {
-          this._play(v, this._degreeFreq(deg, 1), now + i * 0.16, { dur: 0.16, amp: 0.05, pan: i % 2 ? 0.22 : -0.22 });
+          this._play('flute', v, this._degreeFreq(deg, 1), now + i * 0.16, { dur: 0.16, amp: 0.05, pan: i % 2 ? 0.22 : -0.22 });
         });
         break;
       }
       case 'still': {
         const v = this._voice('bell');
         if (v !== 'off') {
-          this._play(v, this._degreeFreq(0, 0), now, { dur: 1.9, amp: 0.05 });
-          this._play(v, this._degreeFreq(2, 0), now + 0.06, { dur: 1.7, amp: 0.038 });
+          this._play('bell', v, this._degreeFreq(0, 0), now, { dur: 1.9, amp: 0.05 });
+          this._play('bell', v, this._degreeFreq(2, 0), now + 0.06, { dur: 1.7, amp: 0.038 });
         }
         break;
       }
       case 'merge': {
         const v = this._voice('choir');
         if (v !== 'off') [0, 2, 4].forEach((deg, i) => {
-          this._play(v, this._degreeFreq(deg, 1), now + 0.02, { dur: 1.2, amp: 0.016, pan: (i - 1) * 0.5 });
+          this._play('choir', v, this._degreeFreq(deg, 1), now + 0.02, { dur: 1.2, amp: 0.016, pan: (i - 1) * 0.5 });
         });
         break;
       }
       case 'split': {
         const v = this._voice('arp');
         if (v !== 'off') [4, 2, 0].forEach((deg, i) => {
-          this._play(v, this._degreeFreq(deg, 1), now + i * 0.1, { dur: 0.25, amp: 0.06, pan: 0.35 * (1 - i) });
+          this._play('arp', v, this._degreeFreq(deg, 1), now + i * 0.1, { dur: 0.25, amp: 0.06, pan: 0.35 * (1 - i) });
         });
         break;
       }
@@ -950,8 +1062,9 @@ export class AudioEngine {
   }
 
   /* ---- Layer 2: Chord pad tone（长 attack，slow rise）---- */
-  _chordTone(freq, when, dur, amp = 0.14, wave = 'triangle', pan = 0) {
+  _chordTone(freq, when, dur, amp = 0.14, wave = 'triangle', pan = 0, part = null) {
     if (this.voices > 24) return;
+    if (part && !this._audible(part)) return;
     if (!Number.isFinite(freq) || freq <= 0) return;   // 防御：非法频率不能中断 tick 循环
     if (!Number.isFinite(amp)) amp = 0.1;              // 防御：NaN 振幅不能进 AudioParam
     const ctx = this.ctx;
@@ -978,7 +1091,7 @@ export class AudioEngine {
     osc.connect(filter);
     filter.connect(g);
     g.connect(p);
-    p.connect(this.master);  // chord 直接到 master，不走 delay（太脏）
+    p.connect(this._bus(part));  // chord 走声部通道（可独立推子 / 静音）
     this.voices++;
     osc.start(when);
     osc.stop(when + dur + 0.1);
@@ -989,10 +1102,11 @@ export class AudioEngine {
   }
 
   /* ---- Layer 4: Sparkle Crystal（3 harmonic 谐波闪烁）---- */
-  _emitSparkle(when, x, y) {
+  _emitSparkle(when, x, y, part = 'lead') {
     if (this.voices > 22) return;
+    if (part && !this._audible(part)) return;
     const rootMidi = this._rootMidi();
-    const baseHz = midiToFreq(rootMidi + 12);  // 高八度基频
+    const baseHz = this._applyOct(midiToFreq(rootMidi + 12), part);  // 高八度基频
     const pan = (x - 0.5) * 1.2;               // stereo: -0.6 ~ +0.6 随机分布
     const amps = [0.12, 0.08, 0.05];            // f, 2f, 3f 能量递减
     const decays = [0.5, 0.38, 0.28];           // exp decay 时间
@@ -1014,7 +1128,7 @@ export class AudioEngine {
 
       osc.connect(panNode);
       panNode.connect(g);
-      g.connect(this.noteBus);
+      g.connect(this._bus(part));
       this.voices++;
       osc.start(when);
       osc.stop(when + d + 0.05);
@@ -1028,9 +1142,9 @@ export class AudioEngine {
     if (!params) return;
     const now = this.ctx.currentTime + 0.02;
     for (const midi of params.midiNotes) {
-      const freq = midiToFreq(midi);
+      const freq = this._applyOct(midiToFreq(midi), 'lead');
       const wave = params.predictionCorrect ? 'sine' : 'square';  // 正确→纯，错误→粗 square
-      this._tone(freq, now, 0.6, params.loudness, wave, 0.5);
+      this._tone(freq, now, 0.6, params.loudness, wave, 0.5, 0, 0, 'lead');
     }
   }
 
@@ -1046,9 +1160,10 @@ export class AudioEngine {
     return midiToFreq(midi);
   }
 
-  _tone(freq, when, dur, peak, wave, send = 0.5, detune = 0, pan = 0) {
+  _tone(freq, when, dur, peak, wave, send = 0.5, detune = 0, pan = 0, part = null) {
     const ctx = this.ctx;
     if (this.voices > 26) return;
+    if (part && !this._audible(part)) return;
     if (!Number.isFinite(freq) || freq <= 0) return;   // 防御：非法频率直接跳过
     if (!Number.isFinite(peak)) peak = 0.08;            // 防御：NaN 振幅不能进 AudioParam
     const osc = ctx.createOscillator();
@@ -1078,7 +1193,7 @@ export class AudioEngine {
     const p = ctx.createStereoPanner();
     p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
     gain.connect(p);
-    p.connect(this.noteBus);
+    p.connect(this._bus(part));
     if (send > 0) {
       const s = ctx.createGain();
       s.gain.value = send;
@@ -1100,8 +1215,9 @@ export class AudioEngine {
   }
 
   /* ---- 钟琴/铃音：非谐泛音（1 / 2.01 / 2.76 / 5.4）+ 长衰减，高频但不刺耳 ---- */
-  _bell(freq, when, amp = 0.05, pan = 0) {
+  _bell(freq, when, amp = 0.05, pan = 0, part = null) {
     if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
     if (!Number.isFinite(freq) || freq <= 0) return;
     if (!Number.isFinite(amp)) amp = 0.04;
     const ctx = this.ctx;
@@ -1109,7 +1225,7 @@ export class AudioEngine {
     const p = ctx.createStereoPanner();
     p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
     out.connect(p);
-    p.connect(this.noteBus);
+    p.connect(this._bus(part));
     const send = ctx.createGain();
     send.gain.value = 0.8;
     p.connect(send);
@@ -1137,8 +1253,9 @@ export class AudioEngine {
   }
 
   /* ---- 竖琴/拨弦：锯齿波 + 快速下扫低通，短促有颗粒感 ---- */
-  _pluck(freq, when, amp = 0.045, pan = 0) {
+  _pluck(freq, when, amp = 0.045, pan = 0, part = null) {
     if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
     if (!Number.isFinite(freq) || freq <= 0) return;
     if (!Number.isFinite(amp)) amp = 0.04;
     const ctx = this.ctx;
@@ -1156,14 +1273,15 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, when + 0.34);
     const p = ctx.createStereoPanner();
     p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
-    osc.connect(flt); flt.connect(g); g.connect(p); p.connect(this.noteBus);
+    osc.connect(flt); flt.connect(g); g.connect(p); p.connect(this._bus(part));
     const s = ctx.createGain(); s.gain.value = 0.45; p.connect(s); s.connect(this.delay);
     osc.start(when); osc.stop(when + 0.38);
   }
 
   /* ---- 弦乐铺底：两个微失谐锯齿 + 慢起慢落，给和弦加厚度 ---- */
-  _stringPad(freq, when, dur, amp = 0.028, pan = 0) {
+  _stringPad(freq, when, dur, amp = 0.028, pan = 0, part = null) {
     if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
     if (!Number.isFinite(freq) || freq <= 0) return;
     if (!Number.isFinite(amp)) amp = 0.025;
     const ctx = this.ctx;
@@ -1174,7 +1292,7 @@ export class AudioEngine {
     flt.Q.value = 0.6;
     const p = ctx.createStereoPanner();
     p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
-    out.connect(flt); flt.connect(p); p.connect(this.master);
+    out.connect(flt); flt.connect(p); p.connect(this._bus(part));
     out.gain.setValueAtTime(0.0001, when);
     out.gain.linearRampToValueAtTime(amp, when + Math.min(1.0, dur * 0.35));
     out.gain.linearRampToValueAtTime(0.0001, when + dur);
@@ -1189,15 +1307,16 @@ export class AudioEngine {
   }
 
   /* ---- 长笛/木管：基音 + 少量二次谐波，柔起柔落 ---- */
-  _flute(freq, when, dur, amp = 0.05, pan = 0) {
+  _flute(freq, when, dur, amp = 0.05, pan = 0, part = null) {
     if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
     if (!Number.isFinite(freq) || freq <= 0) return;
     if (!Number.isFinite(amp)) amp = 0.045;
     const ctx = this.ctx;
     const g = ctx.createGain();
     const p = ctx.createStereoPanner();
     p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
-    g.connect(p); p.connect(this.noteBus);
+    g.connect(p); p.connect(this._bus(part));
     const attack = Math.min(0.09, dur * 0.3);
     g.gain.setValueAtTime(0.0001, when);
     g.gain.linearRampToValueAtTime(amp, when + attack);
@@ -1214,8 +1333,9 @@ export class AudioEngine {
   }
 
   /* ---- 电钢琴（2-op FM）：正弦载波 + 衰减调制，暖而有金属感 ---- */
-  _epiano(freq, when, dur, amp = 0.045, pan = 0) {
+  _epiano(freq, when, dur, amp = 0.045, pan = 0, part = null) {
     if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
     if (!Number.isFinite(freq) || freq <= 0) return;
     if (!Number.isFinite(amp)) amp = 0.04;
     const ctx = this.ctx;
@@ -1236,22 +1356,23 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
     const p = ctx.createStereoPanner();
     p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
-    carrier.connect(g); g.connect(p); p.connect(this.noteBus);
+    carrier.connect(g); g.connect(p); p.connect(this._bus(part));
     const s = ctx.createGain(); s.gain.value = 0.5; p.connect(s); s.connect(this.delay);
     carrier.start(when); carrier.stop(when + dur + 0.05);
     mod.start(when); mod.stop(when + dur + 0.05);
   }
 
   /* ---- 马林巴/木琴：基音 + 四次谐波，短促木质 ---- */
-  _marimba(freq, when, amp = 0.05, pan = 0) {
+  _marimba(freq, when, amp = 0.05, pan = 0, part = null) {
     if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
     if (!Number.isFinite(freq) || freq <= 0) return;
     if (!Number.isFinite(amp)) amp = 0.045;
     const ctx = this.ctx;
     const out = ctx.createGain();
     const p = ctx.createStereoPanner();
     p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
-    out.connect(p); p.connect(this.noteBus);
+    out.connect(p); p.connect(this._bus(part));
     const s = ctx.createGain(); s.gain.value = 0.45; p.connect(s); s.connect(this.delay);
     const parts = [[1, 1.0, 0.55], [4, 0.22, 0.14]];
     for (const [r, a, d] of parts) {
@@ -1268,8 +1389,9 @@ export class AudioEngine {
   }
 
   /* ---- 人声 Pad：锯齿 + 900Hz 共振峰，慢起慢落 ---- */
-  _choir(freq, when, dur, amp = 0.02, pan = 0) {
+  _choir(freq, when, dur, amp = 0.02, pan = 0, part = null) {
     if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
     if (!Number.isFinite(freq) || freq <= 0) return;
     if (!Number.isFinite(amp)) amp = 0.018;
     const ctx = this.ctx;
@@ -1280,7 +1402,7 @@ export class AudioEngine {
     formant.Q.value = 1.8;
     const p = ctx.createStereoPanner();
     p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
-    out.connect(formant); formant.connect(p); p.connect(this.master);
+    out.connect(formant); formant.connect(p); p.connect(this._bus(part));
     out.gain.setValueAtTime(0.0001, when);
     out.gain.linearRampToValueAtTime(amp, when + Math.min(0.8, dur * 0.4));
     out.gain.linearRampToValueAtTime(0.0001, when + dur);
@@ -1295,8 +1417,9 @@ export class AudioEngine {
   }
 
   /* ---- 簧片/口琴：方波 + 1200Hz 带通，短促有鼻音 ---- */
-  _reed(freq, when, dur, amp = 0.04, pan = 0) {
+  _reed(freq, when, dur, amp = 0.04, pan = 0, part = null) {
     if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
     if (!Number.isFinite(freq) || freq <= 0) return;
     if (!Number.isFinite(amp)) amp = 0.035;
     const ctx = this.ctx;
@@ -1313,7 +1436,7 @@ export class AudioEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
     const p = ctx.createStereoPanner();
     p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
-    osc.connect(bp); bp.connect(g); g.connect(p); p.connect(this.noteBus);
+    osc.connect(bp); bp.connect(g); g.connect(p); p.connect(this._bus(part));
     const s = ctx.createGain(); s.gain.value = 0.5; p.connect(s); s.connect(this.delay);
     osc.start(when); osc.stop(when + dur + 0.05);
   }
@@ -1330,25 +1453,25 @@ export class AudioEngine {
     const spacing = type === 'chaotic' ? 0.085 : type === 'periodic' ? 0.16 : 0.28;
     const baseOct = type === 'endangered' || type === 'extinct' ? -1 : 0;
     seq.forEach((deg, i) => {
-      const freq = this._degreeFreq(deg, baseOct);
+      const freq = this._applyOct(this._degreeFreq(deg, baseOct), 'lead');
       const dur =
         type === 'endangered' ? 2.6 : type === 'stable' ? 2.0 : type === 'chaotic' ? 0.22 : 0.55;
       const peak = (type === 'extinct' ? 0.08 : 0.13) * (typeof strength === 'number' ? strength : 1);
-      this._tone(freq, now + i * spacing, dur, clamp(peak, 0.02, 0.2), wave, 0.9, (i % 2 ? 6 : -5));
+      this._tone(freq, now + i * spacing, dur, clamp(peak, 0.02, 0.2), wave, 0.9, (i % 2 ? 6 : -5), 0, 'lead');
     });
     if (type === 'reproduction') {
       const ctx = this.ctx;
       const osc = ctx.createOscillator();
       const g = ctx.createGain();
       osc.type = 'sine';
-      const f0 = this._degreeFreq(0, 0);
+      const f0 = this._applyOct(this._degreeFreq(0, 0), 'lead');
       osc.frequency.setValueAtTime(f0, now);
       osc.frequency.exponentialRampToValueAtTime(f0 * 2, now + 0.8);
       g.gain.setValueAtTime(0.0001, now);
       g.gain.exponentialRampToValueAtTime(0.06, now + 0.08);
       g.gain.exponentialRampToValueAtTime(0.0001, now + 1.1);
       osc.connect(g);
-      g.connect(this.noteBus);
+      g.connect(this._bus('lead'));
       osc.start(now);
       osc.stop(now + 1.2);
     }
