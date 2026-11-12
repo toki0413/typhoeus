@@ -165,6 +165,7 @@ export class AudioEngine {
     this._arpNext = 0;             // 五声琶音
     this._arpIdx = 0;
     this._chordTones = null;       // 当前和弦音，供琶音层使用
+    this._bellNext = 0;            // 钟琴/铃音层
   }
 
   _build() {
@@ -709,6 +710,20 @@ export class AudioEngine {
       }
     }
 
+    /* Layer 2d: 钟琴/铃音 —— 每 4–8 秒一个高音动机，偶尔两音"叮—咚" */
+    if (now >= (this._bellNext || 0)) {
+      this._bellNext = now + 4 + Math.random() * 4;
+      if (this._intensity > 0.3) {
+        const degs = this._scaleDegrees || scale.degrees;
+        const deg = Math.floor(Math.random() * degs.length);
+        const pan = Math.random() * 1.2 - 0.6;
+        this._bell(this._degreeFreq(deg, 2), now + 0.05, 0.05, pan);
+        if (Math.random() < 0.4) {
+          this._bell(this._degreeFreq((deg + 2) % degs.length, 2), now + 0.38, 0.035, -pan * 0.7);
+        }
+      }
+    }
+
     /* ================================================================ */
     /*  Layer 3: Lead Pulse + Counterpoint（巴赫复调）                    */
     /*  音乐性增强：分声部 wave + dynamics × register 漂移 × counter-melody */
@@ -1001,6 +1016,43 @@ export class AudioEngine {
         /* noop */
       }
     };
+  }
+
+  /* ---- 钟琴/铃音：非谐泛音（1 / 2.01 / 2.76 / 5.4）+ 长衰减，高频但不刺耳 ---- */
+  _bell(freq, when, amp = 0.05, pan = 0) {
+    if (!this.built || !this.enabled) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.04;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(p);
+    p.connect(this.noteBus);
+    const send = ctx.createGain();
+    send.gain.value = 0.8;
+    p.connect(send);
+    send.connect(this.delay);
+
+    const partials = [
+      { r: 1,    a: 1.0,  d: 2.4 },
+      { r: 2.01, a: 0.42, d: 1.6 },
+      { r: 2.76, a: 0.26, d: 1.1 },
+      { r: 5.40, a: 0.12, d: 0.7 },
+    ];
+    for (const q of partials) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * q.r, when);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp * q.a), when + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + q.d);
+      osc.connect(g);
+      g.connect(out);
+      osc.start(when);
+      osc.stop(when + q.d + 0.1);
+    }
   }
 
   triggerEvent(type, strength = 1) {
