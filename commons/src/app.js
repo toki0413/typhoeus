@@ -96,6 +96,8 @@ let _galleryLastTick = 0;
 // 库内未剖析种子的后台剖析队列（queueProfiles 使用）
 let profileQueue = [];
 let profileTimer = null;
+/* 打开弹窗前后的焦点记忆，关闭时归还 */
+let _modalReturnFocus = null;
 
 /* ============================================================== */
 /* 无障碍：动效开关初始化                                          */
@@ -203,6 +205,21 @@ const lineageView = createLineageView({ state, findRecipe, adoptRecipe });
 
 function deepClone(o) {
   return JSON.parse(JSON.stringify(o));
+}
+
+/* 滑杆填充比例：把值写进 --fill，CSS 用朱红填充到当前位置 */
+function syncRangeFill(el) {
+  if (!el || el.type !== 'range') return;
+  const min = parseFloat(el.min || '0');
+  const max = parseFloat(el.max || '100');
+  const val = parseFloat(el.value || '0');
+  const pct = max > min ? Math.min(100, Math.max(0, ((val - min) / (max - min)) * 100)) : 0;
+  el.style.setProperty('--fill', `${pct}%`);
+}
+
+function syncRanges(root = document) {
+  const scope = root && root.querySelectorAll ? root : document;
+  scope.querySelectorAll('input[type="range"]').forEach(syncRangeFill);
 }
 
 function normalizeRecipe(rec) {
@@ -808,10 +825,12 @@ function renderSoundPanel() {
       </div>
     </div>
     <div class="section-label">映射</div>
-    ${sliderHTML('音区 Register', Math.round(m.register * 100), 0, 100, 1, 'data-map-param="register"', '%')}
-    ${sliderHTML('亮度 Brightness', Math.round(m.brightness * 100), 10, 100, 1, 'data-map-param="brightness"', '%')}
-    ${sliderHTML('节奏 Tempo', Math.round(m.tempo * 100), 10, 100, 1, 'data-map-param="tempo"', '%')}
-    ${sliderHTML('约束 Strictness', Math.round(m.strictness * 100), 20, 100, 1, 'data-map-param="strictness"', '%')}
+    <div class="param-grid">
+      ${sliderHTML('音区 Register', Math.round(m.register * 100), 0, 100, 1, 'data-map-param="register"', '%')}
+      ${sliderHTML('亮度 Brightness', Math.round(m.brightness * 100), 10, 100, 1, 'data-map-param="brightness"', '%')}
+      ${sliderHTML('节奏 Tempo', Math.round(m.tempo * 100), 10, 100, 1, 'data-map-param="tempo"', '%')}
+      ${sliderHTML('约束 Strictness', Math.round(m.strictness * 100), 20, 100, 1, 'data-map-param="strictness"', '%')}
+    </div>
     <div class="section-label">声部</div>
     <div class="switch-row"><span>持续低音 · 密度驱动</span><button class="switch ${m.drone ? 'on' : ''}" data-map-toggle="drone"></button></div>
     <div class="switch-row"><span>脉冲音符 · 活跃度驱动</span><button class="switch ${m.pulse ? 'on' : ''}" data-map-toggle="pulse"></button></div>
@@ -1809,6 +1828,10 @@ function iterateCurrentSeed() {
 
 function openModal({ eyebrow = '', title, body, actions = [] }) {
   const layer = $('#modalLayer');
+  /* 只在没有其他弹窗时记录来源焦点，避免嵌套打开时丢失 */
+  if (!document.body.classList.contains('modal-open')) {
+    _modalReturnFocus = document.activeElement;
+  }
   layer.innerHTML = `<div class="modal-card">
     <div class="modal-head">
       <div><div class="eyebrow">${esc(eyebrow)}</div><h3>${esc(title)}</h3></div>
@@ -1818,6 +1841,7 @@ function openModal({ eyebrow = '', title, body, actions = [] }) {
     <div class="modal-actions"></div>
   </div>`;
   layer.classList.remove('hidden');
+  document.body.classList.add('modal-open');
   const actionsEl = $('.modal-actions', layer);
   for (const a of actions) {
     const btn = document.createElement('button');
@@ -1827,6 +1851,11 @@ function openModal({ eyebrow = '', title, body, actions = [] }) {
     actionsEl.appendChild(btn);
   }
   $('.modal-close', layer).addEventListener('click', closeModal);
+  const card = $('.modal-card', layer);
+  card.setAttribute('tabindex', '-1');
+  const focusCard = () => { try { card.focus({ preventScroll: true }); } catch (_) { /* noop */ } };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(focusCard);
+  else focusCard();
   return layer;
 }
 
@@ -1834,6 +1863,11 @@ function closeModal() {
   const layer = $('#modalLayer');
   layer.classList.add('hidden');
   layer.innerHTML = '';
+  document.body.classList.remove('modal-open');
+  if (_modalReturnFocus && _modalReturnFocus.isConnected) {
+    try { _modalReturnFocus.focus({ preventScroll: true }); } catch (_) { /* noop */ }
+  }
+  _modalReturnFocus = null;
 }
 
 function openSaveModal() {
@@ -2406,14 +2440,57 @@ function bindUI() {
     $('#speedVal').textContent = `${state.speed.toFixed(2).replace(/0$/, '')}×`;
   });
 
-  $('#railTabs').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-tab]');
+  /* ---- 右侧控制台：单行 5 标签 + 键盘方向键 + 切页回到顶部 ---- */
+  const railTabsEl = $('#railTabs');
+  railTabsEl.setAttribute('role', 'tablist');
+  $$('#railTabs button').forEach((b) => {
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(b.classList.contains('active')));
+  });
+  const activateRailTab = (btn) => {
     if (!btn) return;
-    for (const b of $$('#railTabs button')) b.classList.toggle('active', b === btn);
+    for (const b of $$('#railTabs button')) {
+      const on = b === btn;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', String(on));
+    }
     for (const p of $$('.panel')) p.classList.toggle('active', p.id === `panel-${btn.dataset.tab}`);
+    const railBody = $('.rail-body');
+    if (railBody && railBody.scrollTop > 0) railBody.scrollTo({ top: 0, behavior: 'smooth' });
     if (btn.dataset.tab === 'struct') updateStructValues();
     if (btn.dataset.tab === 'science') sciencePanel.render();
+  };
+  railTabsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-tab]');
+    if (btn) activateRailTab(btn);
   });
+  railTabsEl.addEventListener('keydown', (e) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    const tabs = $$('#railTabs button');
+    let i = tabs.indexOf(document.activeElement);
+    if (i < 0) i = tabs.findIndex((b) => b.classList.contains('active'));
+    if (i < 0) return;
+    e.preventDefault();
+    let n = i;
+    if (e.key === 'ArrowLeft') n = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'ArrowRight') n = (i + 1) % tabs.length;
+    else if (e.key === 'Home') n = 0;
+    else n = tabs.length - 1;
+    tabs[n].focus();
+    activateRailTab(tabs[n]);
+  });
+
+  /* ---- 滑杆填充：输入时实时写 --fill，面板重绘后自动同步 ---- */
+  document.addEventListener('input', (e) => {
+    if (e.target && e.target.type === 'range') syncRangeFill(e.target);
+  }, true);
+  const rangeObserver = typeof MutationObserver === 'function'
+    ? new MutationObserver(() => syncRanges())
+    : null;
+  for (const node of $$('.panel').concat([$('#modalLayer')])) {
+    if (node && rangeObserver) rangeObserver.observe(node, { childList: true, subtree: true });
+  }
+  syncRanges();
 
   $('#panel-rule').addEventListener('click', onRuleClick);
   $('#panel-rule').addEventListener('input', onRuleInput);

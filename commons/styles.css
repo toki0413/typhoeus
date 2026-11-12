@@ -685,10 +685,10 @@ body.audio-on .listen-prompt {
 /* ==================== 传输栏 ==================== */
 
 .transport {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+  gap: 16px;
   margin-top: 18px;
   padding: 14px 16px;
   border: 1.5px solid var(--line-2);
@@ -697,12 +697,22 @@ body.audio-on .listen-prompt {
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow-soft);
 }
-.transport-left,
-.transport-right {
+.transport-left {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+.transport-right {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+.transport-right button {
+  padding: 10px 8px;
+  font-size: 14px;
+  white-space: nowrap;
 }
 .transport-left .primary {
   min-width: 96px;
@@ -745,34 +755,49 @@ body.audio-on .listen-prompt {
 input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
-  height: 8px;
-  border-radius: 20px;
-  background: linear-gradient(90deg, var(--pink), var(--lavender));
+  width: 100%;
+  height: 10px;
+  border: 1.5px solid var(--text) !important;
+  border-radius: 0 !important;
+  background-color: var(--surface) !important;
+  /* 已填充部分用朱红，未填充用纸白；--fill 由 JS 在 input 时写入 */
+  background-image: linear-gradient(
+    90deg,
+    var(--pink) 0 var(--fill, 50%),
+    var(--surface) var(--fill, 50%) 100%
+  ) !important;
   outline: none;
+  cursor: pointer;
 }
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 22px;
+  width: 12px;
   height: 22px;
-  border-radius: 50%;
-  background: #fff;
-  border: 3px solid var(--pink);
-  box-shadow: 0 2px 10px rgba(17, 17, 17, 0.4);
-  cursor: pointer;
-  transition: transform 0.15s;
+  border-radius: 0;
+  background: var(--text);
+  border: 1.5px solid var(--text);
+  box-shadow: none;
+  cursor: ew-resize;
+  transition: transform 0.12s;
 }
 input[type='range']::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
+  transform: scaleY(1.12);
 }
 input[type='range']::-moz-range-thumb {
-  width: 22px;
+  width: 12px;
   height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: #fff;
-  border: 3px solid var(--pink);
-  box-shadow: 0 2px 10px rgba(17, 17, 17, 0.4);
-  cursor: pointer;
+  border-radius: 0;
+  background: var(--text);
+  border: 1.5px solid var(--text);
+  box-shadow: none;
+  cursor: ew-resize;
+}
+input[type='range']::-moz-range-track {
+  background: transparent;
+}
+input[type='range']:focus-visible {
+  outline: 2px solid var(--sky) !important;
+  outline-offset: 2px;
 }
 .speed input {
   width: 120px;
@@ -858,38 +883,52 @@ input[type='range']::-moz-range-thumb {
 }
 .rail-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   border-bottom: 1.5px solid var(--line-2);
   background: rgba(255, 255, 255, 0.6);
 }
 .rail-tabs button {
-  padding: 16px 6px;
-  font-size: 20px;
+  padding: 12px 4px;
+  font-size: 15px;
+  line-height: 1.25;
+  white-space: nowrap;
   color: var(--muted);
   border-bottom: 3px solid transparent;
-  transition: all 0.25s;
+  transition: background 0.16s, color 0.16s, border-color 0.16s;
   font-weight: 500;
 }
 .rail-tabs button:hover {
-  color: var(--rose);
+  color: var(--text);
+  background: rgba(17, 17, 17, 0.06);
 }
 .rail-tabs button.active {
-  color: var(--rose);
+  color: #fff;
+  background: var(--text);
   border-bottom-color: var(--pink);
-  background: rgba(17, 17, 17, 0.08);
   font-weight: 700;
 }
 .rail-body {
   padding: 22px 22px 10px;
   max-height: calc(100vh - 250px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--text) transparent;
 }
+.rail-body::-webkit-scrollbar { width: 8px; }
+.rail-body::-webkit-scrollbar-thumb { background: var(--text); }
+.rail-body::-webkit-scrollbar-track { background: transparent; }
 .panel {
   display: none;
 }
 .panel.active {
   display: block;
-  animation: fadeIn 0.35s ease;
+  animation: panelIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
 }
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -1012,6 +1051,16 @@ input[type='range']::-moz-range-thumb {
 .field {
   margin-bottom: 16px;
 }
+/* 两列参数网格：让窄栏里的滑杆更紧凑、更有秩序 */
+.param-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 14px;
+}
+.param-grid .field { margin-bottom: 10px; }
+.param-grid .field-head { margin-bottom: 5px; }
+.param-grid .field-head label { font-size: 14px; }
+.param-grid .field-head .val { font-size: 13px; }
 .field-head {
   display: flex;
   align-items: baseline;
@@ -2212,8 +2261,17 @@ body.blind-listen .hud-tr {
 
 @media (max-width: 1180px) {
   .cultivate {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
   }
+  /* 手机/平板：舞台 → 播放控制 → 参数控制台 → 时间线，避免先滚过时间线才到参数 */
+  .stage-column { display: contents; }
+  .stage-head { order: 1; }
+  .stage { order: 2; width: 100%; }
+  .transport { order: 3; }
+  .rail { order: 4; margin-top: 22px; }
+  .timeline { order: 5; }
   .rail {
     position: static;
   }
@@ -2277,7 +2335,7 @@ body.blind-listen .hud-tr {
   }
   .commons-tools .search { flex: 1 1 100%; }
   .commons-tools .search input { width: 100%; }
-  .transport { flex-direction: column; align-items: stretch; }
+  .transport { grid-template-columns: 1fr; align-items: stretch; }
   .transport-right {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -2307,6 +2365,12 @@ body.blind-listen .hud-tr {
   .transport-left { justify-content: space-between; }
   .compare-metrics { grid-template-columns: 1fr 1fr; }
   .brand-word em { display: none; }
+}
+
+/* 超窄屏：5 个标签仍保持一行 */
+@media (max-width: 380px) {
+  .rail-tabs button { font-size: 13px; padding: 10px 2px; }
+  .transport-right button { font-size: 13px; padding: 9px 5px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2767,6 +2831,22 @@ input[type="range"] { accent-color: var(--pink); }
   color: #fff !important;
 }
 .preset.active span { opacity: 0.82; }
+
+/* 交互反馈：按压位移 + 键盘焦点环 + 弹窗锁滚动 */
+.btn:active,
+.preset:active,
+.segmented button:active,
+.rail-tabs button:active,
+.mix-btn:active,
+.icon-btn:active {
+  transform: translateY(1px);
+}
+button:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--sky) !important;
+  outline-offset: 2px;
+}
+body.modal-open { overflow: hidden; }
 
 /* ============================================================
    专业混音台 · 构成主义通道条
