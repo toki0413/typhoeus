@@ -71,6 +71,8 @@ import {
   computeFractalDimension,
   computeFieldEnergy,
   computeSpatialPeriod,
+  computeFieldEntropy,
+  laplacian,
   computeScientificMetrics,
   SCIENCE_VERSION,
 } from './scientific.js';
@@ -910,6 +912,130 @@ export class ScientificEngine {
     this._rd = new ReactionDiffusionEngine(w, h, { preset, boundary: env.boundary });
     this.grid = this._rdSnapshotAsGrid();
     this.age = new Uint8Array(w * h);
+    /* 有限时间 Lyapunov：tangent-space 线性化 + 周期重归一化 */
+    this._tangentU = new Float32Array(w * h);
+    this._tangentV = new Float32Array(w * h);
+    this._lyaSum = 0;
+    this._lyaTime = 0;
+    this._lyaStepCount = 0;
+    this.lyapunovExponent = 0;
+    this._activity = 0;
+    this.gen = 0;
+    this._initTangent();
+  }
+
+  _effectiveDt() {
+    const physics = this._physics;
+    const dtMult = (physics?.dtMult ?? 1) * (1 + (physics?._petDtBoost ?? 0));
+    return this._rd.dt * dtMult;
+  }
+
+  _initTangent() {
+    const { w, h } = this;
+    let normSq = 0;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        const du = Math.sin((2 * Math.PI * x) / w) * Math.cos((2 * Math.PI * y) / h);
+        const dv = Math.cos((2 * Math.PI * x) / w) * Math.sin((2 * Math.PI * y) / h);
+        this._tangentU[idx] = du;
+        this._tangentV[idx] = dv;
+        normSq += du * du + dv * dv;
+      }
+    }
+    const norm = Math.sqrt(normSq / Math.max(1, w * h)) || 1;
+    for (let i = 0; i < this._tangentU.length; i++) {
+      this._tangentU[i] /= norm;
+      this._tangentV[i] /= norm;
+    }
+  }
+
+  _normalizeTangent() {
+    const du = this._tangentU;
+    const dv = this._tangentV;
+    let sumSq = 0;
+    for (let i = 0; i < du.length; i++) sumSq += du[i] * du[i] + dv[i] * dv[i];
+    const norm = Math.sqrt(sumSq / Math.max(1, du.length));
+    if (!Number.isFinite(norm) || norm < 1e-18) {
+      this._initTangent();
+      return 1;
+    }
+    for (let i = 0; i < du.length; i++) {
+      du[i] /= norm;
+      dv[i] /= norm;
+    }
+    return norm;
+  }
+
+  /* δx' = δx + dt · (D ∇²δx + J(u,v) δx) */
+  _updateTangent(dtEff) {
+    const { w, h } = this;
+    const u = this._rd.uField;
+    const v = this._rd.vField;
+    const du = this._tangentU;
+    const dv = this._tangentV;
+    const params = this._rd.params || {};
+    const engine = params.engine || this._rd.engineType;
+    const boundary = this._rd.boundary;
+    const Du = Number.isFinite(params.D_u) ? params.D_u : 1;
+    const Dv = Number.isFinite(params.D_v) ? params.D_v : 1;
+    const nextU = new Float32Array(w * h);
+    const nextV = new Float32Array(w * h);
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        const lapDu = laplacian(du, w, h, x, y, boundary);
+        const lapDv = laplacian(dv, w, h, x, y, boundary);
+        const uu = u[idx];
+        const vv = v[idx];
+        let j00 = 0;
+        let j01 = 0;
+        let j10 = 0;
+        let j11 = 0;
+        if (engine === 'grayScott') {
+          const f = params.f;
+          const k = params.k;
+          j00 = -vv * vv - f;
+          j01 = -2 * uu * vv;
+          j10 = vv * vv;
+          j11 = 2 * uu * vv - (f + k);
+        } else if (engine === 'fitzHughNagumo') {
+          const a = params.a;
+          const b = params.b;
+          const c = params.c || 10;
+          j00 = c * (1 - uu * uu);
+          j01 = c;
+          j10 = -1 / c;
+          j11 = -b / c;
+        } else if (engine === 'brusselator') {
+          const B = params.B;
+          j00 = -(B + 1) + 2 * uu * vv;
+          j01 = uu * uu;
+          j10 = B - 2 * uu * vv;
+          j11 = -uu * uu;
+        }
+        nextU[idx] = du[idx] + dtEff * (Du * lapDu + j00 * du[idx] + j01 * dv[idx]);
+        nextV[idx] = dv[idx] + dtEff * (Dv * lapDv + j10 * du[idx] + j11 * dv[idx]);
+      }
+    }
+    this._tangentU = nextU;
+    this._tangentV = nextV;
+    this._lyaStepCount++;
+    if (this._lyaStepCount % 8 === 0) {
+      const norm = this._normalizeTangent();
+      this._lyaSum += Math.log(norm);
+      this._lyaTime += dtEff * 8;
+      this.lyapunovExponent = this._lyaTime > 0 ? this._lyaSum / this._lyaTime : 0;
+    }
+  }
+
+  _resetLyapunov() {
+    this._lyaSum = 0;
+    this._lyaTime = 0;
+    this._lyaStepCount = 0;
+    this.lyapunovExponent = 0;
+    this._initTangent();
   }
 
   _rdSnapshotAsGrid() {
@@ -922,19 +1048,36 @@ export class ScientificEngine {
 
   step() {
     if (this._physics) this._rd.setPhysics(this._physics);
-    for (let i = 0; i < 2; i++) this._rd.step();
+    this.gen++;
+    const vBefore = this._rd.vField.slice();
+    const dtEff = this._effectiveDt();
+    for (let i = 0; i < 2; i++) {
+      this._rd.step();
+      this._updateTangent(dtEff);
+    }
     this.grid = this._rdSnapshotAsGrid();
     for (let i = 0; i < this.age.length; i++) {
       if (this.grid[i]) { this.age[i] = Math.min(250, this.age[i] + 1); }
       else { this.age[i] = 0; }
     }
+    /* 真实活动度：v 场的平均绝对变化率（单位 1/时间） */
+    const v = this._rd.vField;
+    let deltaSum = 0;
+    for (let i = 0; i < v.length; i++) deltaSum += Math.abs(v[i] - vBefore[i]);
+    this._activity = deltaSum / Math.max(1e-9, v.length * dtEff * 2);
   }
 
   /** 把 physics.js 的极端环境物理参数注入到底层 ReactionDiffusionEngine */
   setPhysics(physicsObj) { this._physics = physicsObj; }
   clearPhysics() { this._physics = null; this._rd.clearPhysics?.(); }
 
-  reset() { this._rd.reset(this.env.pattern); this.grid = this._rdSnapshotAsGrid(); }
+  reset() {
+    this._rd.reset(this.env.pattern);
+    this.grid = this._rdSnapshotAsGrid();
+    this._activity = 0;
+    this.gen = 0;
+    this._resetLyapunov();
+  }
   setEnv(env) { this.env = env; }
   applyGenome(genome) {
     this.genome = genome;
@@ -957,6 +1100,7 @@ export class ScientificEngine {
       }
       this._rd.dt = this._rd.params.dt;
     }
+    this._resetLyapunov();
   }
 
   snapshot() { return this._rd.snapshot(); }
@@ -969,25 +1113,39 @@ export class ScientificEngine {
     for (let i = 0; i < v.length; i++) densitySum += v[i];
     const density = densitySum / v.length;
 
+    /* 真实指标：Shannon 场熵 / 二维自相关相关长度 / 有限时间 Lyapunov */
+    const entropy = computeFieldEntropy(u);
+    const period = sci.spatialPeriod;
+    const lyap = Number.isFinite(this.lyapunovExponent) ? this.lyapunovExponent : 0;
+    const activity = Number.isFinite(this._activity) ? this._activity : 0;
+    let attrType = 'periodic';
+    if (lyap > 0.01) attrType = 'chaotic';
+    else if (lyap < -0.005) attrType = 'stable';
+    const typeLabel = attrType === 'chaotic' ? '混沌' : attrType === 'stable' ? '稳定' : '周期';
+
     /* 🧬 Life Operator B1: Auto-Tuning Bridge
        每次算完 Lyapunov 后，检查是否需要微调 diffusionMult / dtMult。
        论文 Evidence-Gated Self-Evolution:
          "operators revise their parameters when observations contradict predictions"
        只在极端环境 physics 存在时 auto-tune（普通环境保持默认）。*/
     const result = {
+      gen: this.gen,
       density,
-      entropy: sci.lyapunov + 1.5,
-      period: sci.spatialPeriod,
+      entropy,
+      period,
+      periodKind: 'correlation-length',
       diameter: sci.fractal * this.w,
       components: 0,
-      activity: Math.abs(sci.lyapunov) * 3,
-      lyapunov: sci.lyapunov,
+      activity,
+      lyapunov: lyap,
+      lyapunovKind: 'finite-time-tangent',
+      lyapunovSamples: this._lyaStepCount,
       fractal: sci.fractal,
       energy: sci.energy,
       complexity: sci.complexity,
-      attrType: sci.attrType,
-      type: sci.attrType,
-      typeLabel: sci.typeLabel,
+      attrType,
+      type: attrType,
+      typeLabel,
     };
 
     if (this._physics) {

@@ -59,7 +59,8 @@ test('format: 标签表覆盖 6 种结构态', () => {
     assert.ok(TYPE_EVENT_LABEL[key], key);
   }
   assert.equal(ENGINE_LABEL.scientific, '反应-扩散（科学）');
-  assert.equal(sortLabel('energy'), '能量最低');
+  assert.equal(sortLabel('energy'), 'E_field 低');
+  assert.equal(sortLabel('lyapunov'), 'λ_FT 低');
   assert.equal(sortLabel('unknown'), 'unknown');
   assert.ok(diagnosisShort({ type: 'chaotic' }).length > 0);
 });

@@ -111,7 +111,7 @@ export const REACTION_DIFFUSION_PRESETS = {
 /*   lap[i,j] = (1/6) * (-center + 0.25*4邻域 + 0.125*4对角)      */
 /* 边界条件：torus（环面）或 wall（硬壁）                         */
 /* ============================================================== */
-function laplacian(grid, w, h, x, y, boundary) {
+export function laplacian(grid, w, h, x, y, boundary) {
   let sum = 0;
   let center = grid[y * w + x];
   const dirs = [
@@ -473,28 +473,76 @@ export function computeFieldEnergy(u, v, w, h) {
 }
 
 /* -------------------------------------------------------------- */
-/* 自相关周期（autocorrelation）                                  */
-/* 空间周期性估计：对 v 场做 2D 自相关，找第一个峰值对应的位移。   */
-/* 返回估计的"典型结构周期"（单位：格）。                          */
+/* 二维自相关相关长度 L_c（第一局部峰）                            */
+/* 说明：沿 x / y 两个方向做归一化自相关，跳过零延迟主峰，          */
+/* 找到第一个局部极大值；两个方向的估计取平均。                    */
+/* 返回单位：格（grid cells）。                                    */
 /* -------------------------------------------------------------- */
 export function computeSpatialPeriod(v, w, h) {
-  const thresh = 0.01;
-  let maxOffset = 1;
-  let maxCorr = 0;
-  const maxSearch = Math.min(w, h) / 4;
-  for (let d = 2; d < maxSearch; d++) {
-    let corr = 0;
-    let norm = 0;
-    for (let y = 0; y < h - d; y++) {
-      for (let x = 0; x < w - d; x++) {
-        corr += v[y * w + x] * v[y * w + x + d];
-        norm += 1;
+  const maxSearch = Math.floor(Math.min(w, h) / 2);
+  if (maxSearch < 4) return 0;
+
+  const firstPeak = (dx, dy) => {
+    const corr = new Float64Array(maxSearch + 1);
+    for (let d = 1; d <= maxSearch; d++) {
+      let sum = 0;
+      let norm = 0;
+      for (let y = 0; y < h; y += 2) {
+        const yy = (y + d * dy + h) % h;
+        for (let x = 0; x < w; x += 2) {
+          const xx = (x + d * dx + w) % w;
+          sum += v[y * w + x] * v[yy * w + xx];
+          norm++;
+        }
+      }
+      corr[d] = norm ? sum / norm : 0;
+    }
+    /* 跳过零延迟衰减段，找第一个“先降后升”的局部峰 */
+    let sawMinimum = false;
+    for (let d = 2; d < maxSearch; d++) {
+      if (corr[d] < corr[d - 1] && corr[d] <= corr[d + 1]) sawMinimum = true;
+      if (sawMinimum && corr[d] > corr[d - 1] && corr[d] >= corr[d + 1] && corr[d] > 0) {
+        return d;
       }
     }
-    corr /= norm || 1;
-    if (corr > maxCorr) { maxCorr = corr; maxOffset = d; }
+    return 0;
+  };
+
+  const px = firstPeak(1, 0);
+  const py = firstPeak(0, 1);
+  if (px && py) return Math.round((px + py) / 2);
+  return px || py || 0;
+}
+
+/* -------------------------------------------------------------- */
+/* 场熵 H_v（归一化 Shannon 熵，单位：bit / bit_max）              */
+/* 对场值做 64 桶直方图，H = -Σ p log2 p，再除以 log2(bins)。      */
+/* 均匀场 → 0；随机场 → 接近 1。                                   */
+/* -------------------------------------------------------------- */
+export function computeFieldEntropy(field, bins = 64) {
+  if (!field || !field.length) return 0;
+  const hist = new Uint32Array(bins);
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < field.length; i++) {
+    const val = field[i];
+    if (val < min) min = val;
+    if (val > max) max = val;
   }
-  return maxOffset;
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return 0;
+  const scale = (bins - 1) / (max - min);
+  for (let i = 0; i < field.length; i++) {
+    const b = Math.min(bins - 1, Math.max(0, Math.floor((field[i] - min) * scale)));
+    hist[b]++;
+  }
+  const total = field.length;
+  let H = 0;
+  for (let i = 0; i < bins; i++) {
+    if (!hist[i]) continue;
+    const p = hist[i] / total;
+    H -= p * Math.log2(p);
+  }
+  return Math.max(0, Math.min(1, H / Math.log2(bins)));
 }
 
 /* -------------------------------------------------------------- */

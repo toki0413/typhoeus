@@ -32,8 +32,10 @@ export function createSciencePanel({ state, toast, openModal, downloadJSON }) {
     html += `<div class="sci-glossary">
       <b>指标说明</b>：${SCIENCE_METRIC_LABELS.lyapunov.symbol} = ${SCIENCE_METRIC_LABELS.lyapunov.note}；
       ${SCIENCE_METRIC_LABELS.fractal.symbol} = ${SCIENCE_METRIC_LABELS.fractal.note}；
+      ${SCIENCE_METRIC_LABELS.entropy.symbol} = ${SCIENCE_METRIC_LABELS.entropy.note}；
+      ${SCIENCE_METRIC_LABELS.period.symbol} = ${SCIENCE_METRIC_LABELS.period.note}；
       ${SCIENCE_METRIC_LABELS.energy.symbol} = ${SCIENCE_METRIC_LABELS.energy.note}。
-      它们只用于本工具内的相对比较，不是严格物理量。
+      它们用于相对比较；λ_FT 是有限时间估计，不宣称收敛的渐近指数。
     </div>`;
 
     /* ---- Section 1: Pattern Match 已发表 Turing 模式匹配 ---- */
@@ -53,10 +55,10 @@ export function createSciencePanel({ state, toast, openModal, downloadJSON }) {
           </div>
           <div class="pattern-desc">${p.desc}</div>
           <div class="pattern-diff">
-            Δλ_est ${p.diff.lyapunov > 0 ? '+' : ''}${p.diff.lyapunov}
+            Δλ_FT ${p.diff.lyapunov > 0 ? '+' : ''}${p.diff.lyapunov}
             · ΔD_box ${p.diff.fractal > 0 ? '+' : ''}${p.diff.fractal}
             · ΔE_field ${p.diff.energy}
-            · ΔT ${p.diff.period > 0 ? '+' : ''}${p.diff.period}
+            · ΔL_c ${p.diff.period > 0 ? '+' : ''}${p.diff.period}
           </div>
           <div class="pattern-refs dim">${p.refs?.join(' · ') ?? ''}</div>
         </li>`;

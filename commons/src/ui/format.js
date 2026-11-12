@@ -51,7 +51,7 @@ export function sortLabel(s) {
   return {
     similarity: '相似度',
     energy: 'E_field 低',
-    lyapunov: 'λ_est 低',
+    lyapunov: 'λ_FT 低',
     fractal: 'D_box 最优',
     recent: '最新',
   }[s] ?? s;

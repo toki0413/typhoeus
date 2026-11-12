@@ -3263,3 +3263,13 @@ body.modal-open .toast-layer { top: 12px; bottom: auto; }
   .mix-sliders { gap: 8px; }
   .mix-row { padding: 11px 2px; }
 }
+
+/* Toast 移到左下，避免覆盖右侧控制台 */
+.toast-layer {
+  left: 32px;
+  right: auto;
+  align-items: flex-start;
+}
+@media (max-width: 760px) {
+  .toast-layer { left: 12px; right: 12px; align-items: stretch; }
+}

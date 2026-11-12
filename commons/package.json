@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "test": "node --test test/unit.test.mjs && node test/app-smoke.mjs && node e2e-test.mjs",
+    "test": "node --test test/unit.test.mjs && node --test test/science.test.mjs && node test/app-smoke.mjs && node e2e-test.mjs",
     "test:unit": "node --test test/unit.test.mjs",
+    "test:science": "node --test test/science.test.mjs",
     "test:smoke": "node test/app-smoke.mjs",
     "test:e2e": "node e2e-test.mjs",
     "audio:render": "node tools/audio-render.cjs",

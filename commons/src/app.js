@@ -359,6 +359,22 @@ function endRangeDrag() {
   document.body.classList.remove('range-dragging');
 }
 
+/* 统一指标入口：科学引擎优先使用其第一性原理指标，生命/Lenia 继续用结构指标 */
+function metricsFor(sim) {
+  const base = computeMetrics(sim);
+  if (!sim || typeof sim.metrics !== 'function') return base;
+  const sci = sim.metrics();
+  return {
+    ...base,
+    ...sci,
+    diameter: base.diameter,
+    diameterNorm: base.diameterNorm,
+    components: base.components,
+    stability: base.stability,
+    typeTone: sci.typeTone || base.typeTone,
+  };
+}
+
 function normalizeRecipe(rec) {
   if (!rec) return null;
   const out = deepClone(rec);
@@ -575,7 +591,7 @@ function attachRecipe(recipe, opts = {}) {
   state.sim = createEngine(state.recipe.seed.genome, state.recipe.env, state.recipe.rngSeed);
   /* 结构识别：只对 Conway/Lenia 这类有离散 grid 的引擎启用 */
   state.structure = state.sim?.grid ? new StructureTracker(state.sim.w, state.sim.h) : null;
-  state.metrics = computeMetrics(state.sim);
+  state.metrics = metricsFor(state.sim);
   if (opts.keepHistory !== true) resetHistory();
   state.lastType = state.metrics.type;
   state.lastTypeLabel = state.metrics.typeLabel;
@@ -602,7 +618,7 @@ function attachRecipe(recipe, opts = {}) {
 function rebuildSim() {
   state.sim = createEngine(state.recipe.seed.genome, state.recipe.env, state.recipe.rngSeed);
   state.structure = state.sim?.grid ? new StructureTracker(state.sim.w, state.sim.h) : null;
-  state.metrics = computeMetrics(state.sim);
+  state.metrics = metricsFor(state.sim);
   resetHistory();
   state.lastType = state.metrics.type;
   state.lastTypeLabel = state.metrics.typeLabel;
@@ -640,7 +656,7 @@ function stepMain() {
 function refreshMainMetrics() {
   if (!state.sim) return;
   const prevType = state.lastType;
-  const m = computeMetrics(state.sim);
+  const m = metricsFor(state.sim);
   state.metrics = m;
   state.renderer.setMetrics(m);
   pushHistory(m);
@@ -757,7 +773,7 @@ function updateHUD(force = false) {
   $('#hudMetrics').innerHTML = `
     <span>密度<b>${(m.density * 100).toFixed(1)}%</b></span>
     <span>熵<b>${m.entropy.toFixed(2)}</b></span>
-    <span>周期<b>${m.period || '∅'}</b></span>
+    <span>${m.periodKind === 'correlation-length' ? 'L_c' : '周期'}<b>${m.period || '∅'}</b></span>
     <span>直径<b>${m.diameter}</b></span>`;
   const fp = currentFingerprint();
   $('#fingerprintCode').textContent = formatFp(fp);
@@ -1437,7 +1453,7 @@ function renderStructPanel() {
         <canvas id="spark-entropy"></canvas>
       </div>
       <div class="metric-card">
-        <div class="m-label">PERIOD · 周期</div>
+        <div class="m-label" id="spPeriodLabel">PERIOD · 周期</div>
         <div class="m-value" id="sp-period">—</div>
       </div>
       <div class="metric-card">
@@ -1516,7 +1532,10 @@ function updateStructValues() {
   };
   set('sp-density', `${(m.density * 100).toFixed(1)}<small>%</small>`);
   set('sp-entropy', `${m.entropy.toFixed(2)}`);
-  set('sp-period', m.period ? `${m.period}<small>代</small>` : `∅<small>未收敛</small>`);
+  const periodIsLc = m.periodKind === 'correlation-length';
+  const periodLabelEl = document.getElementById('spPeriodLabel');
+  if (periodLabelEl) periodLabelEl.textContent = periodIsLc ? 'L_c · 相关长度' : 'PERIOD · 周期';
+  set('sp-period', m.period ? `${m.period}<small>${periodIsLc ? '格' : '代'}</small>` : `∅<small>未收敛</small>`);
   set('sp-diameter', `${m.diameter}<small>格</small>`);
   set('sp-activity', `${m.activity.toFixed(2)}`);
   set('sp-components', `${m.components}<small>块</small>`);
@@ -1563,7 +1582,11 @@ function diagnosisText(m) {
     drifting: '歌声随着它慢慢漫步，还没有定下来。',
   };
   let html = `它现在是<b>${m.typeLabel}</b>态：密度 ${pct}%，温柔度 ${m.entropy.toFixed(2)}，`;
-  html += m.period ? `呼吸周期 ${m.period} 代，` : '还没有明显的呼吸周期，';
+  html += m.period
+    ? (m.periodKind === 'correlation-length'
+      ? `相关长度 ${m.period} 格，`
+      : `呼吸周期 ${m.period} 代，`)
+    : '还没有明显的呼吸周期，';
   html += `活跃度 ${m.activity.toFixed(2)}，邻接范围 ${m.diameter} 格，${m.components} 个连通块。<br>${hints[m.type] || ''}`;
   if (m.type === 'endangered') {
     html += '<br><b>轻轻关怀</b>：试试调低扰动、增加温柔的约束，或换个更宽容的家，也许它会好起来 ♡';
@@ -1629,7 +1652,7 @@ function renderCommons() {
           <div class="card-metrics">
             ${m ? `<span>密度<b>${(m.density * 100).toFixed(1)}%</b></span>
             <span>熵<b>${m.entropy.toFixed(2)}</b></span>
-            <span>周期<b>${m.period || '∅'}</b></span>
+            <span>${m.periodKind === 'correlation-length' ? 'L_c' : '周期'}<b>${m.period || '∅'}</b></span>
             <span>型<b>${m.typeLabel}</b></span>` : '<span>结构剖析中…</span>'}
           </div>
           <div class="card-actions">
@@ -3268,7 +3291,7 @@ function handleSciAction(action) {
     return;
   }
   if (action === 'match' && matchPatternLibrary) {
-    const m = state.sim.metrics ? state.sim.metrics() : computeMetrics(state.sim);
+    const m = metricsFor(state.sim);
     const matches = matchPatternLibrary(m);
     state.sciMatches = matches;
     toast(`📚 模式匹配 Top-1：${matches[0]?.label ?? '—'} ${matches[0]?.similarity ?? 0}%`);
@@ -3293,7 +3316,7 @@ function handleSciAction(action) {
     return;
   }
   if (action === 'save' && saveAsDiscovery) {
-    const m = state.sim.metrics ? state.sim.metrics() : computeMetrics(state.sim);
+    const m = metricsFor(state.sim);
     const matches = matchPatternLibrary ? matchPatternLibrary(m) : [];
     const rec = saveAsDiscovery(state.recipe, m, matches);
     state.sciDiscovery = rec;
@@ -3309,7 +3332,7 @@ function handleSciAction(action) {
 }
 
 function afterEnvReset() {
-  state.metrics = computeMetrics(state.sim);
+  state.metrics = metricsFor(state.sim);
   resetHistory();
   state.lastType = state.metrics.type;
   state.lastTypeLabel = state.metrics.typeLabel;
