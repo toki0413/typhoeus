@@ -1912,6 +1912,17 @@ export class AudioEngine {
   }
 
   /* ---- 尺八：竹笛气声感，起音上滑 + 慢入揉弦 ---- */
+  _noiseBuffer() {
+    if (this._noiseBuf && this._noiseCtx === this.ctx) return this._noiseBuf;
+    const len = Math.floor(this.ctx.sampleRate * 0.2);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this._noiseBuf = buf;
+    this._noiseCtx = this.ctx;
+    return buf;
+  }
+
   _shakuhachi(freq, when, dur, amp = 0.035, pan = 0, part = null) {
     if (!this.built || !this.enabled) return;
     if (part && !this._audible(part)) return;
@@ -1951,6 +1962,23 @@ export class AudioEngine {
       g.gain.value = a;
       osc.connect(g); g.connect(out);
       osc.start(when); osc.stop(when + dur + 0.08);
+    }
+
+    /* 起音气声：只出现在前 140ms，随包络消失，不会变成持续底噪 */
+    if (typeof this.ctx.createBuffer === 'function') {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this._noiseBuffer();
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = Math.max(700, Math.min(4200, freq * 2.4));
+      bp.Q.value = 0.8;
+      const ng = this.ctx.createGain();
+      const noiseAmp = Math.max(0.004, amp * 0.45);
+      ng.gain.setValueAtTime(0.0001, when);
+      ng.gain.linearRampToValueAtTime(noiseAmp, when + 0.012);
+      ng.gain.exponentialRampToValueAtTime(0.0001, when + 0.14);
+      src.connect(bp); bp.connect(ng); ng.connect(out);
+      src.start(when); src.stop(when + 0.18);
     }
   }
 

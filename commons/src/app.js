@@ -1063,17 +1063,21 @@ function mixerBodyHTML() {
     const cur = voiceOf(mapping, p.key);
     const dim = anySolo && !c.solo && !c.mute;
     return `<div class="mix-row${c.mute ? ' mute' : ''}${dim ? ' solo-dim' : ''}" data-mixer-row="${p.key}">
-      <div class="mix-name">${p.label}</div>
-      <select class="select" data-instrument-select="${p.key}" aria-label="${p.label} 音色">
-        ${p.opts.map((o) => `<option value="${o}" ${o === cur ? 'selected' : ''}>${INSTRUMENT_VOICE_LABELS[o] || o}</option>`).join('')}
-      </select>
-      <button class="mix-btn audition" data-mixer-audition="${p.key}" title="试听 ${p.label}" aria-label="试听 ${p.label}">♪</button>
-      <button class="mix-btn${c.mute ? ' on' : ''}" data-mixer-mute="${p.key}" title="静音" aria-label="静音 ${p.label}">M</button>
-      <button class="mix-btn solo${c.solo ? ' on' : ''}" data-mixer-solo="${p.key}" title="独奏" aria-label="独奏 ${p.label}">S</button>
-      ${mixerCtl(p.key, 'gain', Math.round(c.gain * 100), 0, 150, 5, '音量')}
-      ${mixerCtl(p.key, 'pan', Math.round(c.pan * 100), -100, 100, 5, '声像')}
-      ${mixerCtl(p.key, 'oct', c.oct, -2, 2, 1, '八度')}
-      ${mixerCtl(p.key, 'send', Math.round(c.send * 100), 0, 100, 5, '发送')}
+      <div class="mix-top">
+        <div class="mix-name">${p.label}</div>
+        <select class="select" data-instrument-select="${p.key}" aria-label="${p.label} 音色">
+          ${p.opts.map((o) => `<option value="${o}" ${o === cur ? 'selected' : ''}>${INSTRUMENT_VOICE_LABELS[o] || o}</option>`).join('')}
+        </select>
+        <button class="mix-btn audition" data-mixer-audition="${p.key}" title="试听 ${p.label}" aria-label="试听 ${p.label}">♪</button>
+        <button class="mix-btn${c.mute ? ' on' : ''}" data-mixer-mute="${p.key}" title="静音" aria-label="静音 ${p.label}">M</button>
+        <button class="mix-btn solo${c.solo ? ' on' : ''}" data-mixer-solo="${p.key}" title="独奏" aria-label="独奏 ${p.label}">S</button>
+      </div>
+      <div class="mix-sliders">
+        ${mixerCtl(p.key, 'gain', Math.round(c.gain * 100), 0, 150, 5, '音量')}
+        ${mixerCtl(p.key, 'pan', Math.round(c.pan * 100), -100, 100, 5, '声像')}
+        ${mixerCtl(p.key, 'oct', c.oct, -2, 2, 1, '八度')}
+        ${mixerCtl(p.key, 'send', Math.round(c.send * 100), 0, 100, 5, '发送')}
+      </div>
     </div>`;
   }).join('');
 
@@ -1099,6 +1103,7 @@ function mixerBodyHTML() {
       <div class="mix-head"><span>声部</span><span>音色</span><span>♪</span><span>M</span><span>S</span><span>音量</span><span>声像</span><span>八度</span><span>发送</span></div>
       ${rows}
     </div>
+    <div class="mixer-status" id="mixerStatus" aria-live="polite"></div>
     <p class="hint">♪ 试听当前音色 · 慢拖更精细，按住 Shift 微调 · 双击任意滑块恢复默认 · 音量 0–150% · 声像 L/C/R · 八度 −2…+2 · 发送 = 混响量。M 静音；S 独奏（独奏时其余声部自动变暗静音）。</p>`;
 }
 
@@ -1278,6 +1283,8 @@ function applyMixerPreset(key) {
 function exportMixdown() {
   if (state.exportingWav) return;
   state.exportingWav = true;
+  const status = $('#mixerStatus');
+  if (status) status.textContent = '离线渲染 30 秒中…';
   toast('离线渲染 30 秒中，请稍等 …', 5000);
   const rec = state.recipe;
   renderMixdownWav({
@@ -1295,8 +1302,11 @@ function exportMixdown() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    toast(`已导出 ${(blob.size / 1048576).toFixed(1)} MB WAV`, 2600);
+    const sizeMb = (blob.size / 1048576).toFixed(1);
+    if (status) status.textContent = `已导出 ${sizeMb} MB WAV`;
+    toast(`已导出 ${sizeMb} MB WAV`, 2600);
   }).catch((err) => {
+    if (status) status.textContent = `导出失败：${err?.message || err}`;
     toast(`导出失败：${err?.message || err}`, 3200);
   }).finally(() => {
     state.exportingWav = false;
