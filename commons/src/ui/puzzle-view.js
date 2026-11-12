@@ -30,6 +30,8 @@ export function createPuzzleView({ state, toast }) {
   let token = 0;
   let progress = loadPuzzleProgress();
   let statusText = '';
+  let ghostOn = false;
+  let undoStack = [];
 
   /* ------------------------------------------------------------------ */
   /* 工具                                                                */
@@ -83,7 +85,7 @@ export function createPuzzleView({ state, toast }) {
   /* 绘制                                                                */
   /* ------------------------------------------------------------------ */
 
-  function paintField(canvas, field, mode = 'gray') {
+  function paintField(canvas, field, mode = 'gray', ghostField = null) {
     if (!canvas || !field) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -106,6 +108,18 @@ export function createPuzzleView({ state, toast }) {
           Math.round(base[1] + (ink[1] - base[1]) * v),
           Math.round(base[2] + (ink[2] - base[2]) * v),
         ];
+        /* 目标叠影：把目标高密度区域淡淡染成朱红，帮助对齐 */
+        if (ghostField) {
+          const gv = Math.max(0, Math.min(1, ghostField[i] || 0));
+          if (gv > 0.35) {
+            const a = ((gv - 0.35) / 0.65) * 0.26;
+            c = [
+              Math.round(c[0] + (red[0] - c[0]) * a),
+              Math.round(c[1] + (red[1] - c[1]) * a),
+              Math.round(c[2] + (red[2] - c[2]) * a),
+            ];
+          }
+        }
       }
       const p = i * 4;
       img.data[p] = c[0];
@@ -123,14 +137,15 @@ export function createPuzzleView({ state, toast }) {
 
     const work = $('#puzzleWork');
     if (!work) return;
+    const ghost = ghostOn ? target?.field : null;
     if (displayMode === 'seed') {
-      paintField(work, session.mask, 'gray');
+      paintField(work, session.mask, 'gray', ghost);
     } else if (displayMode === 'diff' && previewField && target) {
       const diff = new Float32Array(FIELD_SIZE * FIELD_SIZE);
       for (let i = 0; i < diff.length; i++) diff[i] = Math.abs(previewField[i] - target.field[i]);
       paintField(work, diff, 'diff');
     } else {
-      paintField(work, previewField || session.mask, 'gray');
+      paintField(work, previewField || session.mask, 'gray', ghost);
     }
 
     const tag = $('#puzzleModeTag');
@@ -152,6 +167,16 @@ export function createPuzzleView({ state, toast }) {
     </div>`;
   }
 
+  function hintFor(r, valid) {
+    if (!valid) return '先画几笔，让种子连成块；半径 2 以下的碎点很难成核。';
+    if (r.total >= 80) return '很接近了。试试减少墨量，或微调 f/k 拿满最后几分。';
+    if (r.sLayout < 45) return '布局偏了：切到「差异」看红色区域，把种子放到目标最密的地方。';
+    if (r.sStruct < 45) return '结构不像：试试目标类别的 f/k，或按一次 Wiggle。';
+    if (r.sRobust < 50) return '不太稳：把种子集中成几块，不要撒得太碎。';
+    if (r.sInk < 50) return '墨太多了：减小笔刷，清掉不参与成图的区域。';
+    return '继续微调：先动布局，再动参数。';
+  }
+
   function updateScoreUI() {
     const host = $('#puzzleScore');
     if (!host) return;
@@ -162,10 +187,12 @@ export function createPuzzleView({ state, toast }) {
       const f = r.mean || {};
       const tf = target?.features || {};
       const valid = r.valid && r.total > 0;
+      const stars = starsFor(r.total);
       host.innerHTML = `
         <div class="puzzle-score-top">
           <span class="puzzle-total">${valid ? r.total.toFixed(0) : '—'}</span>
           <span class="dim">${valid ? '总分 / 100' : '种子太少，尚未成图'}</span>
+          ${valid ? `<span class="puzzle-stars" aria-label="${stars} 星">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>` : ''}
           <span class="puzzle-best">最佳 ${Math.round(Number(progress[session.levelId]?.best) || 0)}</span>
         </div>
         <div class="puzzle-bars">
@@ -174,6 +201,7 @@ export function createPuzzleView({ state, toast }) {
           ${bar('稳健 15%', r.sRobust)}
           ${bar('墨量 10%', r.sInk)}
         </div>
+        <p class="puzzle-hint">${hintFor(r, valid)}</p>
         <div class="puzzle-features">
           <span>ρ 目标 ${(tf.density * 100).toFixed(1)}% · 当前 ${((f.density || 0) * 100).toFixed(1)}%</span>
           <span>H_v 目标 ${(tf.entropy || 0).toFixed(2)} · 当前 ${(f.entropy || 0).toFixed(2)}</span>
@@ -182,17 +210,31 @@ export function createPuzzleView({ state, toast }) {
           <span>墨量 ${(r.ink * 100).toFixed(1)}% · ${r.painted} 格</span>
           <span>结构距离 ${r.distance.toFixed(3)}</span>
         </div>`;
+      const totalEl = host.querySelector('.puzzle-total');
+      if (totalEl && valid) {
+        totalEl.classList.add('pop');
+        setTimeout(() => totalEl.classList.remove('pop'), 340);
+      }
     }
 
     const reveal = $('#puzzleReveal');
     if (reveal) {
       if (submitted && lastResult && lastResult.total >= 50) {
+        const idx = PUZZLE_LEVELS.findIndex((l) => l.id === session.levelId);
+        const next = PUZZLE_LEVELS[idx + 1];
+        const nextUnlocked = next ? isLevelUnlocked(idx + 1, progress) : false;
         reveal.hidden = false;
         reveal.innerHTML = `<b>通关揭示</b>
           <div>隐藏参数：f ${fmt(session.level.target.f)} · k ${fmt(session.level.target.k)}</div>
           <div>类别：${session.level.classLabel} · 你的 f ${fmt(session.f)} · k ${fmt(session.k)}</div>
           <div class="dim">目标由已知参数与固定种子合成，是<b>合成标定关卡</b>，不是实验数据。参数不唯一；同浏览器、同种子可复现。</div>
-          <div class="dim">参考：${session.level.refs.join(' · ')}</div>`;
+          <div class="dim">参考：${session.level.refs.join(' · ')}</div>
+          ${next
+            ? `<button class="btn tiny" id="puzzleNext" ${nextUnlocked ? '' : 'disabled'}>进入下一关 →</button>`
+            : '<div class="puzzle-done">全部关卡完成 ♡</div>'}`;
+        $('#puzzleNext')?.addEventListener('click', () => {
+          if (nextUnlocked) selectLevel(next.id);
+        });
       } else {
         reveal.hidden = true;
         reveal.innerHTML = '';
@@ -226,6 +268,83 @@ export function createPuzzleView({ state, toast }) {
     updateScoreUI();
   }
 
+  function pushUndo() {
+    if (!session) return;
+    undoStack.push(Float32Array.from(session.mask));
+    if (undoStack.length > 12) undoStack.shift();
+  }
+
+  function undo() {
+    if (!session || running) return;
+    const prev = undoStack.pop();
+    if (!prev) {
+      toast('没有可撤销的笔画', 1200);
+      return;
+    }
+    session.mask = prev;
+    markEdited();
+    draw();
+    schedulePreview(360);
+  }
+
+  function setBrush(next) {
+    brush = Math.max(2, Math.min(8, next));
+    const el = $('#puzzleBrush');
+    if (el) {
+      el.value = String(brush);
+      syncFill(el);
+    }
+    const label = $('#puzzleBrushVal');
+    if (label) label.textContent = String(brush);
+    updateBrushCursorSize();
+  }
+
+  function toggleErase() {
+    erase = !erase;
+    const el = $('#puzzleErase');
+    if (el) {
+      el.textContent = erase ? '橡皮：开' : '橡皮：关';
+      el.setAttribute('aria-pressed', String(erase));
+    }
+    const cursor = $('#puzzleBrushCursor');
+    if (cursor) cursor.classList.toggle('erasing', erase);
+  }
+
+  function updateBrushCursorSize() {
+    const canvas = $('#puzzleWork');
+    const cursor = $('#puzzleBrushCursor');
+    if (!canvas || !cursor) return;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
+    const size = Math.max(8, (brush * 2 / FIELD_SIZE) * rect.width);
+    cursor.style.width = `${size}px`;
+    cursor.style.height = `${size}px`;
+  }
+
+  function moveBrushCursor(ev) {
+    const canvas = $('#puzzleWork');
+    const cursor = $('#puzzleBrushCursor');
+    const stage = canvas?.parentElement;
+    if (!canvas || !cursor || !stage) return;
+    if (ev.pointerType && ev.pointerType !== 'mouse') {
+      cursor.hidden = true;
+      return;
+    }
+    const canvasRect = canvas.getBoundingClientRect();
+    const stageRect = stage.getBoundingClientRect();
+    if (!canvasRect.width) return;
+    updateBrushCursorSize();
+    cursor.style.left = `${ev.clientX - stageRect.left}px`;
+    cursor.style.top = `${ev.clientY - stageRect.top}px`;
+    cursor.classList.toggle('erasing', erase);
+    cursor.hidden = false;
+  }
+
+  function hideBrushCursor() {
+    const cursor = $('#puzzleBrushCursor');
+    if (cursor) cursor.hidden = true;
+  }
+
   function bindCanvas() {
     const canvas = $('#puzzleWork');
     if (!canvas) return;
@@ -233,6 +352,7 @@ export function createPuzzleView({ state, toast }) {
       if (!session || running) return;
       const p = toGrid(ev, canvas);
       if (!p) return;
+      pushUndo();
       painting = true;
       lastPoint = p;
       markEdited();
@@ -243,6 +363,7 @@ export function createPuzzleView({ state, toast }) {
       ev.preventDefault();
     });
     canvas.addEventListener('pointermove', (ev) => {
+      moveBrushCursor(ev);
       if (!painting || !session) return;
       const p = toGrid(ev, canvas);
       if (!p) return;
@@ -260,7 +381,11 @@ export function createPuzzleView({ state, toast }) {
     };
     canvas.addEventListener('pointerup', end);
     canvas.addEventListener('pointercancel', end);
-    canvas.addEventListener('pointerleave', end);
+    canvas.addEventListener('pointerleave', () => {
+      hideBrushCursor();
+      end();
+    });
+    canvas.addEventListener('pointerenter', moveBrushCursor);
   }
 
   async function runPreview({ silent = false } = {}) {
@@ -362,6 +487,7 @@ export function createPuzzleView({ state, toast }) {
 
   function doShake() {
     if (!session || running) return;
+    pushUndo();
     markEdited();
     shakeSession(session);
     updateSeedChip();
@@ -412,7 +538,10 @@ export function createPuzzleView({ state, toast }) {
       </figure>
       <figure class="puzzle-canvas-card puzzle-work-card">
         <figcaption>你的斑图 · <span id="puzzleModeTag">种子</span></figcaption>
-        <canvas id="puzzleWork" width="${FIELD_SIZE}" height="${FIELD_SIZE}"></canvas>
+        <div class="puzzle-canvas-stage">
+          <canvas id="puzzleWork" width="${FIELD_SIZE}" height="${FIELD_SIZE}"></canvas>
+          <div id="puzzleBrushCursor" class="puzzle-brush-cursor" hidden></div>
+        </div>
         <p class="puzzle-tip">按住拖动画种子；笔刷越大，成核越容易。</p>
       </figure>
     </div>
@@ -420,6 +549,8 @@ export function createPuzzleView({ state, toast }) {
     <div class="puzzle-toolbar">
       <label class="puzzle-tool">笔刷 <input type="range" id="puzzleBrush" min="2" max="8" step="1" value="${brush}"><span id="puzzleBrushVal">${brush}</span></label>
       <button class="btn ghost tiny" id="puzzleErase" aria-pressed="${erase ? 'true' : 'false'}">${erase ? '橡皮：开' : '橡皮：关'}</button>
+      <button class="btn ghost tiny" id="puzzleUndo">撤销</button>
+      <button class="btn ghost tiny" id="puzzleGhost" aria-pressed="${ghostOn ? 'true' : 'false'}">目标叠影：${ghostOn ? '开' : '关'}</button>
       <button class="btn ghost tiny" id="puzzleClear">清空</button>
       <button class="btn ghost tiny" id="puzzleReset">重置本关</button>
       <span class="puzzle-modes">
@@ -428,6 +559,7 @@ export function createPuzzleView({ state, toast }) {
         <button class="puzzle-mode${displayMode === 'diff' ? ' active' : ''}" data-mode="diff">差异</button>
       </span>
     </div>
+    <p class="puzzle-shortcuts">[/] 笔刷 · E 橡皮 · Ctrl/Cmd+Z 撤销 · P 预览</p>
 
     <div class="puzzle-params">
       <label class="puzzle-param">
@@ -463,31 +595,33 @@ export function createPuzzleView({ state, toast }) {
     const brushEl = $('#puzzleBrush');
     if (brushEl) {
       brushEl.addEventListener('input', () => {
-        brush = parseInt(brushEl.value, 10) || 5;
-        const v = $('#puzzleBrushVal');
-        if (v) v.textContent = String(brush);
-        syncFill(brushEl);
+        setBrush(parseInt(brushEl.value, 10) || 5);
       });
     }
-    const eraseEl = $('#puzzleErase');
-    if (eraseEl) {
-      eraseEl.addEventListener('click', () => {
-        erase = !erase;
-        eraseEl.textContent = erase ? '橡皮：开' : '橡皮：关';
-        eraseEl.setAttribute('aria-pressed', String(erase));
-      });
-    }
+    $('#puzzleErase')?.addEventListener('click', toggleErase);
+    $('#puzzleUndo')?.addEventListener('click', undo);
+    $('#puzzleGhost')?.addEventListener('click', () => {
+      ghostOn = !ghostOn;
+      const el = $('#puzzleGhost');
+      if (el) {
+        el.textContent = `目标叠影：${ghostOn ? '开' : '关'}`;
+        el.setAttribute('aria-pressed', String(ghostOn));
+      }
+      draw();
+    });
     $('#puzzleClear')?.addEventListener('click', () => {
       if (!session || running) return;
+      pushUndo();
       markEdited();
       session.mask = clearMask();
       updateSeedChip();
       draw();
       updateScoreUI();
-      toast('种子已清空，重新画吧', 1600);
+      toast('种子已清空，撤销可恢复', 1600);
     });
     $('#puzzleReset')?.addEventListener('click', () => {
       if (!session || running) return;
+      undoStack = [];
       session = createSession(session.levelId);
       previewField = null;
       lastResult = null;
@@ -551,6 +685,7 @@ export function createPuzzleView({ state, toast }) {
     submitted = false;
     displayMode = 'seed';
     statusText = '';
+    undoStack = [];
     render();
   }
 
@@ -598,8 +733,36 @@ export function createPuzzleView({ state, toast }) {
     previewTimer = null;
     painting = false;
     lastPoint = null;
+    hideBrushCursor();
     if (running) setRunning(null);
   }
+
+  /* 键盘快捷键：[/] 笔刷、E 橡皮、Ctrl/Cmd+Z 撤销、P 预览 */
+  document.addEventListener('keydown', (ev) => {
+    if (state.view !== 'puzzle') return;
+    const tag = ev.target?.tagName || '';
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
+    if (document.body.classList.contains('modal-open')) return;
+    const key = ev.key;
+    if ((ev.ctrlKey || ev.metaKey) && key.toLowerCase() === 'z') {
+      ev.preventDefault();
+      undo();
+      return;
+    }
+    if (key === '[') {
+      ev.preventDefault();
+      setBrush(brush - 1);
+    } else if (key === ']') {
+      ev.preventDefault();
+      setBrush(brush + 1);
+    } else if (key.toLowerCase() === 'e') {
+      ev.preventDefault();
+      toggleErase();
+    } else if (key.toLowerCase() === 'p') {
+      ev.preventDefault();
+      runPreview();
+    }
+  });
 
   return { render, activate, deactivate };
 }
