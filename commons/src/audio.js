@@ -63,7 +63,10 @@
 
 import { clamp, hashString } from './rng.js';
 import { SCALES } from './engines.js';
-import { AUDIO_CONSTANTS } from './config.js';
+import { AUDIO_CONSTANTS, INSTRUMENT_PARTS } from './config.js';
+
+/* 声部默认音色（玩家未选择时使用） */
+const PART_DEFAULT = Object.fromEntries(INSTRUMENT_PARTS.map((p) => [p.key, p.def]));
 
 /* ---- 音乐理论层（music.js）---- */
 import {
@@ -277,9 +280,34 @@ export class AudioEngine {
     return 12 * (m.octave + 1) + m.root;
   }
 
-  /* 玩家自选乐器：缺省视为开 */
-  _inst(name) {
-    return this.mapping?.instruments?.[name] !== false;
+  /* 玩家自选音色：返回声部当前音色 id（off = 关闭） */
+  _voice(part) {
+    const v = this.mapping?.instruments?.[part];
+    if (v === false) return 'off';
+    if (typeof v === 'string' && v) return v;
+    return PART_DEFAULT[part] || 'off';
+  }
+
+  /* 统一发声入口：把音色 id 分发到具体合成器 */
+  _play(voice, freq, when, { dur = 0.4, amp = 0.05, pan = 0 } = {}) {
+    if (voice === 'off' || !Number.isFinite(freq) || freq <= 0) return;
+    switch (voice) {
+      case 'sine': case 'triangle': case 'sawtooth': case 'square':
+        this._tone(freq, when, dur, amp, voice, 0.5, 0, pan); break;
+      case 'pluck': this._pluck(freq, when, amp, pan); break;
+      case 'strings': this._stringPad(freq, when, dur, amp, pan); break;
+      case 'choir': this._choir(freq, when, dur, amp, pan); break;
+      case 'flute': this._flute(freq, when, dur, amp, pan); break;
+      case 'marimba': this._marimba(freq, when, amp, pan); break;
+      case 'epiano': this._epiano(freq, when, dur, amp, pan); break;
+      case 'bell': this._bell(freq, when, amp, pan); break;
+      case 'reed': this._reed(freq, when, dur, amp, pan); break;
+      case 'shimmer': this._tone(freq, when, 1.6, amp, 'sine', 0.85, 0, pan); break;
+      case 'pad': this._chordTone(freq, when, dur, amp, this.mapping?.wave || 'triangle', pan); break;
+      case 'heart': this._heartbeatTone(freq, when, amp); break;
+      case 'drone': this._tone(freq, when, dur, amp, 'sine', 0.3, 0, pan); break;
+      default: this._tone(freq, when, dur, amp, 'triangle', 0.5, 0, pan); break;
+    }
   }
 
   _tuneDrone() {
@@ -505,7 +533,15 @@ export class AudioEngine {
     /* ---- drone 层（保留原有，但 BPM 改为 heartbeat 驱动）---- */
     const droneLevel = 0.012 + density * 0.32;
     const energyShift = (0.5 - energyNorm) * 140;
-    const droneOn = mapping.drone !== false && this._inst('drone');
+    const droneVoice = this._voice('drone');
+    const droneOn = mapping.drone !== false && droneVoice !== 'off';
+    if (droneVoice !== 'off') {
+      const isWave = ['sine', 'triangle', 'sawtooth', 'square'].includes(droneVoice);
+      for (const dr of this.drones) {
+        const w = isWave ? droneVoice : (dr.ratio === 2 ? 'triangle' : 'sine');
+        if (dr.osc.type !== w) dr.osc.type = w;
+      }
+    }
     this.droneGain.gain.setTargetAtTime(droneOn ? droneLevel : 0.0001, now, 0.5);
     this.droneFilter.frequency.setTargetAtTime(
       (260 + entropy * 2600 * (0.35 + (mapping.brightness ?? 0.55)) + activity * 500)
@@ -641,14 +677,21 @@ export class AudioEngine {
     // attractor 决定心跳的"是否有第二心音"（stable 更稳，只有一个；chaotic 有两个间隔很近）
     const hasSplitHeartbeat = attractorType === 'chaotic' || attractorType === 'drifting';
 
-    if (this._inst('heart') && this._heartbeatNext < now + 0.15) {
+    const heartVoice = this._voice('heart');
+    if (heartVoice !== 'off' && this._heartbeatNext < now + 0.15) {
       // 心跳音：根音 1 octave 下的 sine + 极短 attack
       // Attention 音乐性增强：音量 × dyn.heartbeat（Pet mood → pp ↔ ff）
       const hz = midiToFreq(rootMidi - 12);  // 低八度
-      this._heartbeatTone(hz, this._heartbeatNext, dyn.heartbeat);
-      if (hasSplitHeartbeat) {
-        // 第二心音（轻微）：delay 80ms，音量小 × dyn.heartbeat
-        this._heartbeatTone(hz * 1.06, this._heartbeatNext + beat * 0.18, dyn.heartbeat * 0.25);
+      if (heartVoice === 'heart') {
+        this._heartbeatTone(hz, this._heartbeatNext, dyn.heartbeat);
+        if (hasSplitHeartbeat) {
+          this._heartbeatTone(hz * 1.06, this._heartbeatNext + beat * 0.18, dyn.heartbeat * 0.25);
+        }
+      } else {
+        this._play(heartVoice, hz, this._heartbeatNext, { dur: 0.42, amp: dyn.heartbeat });
+        if (hasSplitHeartbeat) {
+          this._play(heartVoice, hz * 1.06, this._heartbeatNext + beat * 0.18, { dur: 0.3, amp: dyn.heartbeat * 0.25 });
+        }
       }
       this._heartbeatNext += beat;
       this._heartbeatNext = this._heartbeatNext > now + 5 ? this._heartbeatNext : now + beat;  // 防止漂移
@@ -681,62 +724,67 @@ export class AudioEngine {
          和弦音数随生命密度增加 —— 繁盛时和声更厚 */
       const noteCount = Math.max(3, Math.min(chordMidi.length, 3 + Math.round(lifeDensity * 8)));
       const padAmp = (dyn.chordPad ?? 0.07) * (0.65 + this._intensity * 0.7);
+      const padVoice = this._voice('pad');
       chordMidi.slice(0, noteCount).forEach((midi, ci) => {
-        if (!this._inst('pad')) return;
-        const freq = midiToFreq(midi);
+        if (padVoice === 'off') return;
         const pan = (ci % 2 === 0 ? -1 : 1) * (0.18 + 0.1 * (ci % 3));
-        this._chordTone(freq, this._chordNext, chordSec * 0.9, padAmp, waves.chordPad, pan);
+        this._play(padVoice, midiToFreq(midi), this._chordNext, { dur: chordSec * 0.9, amp: padAmp, pan });
       });
       this._chordTones = chordMidi;
       /* 低音根音：给和声一个地基（与 pad 同八度，避免掉到 30Hz 以下听不见） */
       this._tone(midiToFreq(chordMidi[0]), this._chordNext + 0.02, chordSec * 1.05, 0.055, 'sine', 0.3, 0, 0);
       /* 弦乐铺底：根音 + 五音，慢起慢落，给和弦加身体 */
-      if (this._inst('strings') && this._intensity > 0.3) {
-        this._stringPad(midiToFreq(chordMidi[0]), this._chordNext, chordSec * 1.15, 0.03, -0.35);
-        this._stringPad(midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)]), this._chordNext, chordSec * 1.15, 0.022, 0.35);
+      const stringsVoice = this._voice('strings');
+      if (stringsVoice !== 'off' && this._intensity > 0.3) {
+        this._play(stringsVoice, midiToFreq(chordMidi[0]), this._chordNext, { dur: chordSec * 1.15, amp: 0.03, pan: -0.35 });
+        this._play(stringsVoice, midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)]), this._chordNext, { dur: chordSec * 1.15, amp: 0.022, pan: 0.35 });
       }
       /* 人声 Pad：更繁盛时加入，像远处合唱 */
-      if (this._inst('choir') && this._intensity > 0.42) {
-        this._choir(midiToFreq(chordMidi[0] + 12), this._chordNext, chordSec * 1.1, 0.018, -0.5);
-        this._choir(midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)] + 12), this._chordNext, chordSec * 1.1, 0.014, 0.5);
+      const choirVoice = this._voice('choir');
+      if (choirVoice !== 'off' && this._intensity > 0.42) {
+        this._play(choirVoice, midiToFreq(chordMidi[0] + 12), this._chordNext, { dur: chordSec * 1.1, amp: 0.018, pan: -0.5 });
+        this._play(choirVoice, midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)] + 12), this._chordNext, { dur: chordSec * 1.1, amp: 0.014, pan: 0.5 });
       }
       /* 高八度叠层：繁盛时让和弦更"满" */
-      if (this._inst('pad') && this._intensity > 0.35) {
-        this._chordTone(midiToFreq(chordMidi[0] + 12), this._chordNext, chordSec * 0.9, padAmp * 0.45, waves.chordPad, 0.3);
+      if (padVoice !== 'off' && this._intensity > 0.35) {
+        this._play(padVoice, midiToFreq(chordMidi[0] + 12), this._chordNext, { dur: chordSec * 0.9, amp: padAmp * 0.45, pan: 0.3 });
       }
       this._chordNext += chordSec;
     }
 
     /* Layer 2b: 五声琶音 —— 用当前和弦音做温和流动，偶尔跳高两个八度增加亮色 */
-    if (this._inst('arp') && this._chordTones && this._intensity > 0.35 && now >= (this._arpNext || 0)) {
+    const arpVoice = this._voice('arp');
+    if (arpVoice !== 'off' && this._chordTones && this._intensity > 0.35 && now >= (this._arpNext || 0)) {
       this._arpNext = now + Math.max(0.16, beat / 2);
       const pool = this._chordTones;
       const midi = pool[this._arpIdx % pool.length] + (this._arpIdx % 5 === 4 ? 24 : 12);
       this._arpIdx++;
-      this._pluck(midiToFreq(midi), now + 0.01, 0.045, this._arpIdx % 2 ? 0.32 : -0.32);
+      this._play(arpVoice, midiToFreq(midi), now + 0.01, { dur: 0.42, amp: 0.045, pan: this._arpIdx % 2 ? 0.32 : -0.32 });
     }
 
     /* Layer 2c: 高频微光 —— 稀疏的高八度纯音（不是噪声） */
-    if (this._inst('shimmer') && now >= (this._shimmerNext || 0)) {
+    const shimmerVoice = this._voice('shimmer');
+    if (shimmerVoice !== 'off' && now >= (this._shimmerNext || 0)) {
       this._shimmerNext = now + 1.2 + Math.random() * 1.2;
       if (this._intensity > 0.35) {
         const degs = this._scaleDegrees || scale.degrees;
         const deg = Math.floor(Math.random() * degs.length);
         const oct = Math.random() < 0.5 ? 2 : 3;
-        this._tone(this._degreeFreq(deg, oct), now + 0.04, 1.6, 0.05, 'sine', 0.85, 0, Math.random() * 1.4 - 0.7);
+        this._play(shimmerVoice, this._degreeFreq(deg, oct), now + 0.04, { dur: 1.6, amp: 0.05, pan: Math.random() * 1.4 - 0.7 });
       }
     }
 
     /* Layer 2d: 钟琴/铃音 —— 每 4–8 秒一个高音动机，偶尔两音"叮—咚" */
-    if (this._inst('bell') && now >= (this._bellNext || 0)) {
+    const bellVoice = this._voice('bell');
+    if (bellVoice !== 'off' && now >= (this._bellNext || 0)) {
       this._bellNext = now + 4 + Math.random() * 4;
       if (this._intensity > 0.3) {
         const degs = this._scaleDegrees || scale.degrees;
         const deg = Math.floor(Math.random() * degs.length);
         const pan = Math.random() * 1.2 - 0.6;
-        this._bell(this._degreeFreq(deg, 2), now + 0.05, 0.05, pan);
+        this._play(bellVoice, this._degreeFreq(deg, 2), now + 0.05, { dur: 2.0, amp: 0.05, pan });
         if (Math.random() < 0.4) {
-          this._bell(this._degreeFreq((deg + 2) % degs.length, 2), now + 0.38, 0.035, -pan * 0.7);
+          this._play(bellVoice, this._degreeFreq((deg + 2) % degs.length, 2), now + 0.38, { dur: 1.6, amp: 0.035, pan: -pan * 0.7 });
         }
       }
     }
@@ -769,10 +817,9 @@ export class AudioEngine {
           const counterFreq = this._degreeFreq(counterDegree, counterOct);
           const counterAmp = dyn.counter;
           const counterDur = dur * 0.8;
-          if (this._inst('flute')) {
-            this._flute(counterFreq, this.nextNote, counterDur, counterAmp * 0.7, 0.42);
-          } else {
-            this._tone(counterFreq, this.nextNote, counterDur, counterAmp, waves.counter, 0.5, 0, 0.42);
+          const fluteVoice = this._voice('flute');
+          if (fluteVoice !== 'off') {
+            this._play(fluteVoice, counterFreq, this.nextNote, { dur: counterDur, amp: counterAmp * 0.7, pan: 0.42 });
           }
         }
       }
@@ -784,10 +831,9 @@ export class AudioEngine {
         const freq = this._degreeFreq(degree, cellOctaveShift + 1);  // 高八度：新生儿更亮
         /* Attention 音乐性增强：amp × dyn.sparkle，wave 来自 waves.cell */
         const amp = dyn.sparkle + Math.random() * 0.02;
-        if (this._inst('marimba')) {
-          this._marimba(freq, this.nextNote, amp * 1.1, (cell.x - 0.5) * 1.2);
-        } else {
-          this._tone(freq, this.nextNote, 0.32, amp, waves.cell, 0.5);
+        const marimbaVoice = this._voice('marimba');
+        if (marimbaVoice !== 'off') {
+          this._play(marimbaVoice, freq, this.nextNote, { dur: 0.32, amp: amp * 1.1, pan: (cell.x - 0.5) * 1.2 });
         }
 
         // Layer 4: Sparkle Crystal — 新生儿水晶闪烁
@@ -856,30 +902,42 @@ export class AudioEngine {
     cd[evt.type] = now + 1.6;
 
     switch (evt.type) {
-      case 'glider':
-        [0, 2, 4].forEach((deg, i) => {
-          this._marimba(this._degreeFreq(deg, 1), now + i * 0.11, 0.07, -0.55 + i * 0.55);
+      case 'glider': {
+        const v = this._voice('marimba');
+        if (v !== 'off') [0, 2, 4].forEach((deg, i) => {
+          this._play(v, this._degreeFreq(deg, 1), now + i * 0.11, { dur: 0.3, amp: 0.07, pan: -0.55 + i * 0.55 });
         });
         break;
-      case 'oscillator':
-        [1, 3, 1, 3].forEach((deg, i) => {
-          this._reed(this._degreeFreq(deg, 1), now + i * 0.16, 0.16, 0.05, i % 2 ? 0.22 : -0.22);
+      }
+      case 'oscillator': {
+        const v = this._voice('flute');
+        if (v !== 'off') [1, 3, 1, 3].forEach((deg, i) => {
+          this._play(v, this._degreeFreq(deg, 1), now + i * 0.16, { dur: 0.16, amp: 0.05, pan: i % 2 ? 0.22 : -0.22 });
         });
         break;
-      case 'still':
-        this._epiano(this._degreeFreq(0, 0), now, 1.9, 0.05, 0);
-        this._epiano(this._degreeFreq(2, 0), now + 0.06, 1.7, 0.038, 0);
+      }
+      case 'still': {
+        const v = this._voice('bell');
+        if (v !== 'off') {
+          this._play(v, this._degreeFreq(0, 0), now, { dur: 1.9, amp: 0.05 });
+          this._play(v, this._degreeFreq(2, 0), now + 0.06, { dur: 1.7, amp: 0.038 });
+        }
         break;
-      case 'merge':
-        [0, 2, 4].forEach((deg, i) => {
-          this._choir(this._degreeFreq(deg, 1), now + 0.02, 1.2, 0.016, (i - 1) * 0.5);
+      }
+      case 'merge': {
+        const v = this._voice('choir');
+        if (v !== 'off') [0, 2, 4].forEach((deg, i) => {
+          this._play(v, this._degreeFreq(deg, 1), now + 0.02, { dur: 1.2, amp: 0.016, pan: (i - 1) * 0.5 });
         });
         break;
-      case 'split':
-        [4, 2, 0].forEach((deg, i) => {
-          this._pluck(this._degreeFreq(deg, 1), now + i * 0.1, 0.06, 0.35 * (1 - i));
+      }
+      case 'split': {
+        const v = this._voice('arp');
+        if (v !== 'off') [4, 2, 0].forEach((deg, i) => {
+          this._play(v, this._degreeFreq(deg, 1), now + i * 0.1, { dur: 0.25, amp: 0.06, pan: 0.35 * (1 - i) });
         });
         break;
+      }
       case 'birthSurge':
         this._bloom(now);
         break;

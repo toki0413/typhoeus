@@ -186,11 +186,30 @@ export const AUDIO_CONSTANTS = {
   },
 };
 
-/* ---- 玩家可选乐器默认编制（false = 关闭该声部） ---- */
-export const DEFAULT_INSTRUMENTS = {
-  heart: true, drone: true, pad: true, strings: true, choir: true,
-  arp: true, flute: true, marimba: true, bell: true, shimmer: true,
+/* ---- 玩家可选乐器：每个声部可选一种音色（off = 关闭） ---- */
+export const INSTRUMENT_PARTS = [
+  { key: 'heart',   label: '心跳',     def: 'heart',   opts: ['heart', 'triangle', 'square', 'off'] },
+  { key: 'drone',   label: '低音床',   def: 'drone',   opts: ['drone', 'triangle', 'sawtooth', 'off'] },
+  { key: 'pad',     label: '和弦 Pad', def: 'pad',     opts: ['pad', 'sine', 'sawtooth', 'off'] },
+  { key: 'strings', label: '弦乐',     def: 'strings', opts: ['strings', 'choir', 'triangle', 'off'] },
+  { key: 'choir',   label: '人声',     def: 'choir',   opts: ['choir', 'strings', 'flute', 'off'] },
+  { key: 'arp',     label: '琶音',     def: 'pluck',   opts: ['pluck', 'marimba', 'epiano', 'triangle', 'off'] },
+  { key: 'flute',   label: '对位',     def: 'flute',   opts: ['flute', 'reed', 'epiano', 'triangle', 'off'] },
+  { key: 'marimba', label: '新生儿音', def: 'marimba', opts: ['marimba', 'epiano', 'pluck', 'sine', 'off'] },
+  { key: 'bell',    label: '钟琴',     def: 'bell',    opts: ['bell', 'epiano', 'marimba', 'shimmer', 'off'] },
+  { key: 'shimmer', label: '微光',     def: 'shimmer', opts: ['shimmer', 'bell', 'sine', 'off'] },
+];
+
+export const INSTRUMENT_VOICE_LABELS = {
+  off: '关闭',
+  heart: '心跳', drone: '低音床', pad: '和弦 Pad', strings: '弦乐', choir: '人声',
+  pluck: '竖琴', flute: '长笛', marimba: '马林巴', epiano: '电钢', bell: '钟琴',
+  reed: '簧片', shimmer: '微光',
+  sine: '正弦', triangle: '三角', sawtooth: '锯齿', square: '方波',
 };
+
+/* 默认编制：每个声部用各自的默认音色 */
+export const DEFAULT_INSTRUMENTS = Object.fromEntries(INSTRUMENT_PARTS.map((p) => [p.key, p.def]));
 
 /* ---- defaultEnv() 默认值 ---- */
 export const ENV_DEFAULTS = {

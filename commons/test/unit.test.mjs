@@ -63,10 +63,12 @@ test('format: 标签表覆盖 6 种结构态', () => {
   assert.ok(diagnosisShort({ type: 'chaotic' }).length > 0);
 });
 
-test('instruments: 默认编制 10 件全开', () => {
+test('instruments: 默认编制为 10 个声部的默认音色', () => {
   const inst = defaultGenome('life', 'conway').mapping.instruments;
   assert.equal(Object.keys(inst).length, 10);
-  assert.ok(Object.values(inst).every((v) => v === true));
+  assert.equal(inst.arp, 'pluck');
+  assert.equal(inst.bell, 'bell');
+  assert.ok(Object.values(inst).every((v) => typeof v === 'string' && v.length > 0));
 });
 
 /* ================================================================
