@@ -2,6 +2,7 @@
   "name": "commons",
   "version": "1.0.0",
   "description": "",
+  "type": "module",
   "scripts": {
     "test": "node --test test/unit.test.mjs && node --test test/science.test.mjs && node --test test/fit.test.mjs && node --test test/puzzle.test.mjs && node test/app-smoke.mjs && node e2e-test.mjs",
     "test:unit": "node --test test/unit.test.mjs",

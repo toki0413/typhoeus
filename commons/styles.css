@@ -1816,6 +1816,208 @@ body.blind-listen .hud-tr {
   flex-wrap: wrap;
 }
 
+/* ==================== 研究 · 侧门 ==================== */
+
+.research-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.research-lab {
+  margin-bottom: 22px;
+  padding: 26px;
+  border: 1.5px solid var(--line);
+  background: rgba(17, 17, 17, 0.025);
+}
+.research-lab-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.research-lab-head h3 {
+  margin: 6px 0 8px;
+  font-size: 24px;
+}
+.research-lab-head p {
+  max-width: 62ch;
+  margin: 0;
+}
+.research-lab-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.research-lab-body {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 22px;
+  margin-top: 20px;
+  align-items: start;
+}
+.research-target-preview canvas {
+  width: 160px;
+  height: 160px;
+  image-rendering: pixelated;
+  border: 1.5px solid var(--line);
+  background: #f2efe6;
+}
+.research-target-meta {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--dim);
+}
+.research-lab-output {
+  min-width: 0;
+}
+.research-result {
+  margin-top: 10px;
+  padding: 16px 18px;
+  border: 1.5px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+}
+.rr-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rr-score {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--rose);
+}
+.rr-unit {
+  color: var(--muted);
+  font-size: 14px;
+}
+.rr-meta {
+  margin: 8px 0 12px;
+  color: var(--dim);
+  font-size: 13px;
+}
+.rr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+.rr-cell {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+.rr-cell b {
+  display: block;
+  margin-top: 4px;
+  font-size: 16px;
+  color: var(--text);
+}
+.rr-cell i {
+  font-style: normal;
+  color: var(--dim);
+}
+.research-board {
+  margin-top: 14px;
+}
+.rb-head {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+.rb-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 70px 92px;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  align-items: baseline;
+}
+.rb-row .rb-rank {
+  color: var(--rose);
+  font-family: var(--mono, ui-monospace, monospace);
+}
+.rb-row .rb-score {
+  font-weight: 700;
+}
+.rb-row .rb-time {
+  color: var(--dim);
+  font-size: 12px;
+}
+.rb-empty {
+  color: var(--dim);
+  font-size: 14px;
+}
+@media (max-width: 900px) {
+  .research-lab-body { grid-template-columns: 1fr; }
+  .rr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.research-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.research-card {
+  position: relative;
+  padding: 26px 26px 22px;
+  border: 1.5px solid var(--line);
+  background: rgba(255, 255, 255, 0.66);
+}
+.research-card .rc-index {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--rose);
+}
+.research-card h3 {
+  margin: 8px 0 10px;
+  font-size: 22px;
+  font-weight: 800;
+}
+.research-card p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.8;
+}
+.rc-note {
+  display: inline-block;
+  padding: 4px 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+}
+.research-boundary {
+  margin-top: 26px;
+  padding: 24px 26px;
+  border-left: 4px solid var(--rose);
+  background: rgba(215, 38, 30, 0.045);
+}
+.research-boundary h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.research-boundary p {
+  max-width: 78ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.9;
+}
+@media (max-width: 760px) {
+  .research-grid { grid-template-columns: 1fr; }
+  .research-actions { width: 100%; }
+}
+
 /* ==================== 对比视图 ==================== */
 
 .compare-controls {

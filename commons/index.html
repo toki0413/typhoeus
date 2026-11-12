@@ -294,6 +294,33 @@
         </div>
       </header>
 
+      <section class="research-lab">
+        <div class="research-lab-head">
+          <div>
+            <div class="eyebrow">PUBLIC VERIFICATION · 服务端复核</div>
+            <h3>研究关 · 用当前生命复核</h3>
+            <p class="hint">选择一个真实实验目标，把当前生命提交到服务端重跑。评分只表示结构统计的接近程度，不宣称恢复实验参数。</p>
+          </div>
+          <div class="research-lab-controls">
+            <select id="researchTarget" class="select" aria-label="研究目标">
+              <option value="">连接中…</option>
+            </select>
+            <button id="researchVerify" class="primary" disabled>提交当前生命</button>
+          </div>
+        </div>
+        <div class="research-lab-body">
+          <div class="research-target-preview">
+            <canvas id="researchTargetCanvas" width="160" height="160"></canvas>
+            <div id="researchTargetMeta" class="research-target-meta">—</div>
+          </div>
+          <div class="research-lab-output">
+            <div id="researchLabStatus" class="hint">正在连接研究服务…</div>
+            <div id="researchResult" class="research-result" hidden></div>
+            <div id="researchBoard" class="research-board"></div>
+          </div>
+        </div>
+      </section>
+
       <section class="research-grid">
         <article class="research-card">
           <div class="rc-index">01 / FIT</div>
@@ -324,8 +351,9 @@
       <section class="research-boundary">
         <h3>边界</h3>
         <p>
-          这些工具目前只在本机运行，还没有接入外部实验数据、服务端复核与共享榜单。
-          所以它还不是公民科学，只是一扇入口：先让人玩到真问题，再谈让发现被专业的人检验。
+          外部目标来自公开的 CIMA 实验斑图（CC BY 4.0），复核由服务端用确定性种子重跑完成，
+          榜单也由服务端保存。但仍要说明：评分是结构统计距离，不比较相位，也不宣称恢复实验参数；
+          榜单目前存在运行实例的临时目录里，重启会清空，还没有账号、去重与长期存储。
         </p>
       </section>
     </main>

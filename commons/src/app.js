@@ -2757,6 +2757,217 @@ function exportLocalDiscoveries() {
   toast('本地发现已导出', 1600);
 }
 
+/* ---- 研究关：真实实验目标 + 服务端复核 + 共享榜单 ---- */
+
+const researchLab = { targets: null, loading: null };
+
+function currentResearchTarget() {
+  const sel = $('#researchTarget');
+  if (!researchLab.targets?.length) return null;
+  return researchLab.targets.find((t) => t.id === sel?.value) || researchLab.targets[0];
+}
+
+function drawResearchField(canvas, field, w, h) {
+  if (!canvas || !field?.length) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const img = ctx.createImageData(w, h);
+  for (let i = 0; i < w * h; i++) {
+    const v = Math.max(0, Math.min(1, field[i] || 0));
+    const c = Math.round(242 - v * 200);
+    img.data[i * 4] = c;
+    img.data[i * 4 + 1] = c;
+    img.data[i * 4 + 2] = c;
+    img.data[i * 4 + 3] = 255;
+  }
+  const tmp = document.createElement('canvas');
+  tmp.width = w;
+  tmp.height = h;
+  tmp.getContext('2d')?.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
+}
+
+function renderResearchTarget() {
+  const t = currentResearchTarget();
+  if (!t) return;
+  drawResearchField($('#researchTargetCanvas'), t.field, t.w, t.h);
+  const meta = $('#researchTargetMeta');
+  if (meta) {
+    const src = t.source
+      ? `${esc(t.source.citation)}<br>${esc(t.source.license)} · ${esc(t.source.note || '')}`
+      : '';
+    meta.innerHTML = `<b>${esc(t.label)}</b><br>${src}<br>
+      ρ ${(t.features.density * 100).toFixed(1)}% · A ${(t.features.anisotropy ?? 0).toFixed(2)} ·
+      L_c ${t.features.period || '—'} · N ${Math.round((t.features.components ?? 0) * t.w * t.h)} ·
+      P ${(t.features.perimeter ?? 0).toFixed(2)}`;
+  }
+}
+
+function renderResearchBoard(items, target) {
+  const host = $('#researchBoard');
+  if (!host) return;
+  const rows = (items || []).slice(0, 10).map((it) => `<div class="rb-row">
+      <span class="rb-rank">#${it.rank}</span>
+      <span>${esc(it.name || '匿名生命')}</span>
+      <span class="rb-score">${Number(it.score).toFixed(1)}</span>
+      <span class="rb-time">${new Date(it.at).toLocaleString('zh-CN', { hour12: false })}</span>
+    </div>`).join('');
+  host.innerHTML = `<div class="rb-head">共享榜单 · ${esc(target?.label || '全部目标')} · 仅显示前 10</div>
+    ${rows || '<div class="rb-empty">还没有提交。成为第一个。</div>'}`;
+}
+
+async function loadResearchTargets() {
+  const status = $('#researchLabStatus');
+  try {
+    const res = await fetch('/api/research/targets', { headers: { accept: 'application/json' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!Array.isArray(data.targets) || !data.targets.length) throw new Error('目标包为空');
+    researchLab.targets = data.targets;
+    const sel = $('#researchTarget');
+    if (sel) {
+      sel.innerHTML = data.targets
+        .map((t) => `<option value="${esc(t.id)}">${esc(t.label)}</option>`)
+        .join('');
+      sel.value = data.targets[0].id;
+    }
+    $('#researchVerify').disabled = false;
+    if (status) {
+      status.textContent = '已连接研究服务。服务端会用确定性种子重跑 480 步，再按结构统计评分。';
+      if (data.storage === 'ephemeral') {
+        status.textContent += ' 榜单暂存于当前运行实例，重启后会清空。';
+      }
+    }
+    renderResearchTarget();
+    loadResearchBoard();
+  } catch (_) {
+    researchLab.targets = null;
+    const sel = $('#researchTarget');
+    if (sel) sel.innerHTML = '<option value="">未连接</option>';
+    const verify = $('#researchVerify');
+    if (verify) verify.disabled = true;
+    if (status) {
+      status.textContent = '未连接研究服务（当前为静态预览）。服务端复核与共享榜单需要 FunctionWeb 部署。';
+    }
+  }
+}
+
+async function loadResearchBoard() {
+  const host = $('#researchBoard');
+  if (!host) return;
+  const target = currentResearchTarget();
+  if (!target) return;
+  try {
+    const res = await fetch(`/api/research/leaderboard?targetId=${encodeURIComponent(target.id)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderResearchBoard(data.items, target);
+  } catch (_) {
+    host.innerHTML = '<div class="rb-empty">榜单暂不可用</div>';
+  }
+}
+
+function renderResearchResult(data) {
+  const host = $('#researchResult');
+  if (!host) return;
+  const f = data.features || {};
+  const tf = data.targetFeatures || {};
+  const cells = [
+    ['密度 ρ', `${(f.density * 100).toFixed(1)}%`, `${(tf.density * 100).toFixed(1)}%`],
+    ['各向异性 A', (f.anisotropy ?? 0).toFixed(2), (tf.anisotropy ?? 0).toFixed(2)],
+    ['相关长度 L_c', String(f.period || '—'), String(tf.period || '—')],
+    ['斑块数 N', String(Math.round((f.components ?? 0) * 4096)), String(Math.round((tf.components ?? 0) * 4096))],
+    ['边界密度 P', (f.perimeter ?? 0).toFixed(2), (tf.perimeter ?? 0).toFixed(2)],
+  ];
+  host.hidden = false;
+  host.innerHTML = `<div class="rr-top">
+      <span class="rr-score">${Number(data.score).toFixed(1)}</span>
+      <span class="rr-unit">/ 100 · 结构距离 ${Number(data.distance).toFixed(3)}</span>
+    </div>
+    <div class="rr-meta">
+      服务端重跑 ${data.steps} 步 · ${data.usedMask ? '使用你提交的种子' : '使用确定性默认种子'}
+      ${data.rank ? ` · 本轮排名 #${data.rank}` : ''}
+      ${data.persisted === false ? ' · 榜单暂不可写' : ''}
+    </div>
+    <div class="rr-grid">
+      ${cells.map(([label, a, b]) => `<div class="rr-cell">${label}<b>${a}</b><i>目标 ${b}</i></div>`).join('')}
+    </div>`;
+}
+
+async function submitResearchVerification() {
+  const target = currentResearchTarget();
+  if (!target) {
+    toast('先选择一个研究目标', 'warn');
+    return;
+  }
+  const btn = $('#researchVerify');
+  const status = $('#researchLabStatus');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '复核中…';
+  }
+  if (status) status.textContent = '服务端正在重跑反应—扩散…';
+
+  const g = state.recipe.seed.genome;
+  const sci = g.scientific || {};
+  const mask = Array.isArray(sci.mask) ? sci.mask : null;
+  const payload = {
+    targetId: target.id,
+    name: state.recipe.seed.name,
+    recipeId: state.recipe.id,
+    engine: g.engine,
+    f: Number.isFinite(sci.f) ? sci.f : REACTION_DIFFUSION_PRESETS.gs_spots.f,
+    k: Number.isFinite(sci.k) ? sci.k : REACTION_DIFFUSION_PRESETS.gs_spots.k,
+    D_u: Number.isFinite(sci.D_u) ? sci.D_u : PUZZLE_DU,
+    D_v: Number.isFinite(sci.D_v) ? sci.D_v : PUZZLE_DV,
+    dt: Number.isFinite(sci.dt) ? sci.dt : 1.0,
+    mask,
+    maskW: sci.maskW || 64,
+    maskH: sci.maskH || 64,
+  };
+
+  try {
+    const res = await fetch('/api/research/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    renderResearchResult(data);
+    renderResearchBoard(data.leaderboard, target);
+    if (status) {
+      status.textContent = data.persisted === false
+        ? '复核完成，但榜单暂不可写（运行环境只读）。'
+        : '复核完成，结果已写入共享榜单。';
+    }
+    toast(`研究关复核：${data.score} 分`, 'ok');
+  } catch (err) {
+    if (status) status.textContent = `复核失败：${err.message}`;
+    toast(`复核失败：${err.message}`, 'warn');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '提交当前生命';
+    }
+  }
+}
+
+async function initResearchView() {
+  if (!researchLab.targets && !researchLab.loading) {
+    researchLab.loading = loadResearchTargets().finally(() => {
+      researchLab.loading = null;
+    });
+  }
+  if (researchLab.loading) await researchLab.loading;
+  if (researchLab.targets) {
+    renderResearchTarget();
+    loadResearchBoard();
+  }
+}
+
 function downloadJSON(filename, obj) {
   const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -2783,6 +2994,7 @@ function switchView(view) {
   if (view === 'commons') renderCommons();
   if (view === 'compare') openCompare();
   if (view === 'puzzle') puzzleView.activate();
+  if (view === 'research') initResearchView();
   if (view === 'lineage') lineageView.render();
   syncAudioForView();
   updateCompareAudioButton();
@@ -2976,6 +3188,11 @@ function bindUI() {
     });
   });
   $('#researchExport')?.addEventListener('click', exportLocalDiscoveries);
+  $('#researchVerify')?.addEventListener('click', submitResearchVerification);
+  $('#researchTarget')?.addEventListener('change', () => {
+    renderResearchTarget();
+    loadResearchBoard();
+  });
 
   $('#compareMode').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-mode]');

@@ -18,8 +18,8 @@ export { normalizeField };
 
 /* 特征归一化尺度：把不同量纲的特征变成可比较的无量纲距离。
  * density/entropy ∈ [0,1]；period 单位格；fractal ∈ [0.5,2]。 */
-export const FEATURE_SCALES = { density: 0.2, entropy: 0.2, period: 12, fractal: 0.35 };
-export const FEATURE_WEIGHTS = { density: 1.0, entropy: 0.8, period: 1.0, fractal: 0.8 };
+export const FEATURE_SCALES = { density: 0.2, entropy: 0.2, period: 12, fractal: 0.35, anisotropy: 0.25 };
+export const FEATURE_WEIGHTS = { density: 1.0, entropy: 0.8, period: 1.0, fractal: 0.8, anisotropy: 0.9 };
 
 /* 拟合分辨率与演化步数：
  * - 64×64：相关长度搜索上限为 32 格，能测到 16~24 格的真实斑图波长；
@@ -75,7 +75,9 @@ export function imageToField(imageData, w, h, { invert = false } = {}) {
   return out;
 }
 
-/* 结构统计特征（与科学引擎 metrics 使用同一组定义） */
+/* 结构统计特征（与科学引擎 metrics 使用同一组定义）
+ * anisotropy = 结构张量相干度：条纹接近 1，斑点接近 0。
+ * 没有它时，“斑点”和“条纹”可能因为密度/熵相近而被误判为相似。 */
 export function extractPatternFeatures(field, w, h, threshold = 0.5) {
   let occupied = 0;
   for (let i = 0; i < field.length; i++) if (field[i] > threshold) occupied++;
@@ -83,13 +85,34 @@ export function extractPatternFeatures(field, w, h, threshold = 0.5) {
   const entropy = computeFieldEntropy(field);
   const period = computeSpatialPeriod(field, w, h);
   const fractal = computeFractalDimension(field, w, h, threshold);
-  return { density, entropy, period, fractal };
+  const anisotropy = computeAnisotropy(field, w, h);
+  return { density, entropy, period, fractal, anisotropy };
+}
+
+function computeAnisotropy(field, w, h) {
+  let jxx = 0;
+  let jyy = 0;
+  let jxy = 0;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const gx = (field[i + 1] - field[i - 1]) * 0.5;
+      const gy = (field[i + w] - field[i - w]) * 0.5;
+      jxx += gx * gx;
+      jyy += gy * gy;
+      jxy += gx * gy;
+    }
+  }
+  const trace = jxx + jyy;
+  if (trace < 1e-12) return 0;
+  const coherence = Math.sqrt((jxx - jyy) ** 2 + 4 * jxy * jxy) / trace;
+  return Math.min(1, Math.max(0, coherence));
 }
 
 /* 无量纲结构距离 */
 export function featureDistance(target, candidate) {
   let sum = 0;
-  for (const key of ['density', 'entropy', 'period', 'fractal']) {
+  for (const key of ['density', 'entropy', 'period', 'fractal', 'anisotropy']) {
     const a = Number.isFinite(target[key]) ? target[key] : 0;
     const b = Number.isFinite(candidate[key]) ? candidate[key] : 0;
     let diff;
