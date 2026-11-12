@@ -27,61 +27,63 @@
 /* ================================================================ */
 
 export const PATTERN_LIBRARY = [
-  /* ============ Gray-Scott (反应-扩散) ============ */
+  /* ============ Gray-Scott (反应-扩散) ============
+   * signature 由修正后的五点 Laplacian 求解器在 64×64、600 步、torus 边界下实测：
+   * λ_FT / D_box / E_field / L_c。旧签名来自退化场，已全部重算。 */
   {
     id: 'gs_spots', engine: 'grayScott', label: '斑点 Spots',
     refs: ['Gray & Scott 1984', 'Kondo & Miura 2010 斑马条纹'],
-    params: { D_u: 1.0, D_v: 0.5, f: 0.035, k: 0.065, dt: 1.0 },
-    signature: { lyapunov: -2.9, fractal: 1.81, energy: 0.57, period: 14 },
+    params: { D_u: 0.16, D_v: 0.08, f: 0.035, k: 0.062, dt: 1.0 },
+    signature: { lyapunov: 0.0, fractal: 1.31, energy: 0.030, period: 28 },
     desc: '局部激活 → 高扩散抑制剂 → 分离的斑点（典型生物色素模式）',
   },
   {
     id: 'gs_stripes', engine: 'grayScott', label: '斑马条纹 Stripes',
     refs: ['Gray & Scott 1984', 'Akaiwa et al. 2005'],
-    params: { D_u: 1.0, D_v: 0.5, f: 0.022, k: 0.051, dt: 1.0 },
-    signature: { lyapunov: -2.8, fractal: 1.78, energy: 0.39, period: 16 },
+    params: { D_u: 0.16, D_v: 0.08, f: 0.014, k: 0.052, dt: 1.0 },
+    signature: { lyapunov: 0.0, fractal: 1.49, energy: 0.040, period: 15 },
     desc: 'f/k 稍低 → 更活跃 → 条纹代替斑点（斑马/热带鱼）',
   },
   {
     id: 'gs_maze', engine: 'grayScott', label: '迷宫 Labyrinth',
     refs: ['Pearson 1993 混沌迷宫模式'],
-    params: { D_u: 1.0, D_v: 0.5, f: 0.029, k: 0.057, dt: 1.0 },
-    signature: { lyapunov: -2.7, fractal: 1.85, energy: 0.52, period: 12 },
+    params: { D_u: 0.16, D_v: 0.08, f: 0.026, k: 0.058, dt: 1.0 },
+    signature: { lyapunov: 0.0, fractal: 1.55, energy: 0.048, period: 21 },
     desc: '在 spots/stripes 边界 → 迷宫样不规则',
   },
   {
     id: 'gs_hexagons', engine: 'grayScott', label: '六边形蜂窝 Hexagons',
     refs: ['Silva & Gomatam 1998'],
-    params: { D_u: 1.0, D_v: 0.5, f: 0.014, k: 0.048, dt: 1.0 },
-    signature: { lyapunov: -2.6, fractal: 1.72, energy: 0.36, period: 18 },
+    params: { D_u: 0.16, D_v: 0.08, f: 0.040, k: 0.062, dt: 1.0 },
+    signature: { lyapunov: 0.0, fractal: 1.36, energy: 0.034, period: 0 },
     desc: '低 f/k → 抑制区变成规则六边形（眼睛虹膜）',
   },
   {
     id: 'gs_wandering_drops', engine: 'grayScott', label: '游走点 Wandering Drops',
     refs: ['Lee & Swinney 1995'],
-    params: { D_u: 1.0, D_v: 0.5, f: 0.030, k: 0.062, dt: 1.0 },
-    signature: { lyapunov: -0.08, fractal: 1.79, energy: 0.41, period: 22 },
+    params: { D_u: 0.16, D_v: 0.08, f: 0.014, k: 0.050, dt: 1.0 },
+    signature: { lyapunov: 0.0, fractal: 1.29, energy: 0.024, period: 29 },
     desc: 'f 稍高 → 孤立的移动液滴（弱混沌，λ≈0）',
   },
   {
     id: 'gs_mitosis', engine: 'grayScott', label: '有丝分裂 Mitosis',
     refs: ['Reaction-Diffusion 3.0 经典 demo'],
-    params: { D_u: 1.0, D_v: 0.5, f: 0.0367, k: 0.0649, dt: 1.0 },
-    signature: { lyapunov: -2.85, fractal: 1.76, energy: 0.49, period: 15 },
+    params: { D_u: 0.16, D_v: 0.08, f: 0.035, k: 0.060, dt: 1.0 },
+    signature: { lyapunov: 0.0, fractal: 1.53, energy: 0.051, period: 22 },
     desc: '接近边界 → 液滴分裂（有丝分裂模拟）',
   },
   {
     id: 'gs_coral', engine: 'grayScott', label: '珊瑚 Coral',
     refs: ['Kondo & Miura 2010'],
-    params: { D_u: 1.0, D_v: 0.5, f: 0.0545, k: 0.062, dt: 1.0 },
-    signature: { lyapunov: -2.5, fractal: 1.87, energy: 0.55, period: 8 },
+    params: { D_u: 0.16, D_v: 0.08, f: 0.030, k: 0.058, dt: 1.0 },
+    signature: { lyapunov: 0.0, fractal: 1.63, energy: 0.061, period: 27 },
     desc: '高 f → 高生低死 → 珊瑚状分枝',
   },
   {
     id: 'gs_cracks', engine: 'grayScott', label: '龟裂 Cracks',
     refs: ['Murray 2003 Mathematical Biology'],
-    params: { D_u: 0.9, D_v: 0.45, f: 0.03, k: 0.058, dt: 1.0 },
-    signature: { lyapunov: -2.6, fractal: 1.90, energy: 0.61, period: 9 },
+    params: { D_u: 0.144, D_v: 0.072, f: 0.030, k: 0.055, dt: 1.0 },
+    signature: { lyapunov: 0.002, fractal: 1.66, energy: 0.065, period: 26 },
     desc: 'D_u/D_v 比降低 → 狭窄裂缝网络（皮肤纹理）',
   },
 

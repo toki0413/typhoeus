@@ -9,7 +9,12 @@
  *   - 输出是“结构最接近”的参数，不宣称唯一解或实验真值。
  */
 
-import { ReactionDiffusionEngine, computeFieldEntropy, computeSpatialPeriod, computeFractalDimension } from './scientific.js';
+import {
+  ReactionDiffusionEngine, computeFieldEntropy, computeSpatialPeriod,
+  computeFractalDimension, normalizeField,
+} from './scientific.js';
+
+export { normalizeField };
 
 /* 特征归一化尺度：把不同量纲的特征变成可比较的无量纲距离。
  * density/entropy ∈ [0,1]；period 单位格；fractal ∈ [0.5,2]。 */
@@ -67,20 +72,6 @@ export function imageToField(imageData, w, h, { invert = false } = {}) {
       out[y * w + x] = (sample(fx, fy) - min) / span;
     }
   }
-  return out;
-}
-
-/* 把任意场拉伸到 [0,1]（只用于特征提取/显示，不改变动力学） */
-export function normalizeField(field) {
-  let min = Infinity;
-  let max = -Infinity;
-  for (let i = 0; i < field.length; i++) {
-    if (field[i] < min) min = field[i];
-    if (field[i] > max) max = field[i];
-  }
-  const span = max - min || 1;
-  const out = new Float32Array(field.length);
-  for (let i = 0; i < field.length; i++) out[i] = (field[i] - min) / span;
   return out;
 }
 

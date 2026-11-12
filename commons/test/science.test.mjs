@@ -17,6 +17,7 @@ import {
   computeFractalDimension,
   computeFieldEntropy,
   computeFieldEnergy,
+  laplacian,
 } from '../src/scientific.js';
 import { createEngine, defaultGenome, defaultEnv } from '../src/engines.js';
 
@@ -113,23 +114,52 @@ test('求解器: 相同种子 → 可复现指标', () => {
   assert.equal(ma.lyapunov, mb.lyapunov);
 });
 
-test('求解器: 纯扩散（f=k=0）总质量守恒', () => {
+test('求解器: 纯扩散（v=0, f=k=0）总质量守恒', () => {
   const sim = scientificEngine();
   const rd = sim._rd;
   rd.params.f = 0;
   rd.params.k = 0;
   rd.dt = 0.05;
+  /* v=0 时反应项 u·v² = 0，只剩 u 的扩散；这才是不含反应的纯扩散检验 */
   rd.u.fill(1);
   rd.v.fill(0);
-  /* 中心一个小方斑 */
   for (let y = 28; y < 36; y++) {
-    for (let x = 28; x < 36; x++) rd.v[y * W + x] = 1;
+    for (let x = 28; x < 36; x++) rd.u[y * W + x] = 0.2;
   }
   const massBefore = sumField(rd.u) + sumField(rd.v);
   for (let i = 0; i < 50; i++) sim.step();
   const massAfter = sumField(rd.u) + sumField(rd.v);
   const rel = Math.abs(massAfter - massBefore) / Math.max(1e-12, massBefore);
-  assert.ok(rel < 1e-2, `总质量相对漂移 ${rel}`);
+  assert.ok(rel < 1e-6, `总质量相对漂移 ${rel}`);
+});
+
+test('求解器: 五点 Laplacian 对常数场为 0、对二次场为 4', () => {
+  const w = 16;
+  const h = 16;
+  const constant = new Float32Array(w * h).fill(0.7);
+  assert.equal(laplacian(constant, w, h, 8, 8, 'torus'), 0);
+
+  const quadratic = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) quadratic[y * w + x] = x * x + y * y;
+  }
+  const lap = laplacian(quadratic, w, h, 8, 8, 'torus');
+  assert.ok(Math.abs(lap - 4) < 1e-9, `laplacian(x²+y²)=${lap}`);
+});
+
+test('求解器: 预设 D·dt 超出 CFL 时自动子步且保持有界', () => {
+  const sim = scientificEngine();
+  const rd = sim._rd;
+  rd.params.f = 0;
+  rd.params.k = 0;
+  rd.dt = 2.0;               // D=0.16 → D·dt=0.32 > 1/4，必须子步
+  rd.u.fill(1);
+  rd.v.fill(0);
+  rd.u[32 * W + 32] = 0;
+  for (let i = 0; i < 20; i++) sim.step();
+  for (let i = 0; i < rd.u.length; i++) {
+    assert.ok(Number.isFinite(rd.u[i]) && rd.u[i] >= 0 && rd.u[i] <= 1, `u[${i}]=${rd.u[i]}`);
+  }
 });
 
 test('切空间: 重归一化后切向量范数有界且有限', () => {

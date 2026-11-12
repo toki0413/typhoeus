@@ -7,6 +7,11 @@ import { PHYSICS_DEFAULTS, SCIENCE_THRESHOLDS } from './config.js';
 // clamp（自包含，避免跨模块依赖 rng.js 是否 export）
 const clampSafe = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
 
+/* 二维五点 Laplacian 显式欧拉的稳定上限：D · dt ≤ 1/4。
+ * 超过该值时由 step() 自动分子步，不允许用 clamp 掩盖发散。 */
+export const EXPLICIT_EULER_CFL = 0.25;
+const MAX_SUBSTEPS = 8;
+
 export const SCIENCE_VERSION = '2.0.0';
 
 /* ============================================================== */
@@ -16,12 +21,11 @@ export const SCIENCE_VERSION = '2.0.0';
 /*   ∂u/∂t = D_u · ∇²u + F_u(u, v)                               */
 /*   ∂v/∂t = D_v · ∇²v + F_v(u, v)                               */
 /*                                                                */
-/* 其中 ∇² 是九邻域拉普拉斯算子：                                  */
-/*   ∇²f(x,y) = (1/6) * [                                         */
-/*     -1·f(x,y) + 0.25·Σ_neighbors                               */
-/*   ]                                                            */
+/* 其中 ∇² 是标准五点拉普拉斯算子（torus / wall 边界）：             */
+/*   ∇²f(x,y) = f(x-1,y) + f(x+1,y) + f(x,y-1) + f(x,y+1) - 4f     */
+/*   常数场 → 0；二次场 x²+y² → 4（离散精确）。                     */
 /*                                                                */
-/* 离散化（Forward Euler，dt 必须足够小以保证数值稳定）：          */
+/* 离散化（Forward Euler；D·dt > 1/4 时自动分子步，见 step()）：    */
 /*   u_new = u + dt · (D_u * lapU + F_u(u, v))                    */
 /*   v_new = v + dt · (D_v * lapV + F_v(u, v))                    */
 /* ============================================================== */
@@ -65,24 +69,26 @@ export const SCIENCE_VERSION = '2.0.0';
 /* -------------------------------------------------------------- */
 
 export const REACTION_DIFFUSION_PRESETS = {
-  /* ---- Gray-Scott ---- */
-  gs_spots:   { label: '斑点', engine: 'grayScott', D_u: 1.0, D_v: 0.5,
-                f: 0.035, k: 0.065, dt: 1.0,
+  /* ---- Gray-Scott ----
+   * D_u = 0.16, D_v = 0.08 是 Gray-Scott 的标准标度（网格间距 1、dt=1）。
+   * 旧值 1.0/0.5 在 D·dt ≤ 1/4 的显式欧拉稳定域之外，会被 clamp 压成均匀场。 */
+  gs_spots:   { label: '斑点', engine: 'grayScott', D_u: 0.16, D_v: 0.08,
+                f: 0.035, k: 0.062, dt: 1.0,
                 note: 'Gray-Scott · 经典斑点，像瓢虫身上的花纹' },
-  gs_stripes: { label: '条纹', engine: 'grayScott', D_u: 1.0, D_v: 0.5,
-                f: 0.012, k: 0.050, dt: 1.0,
+  gs_stripes: { label: '条纹', engine: 'grayScott', D_u: 0.16, D_v: 0.08,
+                f: 0.014, k: 0.052, dt: 1.0,
                 note: 'Gray-Scott · 斑马条纹，最经典的 Turing 模式' },
-  gs_maze:    { label: '迷宫', engine: 'grayScott', D_u: 1.0, D_v: 0.5,
-                f: 0.022, k: 0.051, dt: 1.0,
+  gs_maze:    { label: '迷宫', engine: 'grayScott', D_u: 0.16, D_v: 0.08,
+                f: 0.026, k: 0.058, dt: 1.0,
                 note: 'Gray-Scott · 蜿蜒迷宫，像大脑皮层' },
-  gs_hex:     { label: '六边形', engine: 'grayScott', D_u: 1.0, D_v: 0.5,
-                f: 0.040, k: 0.060, dt: 1.0,
+  gs_hex:     { label: '六边形', engine: 'grayScott', D_u: 0.16, D_v: 0.08,
+                f: 0.040, k: 0.062, dt: 1.0,
                 note: 'Gray-Scott · 完美六边形蜂窝' },
-  gs_wander:  { label: '游走点', engine: 'grayScott', D_u: 1.0, D_v: 0.5,
-                f: 0.010, k: 0.047, dt: 1.0,
+  gs_wander:  { label: '游走点', engine: 'grayScott', D_u: 0.16, D_v: 0.08,
+                f: 0.014, k: 0.050, dt: 1.0,
                 note: 'Gray-Scott · 小点点自己会跑' },
-  gs_coral:   { label: '珊瑚', engine: 'grayScott', D_u: 1.0, D_v: 0.5,
-                f: 0.030, k: 0.062, dt: 1.0,
+  gs_coral:   { label: '珊瑚', engine: 'grayScott', D_u: 0.16, D_v: 0.08,
+                f: 0.030, k: 0.058, dt: 1.0,
                 note: 'Gray-Scott · 珊瑚状分枝' },
 
   /* ---- FitzHugh-Nagumo ---- */
@@ -106,21 +112,16 @@ export const REACTION_DIFFUSION_PRESETS = {
 };
 
 /* ============================================================== */
-/* 九邻域拉普拉斯算子（Nine-point Laplacian）                      */
-/* 在 (i,j) 处的离散拉普拉斯：                                     */
-/*   lap[i,j] = (1/6) * (-center + 0.25*4邻域 + 0.125*4对角)      */
+/* 五点拉普拉斯算子（Five-point Laplacian）                        */
+/*   lap = f(x-1,y) + f(x+1,y) + f(x,y-1) + f(x,y+1) - 4·f(x,y)   */
+/* 常数场结果为 0；这是显式欧拉稳定域 D·dt ≤ 1/4 对应的标准格式。 */
 /* 边界条件：torus（环面）或 wall（硬壁）                         */
 /* ============================================================== */
 export function laplacian(grid, w, h, x, y, boundary) {
+  const idx = y * w + x;
   let sum = 0;
-  let center = grid[y * w + x];
-  const dirs = [
-    [-1, -1], [0, -1], [1, -1],
-    [-1,  0],          [1,  0],
-    [-1,  1], [0,  1], [1,  1],
-  ];
-  const weights = [0.125, 0.25, 0.125, 0.25, 0.25, 0.125, 0.25, 0.125];
-  for (let k = 0; k < 8; k++) {
+  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  for (let k = 0; k < 4; k++) {
     let nx = x + dirs[k][0];
     let ny = y + dirs[k][1];
     if (boundary === 'torus') {
@@ -129,9 +130,9 @@ export function laplacian(grid, w, h, x, y, boundary) {
     } else {
       if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
     }
-    sum += grid[ny * w + nx] * weights[k];
+    sum += grid[ny * w + nx];
   }
-  return (sum - center);
+  return sum - 4 * grid[idx];
 }
 
 /* ============================================================== */
@@ -151,6 +152,9 @@ export class ReactionDiffusionEngine {
     this.dt = this.params.dt || 1.0;
     this.u = new Float32Array(w * h);
     this.v = new Float32Array(w * h);
+    /* 双缓冲：子步积分时避免每步分配新数组 */
+    this._uNext = new Float32Array(w * h);
+    this._vNext = new Float32Array(w * h);
     this.t = 0;
     this._initField(opts.pattern || 'ring');
   }
@@ -163,28 +167,31 @@ export class ReactionDiffusionEngine {
     this.dt = p.dt;
   }
 
-  /* ---- 播种：中间一个圆环（经典 Gray-Scott 初始条件）---- */
+  /* ---- 播种：中间一个圆斑（经典 Gray-Scott 初始条件）----
+   * 激发格使用 u=0.5, v=0.25（标准 GS 种子），而不是 v=1。
+   * v=1 会瞬间耗尽 u，修正后的五点 Laplacian 下斑图会直接熄灭。 */
   _initField(pattern) {
     const { w, h } = this;
     this.u.fill(1);        // 均匀 u = 1
     this.v.fill(0);        // 均匀 v = 0
     const cx = w / 2, cy = h / 2;
+    const excite = (idx) => { this.u[idx] = 0.5; this.v[idx] = 0.25; };
     if (pattern === 'ring') {
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const d = Math.hypot(x - cx, y - cy);
-          if (d < Math.min(w, h) * 0.15) this.v[y * w + x] = 1;  // 中间一个 v 圆斑
+          if (d < Math.min(w, h) * 0.15) excite(y * w + x);
         }
       }
     } else if (pattern === 'dot') {
       for (let k = 0; k < 20; k++) {
         const dx = Math.floor(Math.random() * w);
         const dy = Math.floor(Math.random() * h);
-        this.v[dy * w + dx] = 1;
+        excite(dy * w + dx);
       }
     } else if (pattern === 'soup') {
       for (let i = 0; i < w * h; i++) {
-        if (Math.random() < 0.05) this.v[i] = 1;
+        if (Math.random() < 0.05) excite(i);
       }
     }
   }
@@ -200,7 +207,7 @@ export class ReactionDiffusionEngine {
   }
   clearPhysics() { this._physics = null; }
 
-  /* ---- 一步 Euler 积分 ---- */
+  /* ---- 一步 Euler 积分（D·dt 超限时自动分子步）---- */
   step() {
     const { w, h } = this;
     const physics = this._physics;
@@ -211,13 +218,6 @@ export class ReactionDiffusionEngine {
     const globalDecay = (physics?.globalDecay ?? 0) + (physics?._petDecay ?? 0);
     const gDecayU = physics?.globalDecayU ?? PHYSICS_DEFAULTS.multipliers.globalDecayU;
     const gDecayV = physics?.globalDecayV ?? PHYSICS_DEFAULTS.multipliers.globalDecayV;
-    const boost = physics?.reactionBoost ?? null;
-    const fMult = boost?.fMult ?? 1.0;
-    const kMult = boost?.kMult ?? 1.0;
-    const aMult = boost?.aMult ?? 1.0;
-    const bMult = boost?.bMult ?? 1.0;
-    const A_Mult = boost?.A_Mult ?? 1.0;
-    const B_Mult = boost?.B_Mult ?? 1.0;
 
     // 土星环碎片：每 perturbation.rate 步注入扰动
     if (physics?.perturbation && this.t % physics.perturbation.rate === 0) {
@@ -243,17 +243,51 @@ export class ReactionDiffusionEngine {
       }
     }
 
+    const engine = this.params.engine || this.engineType;
+    const du = Number.isFinite(this.params.D_u) ? this.params.D_u : (engine === 'fitzHughNagumo' ? 1.0 : 0);
+    const dv = Number.isFinite(this.params.D_v) ? this.params.D_v : (engine === 'fitzHughNagumo' ? 1.0 : 0);
+    const Dmax = Math.max(du, dv) * diffMult;
+    const dtEff = this.dt * dtMult;
+    const rawSubsteps = Math.ceil((Dmax * dtEff) / EXPLICIT_EULER_CFL);
+    if (rawSubsteps > MAX_SUBSTEPS) {
+      throw new Error(
+        `反应-扩散显式积分不稳定：D·dt=${(Dmax * dtEff).toFixed(4)} 需要 ${rawSubsteps} 个子步，`
+        + `超过上限 ${MAX_SUBSTEPS}。请降低 dt 或扩散系数（不允许用 clamp 掩盖发散）。`
+      );
+    }
+    const substeps = Math.max(1, rawSubsteps);
+    const dtSub = dtEff / substeps;
+    for (let s = 0; s < substeps; s++) this._substep(dtSub);
+
+    /* 环境/Pet 衰减：每个外层步只作用一次，避免子步放大衰减率 */
+    if (globalDecay > 0) {
+      for (let i = 0; i < w * h; i++) {
+        this.u[i] *= (1 - globalDecay * gDecayU);
+        this.v[i] *= (1 - globalDecay * gDecayV);
+      }
+    }
+    this.t += this.dt;
+  }
+
+  /* ---- 单个显式子步（dtSub 已含 dtMult）---- */
+  _substep(dtSub) {
+    const { w, h } = this;
+    const physics = this._physics;
+    const diffMult = physics?.diffusionMult ?? PHYSICS_DEFAULTS.multipliers.diffusion;
+    const boost = physics?.reactionBoost ?? null;
     const { D_u, D_v, engine } = this.params;
-    const { boundary, dt, u, v } = this;
-    const u_new = new Float32Array(w * h);
-    const v_new = new Float32Array(w * h);
+    const { boundary, u, v } = this;
+    const u_new = this._uNext;
+    const v_new = this._vNext;
+    const tidal = physics?.tidalField;
+    const fU = physics?.diffusionField_u;
+    const fV = physics?.diffusionField_v;
 
     if (engine === 'grayScott') {
-      const f = this.params.f * fMult;
-      const k = this.params.k * kMult;
+      const f = this.params.f * (boost?.fMult ?? 1.0);
+      const k = this.params.k * (boost?.kMult ?? 1.0);
       const baseD_u = D_u * diffMult;
       const baseD_v = D_v * diffMult;
-      const fU = physics?.diffusionField_u, fV = physics?.diffusionField_v;
 
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
@@ -266,27 +300,20 @@ export class ReactionDiffusionEngine {
           // 逐格扩散系数（木卫二热梯度用）：标量 × field[idx]
           const Du = fU ? baseD_u * fU[idx] : baseD_u;
           const Dv = fV ? baseD_v * fV[idx] : baseD_v;
-          u_new[idx] = clampSafe(uu + dt * dtMult * (Du * lapU - uv2 + f * (1 - uu)), 0, 1);
-          v_new[idx] = clampSafe(vv + dt * dtMult * (Dv * lapV + uv2 - (f + k) * vv), 0, 1);
+          u_new[idx] = clampSafe(uu + dtSub * (Du * lapU - uv2 + f * (1 - uu)), 0, 1);
+          v_new[idx] = clampSafe(vv + dtSub * (Dv * lapV + uv2 - (f + k) * vv), 0, 1);
 
           // 黑洞潮汐：tidalField 让 v 场随"离中心距离"衰减
-          if (physics?.tidalField) {
-            v_new[idx] *= physics.tidalField[idx];
-          }
-          if (globalDecay > 0) {
-            u_new[idx] *= (1 - globalDecay * gDecayU);
-            v_new[idx] *= (1 - globalDecay * gDecayV);
-          }
+          if (tidal) v_new[idx] *= tidal[idx];
         }
       }
     } else if (engine === 'fitzHughNagumo') {
-      const a = this.params.a * aMult;
-      const b = this.params.b * bMult;
+      const a = this.params.a * (boost?.aMult ?? 1.0);
+      const b = this.params.b * (boost?.bMult ?? 1.0);
       const c = this.params.c;
       // FHN 默认 D_u=D_v=1.0，但 physics 可以乘 diffMult + 逐格 field
-      const baseD_u = (this.params.D_u ?? 1.0) * diffMult;
-      const baseD_v = (this.params.D_v ?? 1.0) * diffMult;
-      const fU = physics?.diffusionField_u, fV = physics?.diffusionField_v;
+      const baseD_u = (D_u ?? 1.0) * diffMult;
+      const baseD_v = (D_v ?? 1.0) * diffMult;
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const idx = y * w + x;
@@ -296,21 +323,16 @@ export class ReactionDiffusionEngine {
           const vv = v[idx];
           const Du = fU ? baseD_u * fU[idx] : baseD_u;
           const Dv = fV ? baseD_v * fV[idx] : baseD_v;
-          u_new[idx] = clampSafe(uu + dt * dtMult * (Du * lapU + c * (uu - uu * uu * uu / 3 + vv)), -2, 2);
-          v_new[idx] = clampSafe(vv + dt * dtMult * (Dv * lapV - (uu - a + b * vv) / c), -2, 2);
-          if (physics?.tidalField) v_new[idx] *= physics.tidalField[idx];
-          if (globalDecay > 0) {
-            u_new[idx] *= (1 - globalDecay * gDecayU);
-            v_new[idx] *= (1 - globalDecay * gDecayV);
-          }
+          u_new[idx] = clampSafe(uu + dtSub * (Du * lapU + c * (uu - uu * uu * uu / 3 + vv)), -2, 2);
+          v_new[idx] = clampSafe(vv + dtSub * (Dv * lapV - (uu - a + b * vv) / c), -2, 2);
+          if (tidal) v_new[idx] *= tidal[idx];
         }
       }
     } else if (engine === 'brusselator') {
       const A = this.params.A * (boost?.A_Mult ?? 1.0);
       const B = this.params.B * (boost?.B_Mult ?? 1.0);
-      const baseD_u = this.params.D_u * diffMult;
-      const baseD_v = this.params.D_v * diffMult;
-      const fU = physics?.diffusionField_u, fV = physics?.diffusionField_v;
+      const baseD_u = D_u * diffMult;
+      const baseD_v = D_v * diffMult;
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const idx = y * w + x;
@@ -321,20 +343,18 @@ export class ReactionDiffusionEngine {
           const u2v = uu * uu * vv;
           const Du = fU ? baseD_u * fU[idx] : baseD_u;
           const Dv = fV ? baseD_v * fV[idx] : baseD_v;
-          u_new[idx] = clampSafe(uu + dt * dtMult * (Du * lapU + A + u2v - (B + 1) * uu), 0, 10);
-          v_new[idx] = clampSafe(vv + dt * dtMult * (Dv * lapV + B * uu - u2v), 0, 10);
-          if (physics?.tidalField) v_new[idx] *= physics.tidalField[idx];
-          if (globalDecay > 0) {
-            u_new[idx] *= (1 - globalDecay * gDecayU);
-            v_new[idx] *= (1 - globalDecay * gDecayV);
-          }
+          u_new[idx] = clampSafe(uu + dtSub * (Du * lapU + A + u2v - (B + 1) * uu), 0, 10);
+          v_new[idx] = clampSafe(vv + dtSub * (Dv * lapV + B * uu - u2v), 0, 10);
+          if (tidal) v_new[idx] *= tidal[idx];
         }
       }
     }
 
+    /* 双缓冲交换 */
     this.u = u_new;
     this.v = v_new;
-    this.t += dt;
+    this._uNext = u;
+    this._vNext = v;
   }
 
   /* ---- 快照：把 v 场映射为 0-255 Uint8Array ---- */
@@ -472,6 +492,22 @@ export function computeFieldEnergy(u, v, w, h) {
   };
 }
 
+/* 把任意场拉伸到 [0,1]（只用于特征提取/显示，不改变动力学）。
+ * 已熄灭或完全均匀的场返回零场，避免把 1e-44 的数值噪声放大成假结构。 */
+export function normalizeField(field) {
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < field.length; i++) {
+    if (field[i] < min) min = field[i];
+    if (field[i] > max) max = field[i];
+  }
+  const out = new Float32Array(field.length);
+  const span = max - min;
+  if (!Number.isFinite(span) || span < 1e-9) return out;
+  for (let i = 0; i < field.length; i++) out[i] = (field[i] - min) / span;
+  return out;
+}
+
 /* -------------------------------------------------------------- */
 /* 二维自相关相关长度 L_c（第一局部峰）                            */
 /* 说明：沿 x / y 两个方向做归一化自相关，跳过零延迟主峰，          */
@@ -549,12 +585,15 @@ export function computeFieldEntropy(field, bins = 64) {
 /* 科学模式 metrics 汇总（替换拓扑指标）                            */
 /* -------------------------------------------------------------- */
 export function computeScientificMetrics(v, u, w, h, engineType) {
-  // uField 才有真实 pattern（vField 在 Gray-Scott 等引擎里会饱和到 1.0）
-  // 所以用 uField 算 Lyapunov、分形维数、空间周期
+  // 修正后的求解器里 v 是浓度较低的斑图场，u 是被消耗的底物。
+  // 两者都先归一化，保证不同参数标度下的结构指标可比；
+  // 阈值 0.5 对应归一化后的“有斑图 / 无斑图”分割。
+  const un = normalizeField(u);
+  const vn = normalizeField(v);
   const lyapunov = computeLyapunov(u, w, h);
-  const fractal = computeFractalDimension(u, w, h, 0.3);
-  const energy = computeFieldEnergy(u, v, w, h);
-  const spatialPeriod = computeSpatialPeriod(u, w, h);
+  const fractal = computeFractalDimension(vn, w, h, 0.5);
+  const energy = computeFieldEnergy(un, vn, w, h);
+  const spatialPeriod = computeSpatialPeriod(vn, w, h);
 
   // 从 Lyapunov 指数判定吸引子类型（比拓扑指标科学）
   const LT = SCIENCE_THRESHOLDS.lyapunov;

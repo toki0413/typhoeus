@@ -83,11 +83,12 @@ export function applyPaint(engine, gx, gy, radius = 4, strength = 0.7) {
       const falloff = Math.exp(-(dist * dist) / (2 * radius * 0.35));  // 高斯衰减
 
       if (info.kind === 'reaction-diffusion') {
-        // 激活 v 场（抑制物）—— Gray-Scott 经典"画笔"操作
+        // 标准 Gray-Scott 激发：把该格推到 u=0.5, v=0.25，而不是 v=1。
+        // v=1 会瞬间耗尽 u，修正后的五点 Laplacian 下斑图会直接熄灭。
         const idx = ny * info.w + nx;
-        engine.v[idx] = clamp(engine.v[idx] + strength * falloff, 0, 1);
-        // 同时稍微降低 u 场（让反应发生）
-        engine.u[idx] = clamp(engine.u[idx] - 0.3 * falloff, 0, 1);
+        const w = strength * falloff;
+        engine.u[idx] = clamp(engine.u[idx] + (0.5 - engine.u[idx]) * w, 0, 1);
+        engine.v[idx] = clamp(engine.v[idx] + (0.25 - engine.v[idx]) * w, 0, 1);
         injected++;
       } else if (info.kind === 'conway') {
         const idx = ny * info.w + nx;

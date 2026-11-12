@@ -64,6 +64,7 @@ import { renderMixdownWav } from './export-wav.js';
 /* ---- UI 子模块（从 app.js 拆出） ---- */
 import { createSciencePanel } from './ui/science-panel.js';
 import { createLineageView } from './ui/lineage.js';
+import { createPuzzleView } from './ui/puzzle-view.js';
 import { ENV_PRESETS, EXOTIC_ENVIRONMENTS, BOUNDARY_LABEL } from './ui/presets.js';
 import {
   esc, ENGINE_LABEL, TYPE_COLOR, TYPE_EVENT_LABEL,
@@ -203,6 +204,7 @@ const state = {
 
 const sciencePanel = createSciencePanel({ state, toast, openModal, downloadJSON, applyScientificParams });
 const lineageView = createLineageView({ state, findRecipe, adoptRecipe });
+const puzzleView = createPuzzleView({ state, toast });
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                            */
@@ -2605,13 +2607,16 @@ function downloadJSON(filename, obj) {
 /* ------------------------------------------------------------------ */
 
 function switchView(view) {
+  const prev = state.view;
   state.view = view;
   for (const btn of $$('#nav button')) btn.classList.toggle('active', btn.dataset.view === view);
-  for (const v of ['cultivate', 'commons', 'compare', 'lineage']) {
+  for (const v of ['cultivate', 'commons', 'compare', 'puzzle', 'lineage']) {
     $(`#view-${v}`)?.classList.toggle('active', v === view);
   }
+  if (prev === 'puzzle' && view !== 'puzzle') puzzleView.deactivate();
   if (view === 'commons') renderCommons();
   if (view === 'compare') openCompare();
+  if (view === 'puzzle') puzzleView.activate();
   if (view === 'lineage') lineageView.render();
   syncAudioForView();
   updateCompareAudioButton();
@@ -2748,7 +2753,7 @@ function bindUI() {
   const rangeObserver = typeof MutationObserver === 'function'
     ? new MutationObserver(() => syncRanges())
     : null;
-  for (const node of $$('.panel').concat([$('#modalLayer')])) {
+  for (const node of $$('.panel').concat([$('#modalLayer'), $('#view-puzzle')])) {
     if (node && rangeObserver) rangeObserver.observe(node, { childList: true, subtree: true });
   }
   syncRanges();
@@ -3487,7 +3492,7 @@ function frame(now) {
   const dt = Math.min(120, now - (state.lastFrame || now));
   state.lastFrame = now;
 
-  if (state.playing && state.view !== 'compare') {
+  if (state.playing && state.view !== 'compare' && state.view !== 'puzzle') {
     state.frameAcc += dt * state.speed * (state.recipe?.env.timeScale || 1);
     const stepMs = state.sim?.kind === 'lenia' ? 42 : 80;
     let count = 0;
@@ -3521,7 +3526,7 @@ function frame(now) {
         state.compare.audioA?.tick(t);
         state.compare.audioB?.tick(t);
       }
-    } else if (state.playing) {
+    } else if (state.playing && state.view !== 'puzzle') {
       state.audio?.tick(t);
     }
   }
