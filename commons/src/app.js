@@ -126,6 +126,8 @@ const state = {
   playing: true,
   speed: 1,
   audioOn: false,
+  exportingWav: false,
+  mixerPresetKey: null,
   blind: false,
   motion: resolveMotionDefault(),  // 呼吸/动效开关
   audioCtx: null,
@@ -415,6 +417,7 @@ function resetHistory() {
 
 function attachRecipe(recipe, opts = {}) {
   state.recipe = normalizeRecipe(recipe);
+  state.mixerPresetKey = null;
   state.sim = createEngine(state.recipe.seed.genome, state.recipe.env, state.recipe.rngSeed);
   /* 结构识别：只对 Conway/Lenia 这类有离散 grid 的引擎启用 */
   state.structure = state.sim?.grid ? new StructureTracker(state.sim.w, state.sim.h) : null;
@@ -787,6 +790,9 @@ function renderRulePanel() {
 
 function renderSoundPanel() {
   const m = state.recipe.seed.genome.mapping;
+  /* 重绘时保持"乐器编制"折叠区的展开状态，避免改一个下拉就自动收起 */
+  const detailsWasOpen = !!$('#panel-sound .instrument-details')?.open;
+  const activeVoices = INSTRUMENT_PARTS.filter((p) => voiceOf(m, p.key) !== 'off').length;
   $('#panel-sound').innerHTML = `
     <div class="section-label">音阶约束 · 五声</div>
     <div class="field">
@@ -814,16 +820,6 @@ function renderSoundPanel() {
     <div class="segmented">
       ${['sine', 'triangle', 'sawtooth', 'square'].map((w) => `<button data-wave="${w}" class="${m.wave === w ? 'active' : ''}">${w}</button>`).join('')}
     </div>
-    <div class="section-label">乐器编制 · 每个声部可选音色</div>
-    ${INSTRUMENT_PARTS.map((p) => {
-      const cur = voiceOf(m, p.key);
-      return `<div class="field" style="margin-bottom:6px">
-        <div class="field-head"><label>${p.label}</label><span class="val">${INSTRUMENT_VOICE_LABELS[cur] || cur}</span></div>
-        <select class="select" data-instrument-select="${p.key}" style="width:100%">
-          ${p.opts.map((o) => `<option value="${o}" ${o === cur ? 'selected' : ''}>${INSTRUMENT_VOICE_LABELS[o] || o}</option>`).join('')}
-        </select>
-      </div>`;
-    }).join('')}
     <div class="section-label">混音台 · ${INSTRUMENT_PARTS.length} 声部</div>
     ${mixerSummaryHTML(m)}
     <div class="btn-row">
@@ -833,10 +829,28 @@ function renderSoundPanel() {
     <div class="btn-row">
       <button class="ghost" data-action="listen">试听一个事件</button>
     </div>
+    <details class="instrument-details">
+      <summary>乐器编制 · ${activeVoices}/${INSTRUMENT_PARTS.length} 在响</summary>
+      <div class="instrument-list">
+        ${INSTRUMENT_PARTS.map((p) => {
+          const cur = voiceOf(m, p.key);
+          return `<div class="field" style="margin-bottom:6px">
+            <div class="field-head"><label>${p.label}</label><span class="val">${INSTRUMENT_VOICE_LABELS[cur] || cur}</span></div>
+            <select class="select" data-instrument-select="${p.key}" style="width:100%">
+              ${p.opts.map((o) => `<option value="${o}" ${o === cur ? 'selected' : ''}>${INSTRUMENT_VOICE_LABELS[o] || o}</option>`).join('')}
+            </select>
+          </div>`;
+        }).join('')}
+      </div>
+    </details>
     <p class="hint">
       <b>密度</b> → 低音音量 · <b>熵</b> → 滤波器亮度 · <b>活跃度</b> → 节奏与音符密度 ·
       <b>周期</b> → 节奏规律性。所有音高被约束在五声音阶内，开箱即可听。
     </p>`;
+  if (detailsWasOpen) {
+    const d = $('#panel-sound .instrument-details');
+    if (d) d.open = true;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -866,7 +880,7 @@ function mixerSummaryHTML(mapping) {
   const mx = normalizeMixer(mapping.mixer);
   const active = INSTRUMENT_PARTS.filter((p) => voiceOf(mapping, p.key) !== 'off').length;
   const solos = INSTRUMENT_PARTS.filter((p) => mx.parts[p.key].solo).map((p) => p.label);
-  return `<div class="mixer-summary">
+  return `<div class="mixer-summary" data-action="open-mixer" role="button" tabindex="0" title="打开混音台">
     <span>在响 ${active}/${INSTRUMENT_PARTS.length}</span>
     <span>主控 ${Math.round(mx.master * 100)}%</span>
     <span>速度 ×${mx.tempo.toFixed(2)}</span>
@@ -887,16 +901,19 @@ function mixerCtl(part, param, value, min, max, step, cap) {
 function mixerBodyHTML() {
   const mapping = state.recipe.seed.genome.mapping;
   const mx = normalizeMixer(mapping.mixer);
+  const anySolo = INSTRUMENT_PARTS.some((p) => mx.parts[p.key].solo);
   const rows = INSTRUMENT_PARTS.map((p) => {
     const c = mx.parts[p.key];
     const cur = voiceOf(mapping, p.key);
-    return `<div class="mix-row${c.mute ? ' mute' : ''}" data-mixer-row="${p.key}">
+    const dim = anySolo && !c.solo && !c.mute;
+    return `<div class="mix-row${c.mute ? ' mute' : ''}${dim ? ' solo-dim' : ''}" data-mixer-row="${p.key}">
       <div class="mix-name">${p.label}</div>
-      <select class="select" data-instrument-select="${p.key}">
+      <select class="select" data-instrument-select="${p.key}" aria-label="${p.label} 音色">
         ${p.opts.map((o) => `<option value="${o}" ${o === cur ? 'selected' : ''}>${INSTRUMENT_VOICE_LABELS[o] || o}</option>`).join('')}
       </select>
-      <button class="mix-btn${c.mute ? ' on' : ''}" data-mixer-mute="${p.key}" title="静音">M</button>
-      <button class="mix-btn solo${c.solo ? ' on' : ''}" data-mixer-solo="${p.key}" title="独奏">S</button>
+      <button class="mix-btn audition" data-mixer-audition="${p.key}" title="试听 ${p.label}" aria-label="试听 ${p.label}">♪</button>
+      <button class="mix-btn${c.mute ? ' on' : ''}" data-mixer-mute="${p.key}" title="静音" aria-label="静音 ${p.label}">M</button>
+      <button class="mix-btn solo${c.solo ? ' on' : ''}" data-mixer-solo="${p.key}" title="独奏" aria-label="独奏 ${p.label}">S</button>
       ${mixerCtl(p.key, 'gain', Math.round(c.gain * 100), 0, 150, 5, '音量')}
       ${mixerCtl(p.key, 'pan', Math.round(c.pan * 100), -100, 100, 5, '声像')}
       ${mixerCtl(p.key, 'oct', c.oct, -2, 2, 1, '八度')}
@@ -906,7 +923,7 @@ function mixerBodyHTML() {
 
   return `
     <div class="mixer-presets">
-      ${MIXER_PRESETS.map((p) => `<button class="preset" data-mixer-preset="${p.key}"><b>${p.label}</b><span>${p.note}</span></button>`).join('')}
+      ${MIXER_PRESETS.map((p) => `<button class="preset${state.mixerPresetKey === p.key ? ' active' : ''}" data-mixer-preset="${p.key}"><b>${p.label}</b><span>${p.note}</span></button>`).join('')}
     </div>
     <div class="mixer-global">
       <label class="mix-ctl">主音量
@@ -923,10 +940,10 @@ function mixerBodyHTML() {
       </label>
     </div>
     <div class="mixer-table">
-      <div class="mix-head"><span>声部</span><span>音色</span><span>M</span><span>S</span><span>音量</span><span>声像</span><span>八度</span><span>发送</span></div>
+      <div class="mix-head"><span>声部</span><span>音色</span><span>♪</span><span>M</span><span>S</span><span>音量</span><span>声像</span><span>八度</span><span>发送</span></div>
       ${rows}
     </div>
-    <p class="hint">音量 0–150% · 声像 L/C/R · 八度 −2…+2 · 发送 = 混响量。M 静音；S 独奏（独奏时其余声部自动静音）。</p>`;
+    <p class="hint">♪ 试听当前音色 · 双击任意滑块恢复默认 · 音量 0–150% · 声像 L/C/R · 八度 −2…+2 · 发送 = 混响量。M 静音；S 独奏（独奏时其余声部自动变暗静音）。</p>`;
 }
 
 function openMixerModal() {
@@ -934,12 +951,17 @@ function openMixerModal() {
     eyebrow: 'MIXER · 11 CHANNELS',
     title: '专业混音台',
     body: mixerBodyHTML(),
+    actions: [
+      { label: '重置混音台', cls: 'ghost', onClick: () => resetMixer() },
+      { label: '完成', cls: 'primary', onClick: () => closeModal() },
+    ],
   });
   $('.modal-card', layer)?.classList.add('mixer-modal');
   /* 用属性赋值而非 addEventListener：重复打开不会叠加监听 */
   layer.oninput = onMixerInput;
   layer.onchange = onMixerChange;
   layer.onclick = onMixerClick;
+  layer.ondblclick = onMixerDblClick;
 }
 
 function refreshMixerModal() {
@@ -955,8 +977,58 @@ function refreshMixerSummary() {
 }
 
 function applyMixerToAudio() {
+  state.mixerPresetKey = null;
+  $$('.mixer-presets .preset.active').forEach((b) => b.classList.remove('active'));
   markGenomeChanged();   // 内部已调用 audio.setGenome（含 setMixer）
   refreshMixerSummary();
+}
+
+function resetMixer() {
+  const mapping = state.recipe.seed.genome.mapping;
+  mapping.mixer = normalizeMixer(DEFAULT_MIXER);
+  state.mixerPresetKey = null;
+  markGenomeChanged();
+  renderSoundPanel();
+  refreshMixerModal();
+  toast('混音台已重置为中性值', 1600);
+}
+
+function auditionPart(part, btn) {
+  if (!state.audioOn) setAudio(true);
+  ensureAudio();
+  state.audio?.audition(part);
+  if (btn) {
+    btn.classList.add('on');
+    setTimeout(() => btn.classList.remove('on'), 240);
+  }
+}
+
+/* 双击滑块 → 恢复该参数默认值 */
+function onMixerDblClick(e) {
+  const target = e.target;
+  if (!target || !target.closest) return;
+  const globalEl = target.closest('[data-mixer-global]');
+  const partEl = target.closest('[data-mixer-part]');
+  if (!globalEl && !partEl) return;
+  e.preventDefault();
+  const mx = mixerState();
+
+  if (globalEl) {
+    const key = globalEl.dataset.mixerGlobal;
+    mx[key] = DEFAULT_MIXER[key];
+    globalEl.value = String(Math.round(mx[key] * 100));
+    const valEl = $(`[data-mixer-val="global:${key}"]`);
+    if (valEl) valEl.textContent = key === 'tempo' ? `×${mx.tempo.toFixed(2)}` : `${Math.round(mx[key] * 100)}`;
+  } else {
+    const part = partEl.dataset.mixerPart;
+    const param = partEl.dataset.mixerParam;
+    const def = DEFAULT_MIXER.parts[part]?.[param] ?? 0;
+    mx.parts[part][param] = def;
+    partEl.value = String(param === 'oct' ? def : Math.round(def * 100));
+    const valEl = $(`[data-mixer-val="${part}:${param}"]`);
+    if (valEl) valEl.textContent = mixerValueLabel(param, def);
+  }
+  applyMixerToAudio();
 }
 
 function onMixerInput(e) {
@@ -1005,6 +1077,11 @@ function onMixerChange(e) {
 function onMixerClick(e) {
   const target = e.target;
   if (!target || !target.closest) return;
+  const auditionBtn = target.closest('[data-mixer-audition]');
+  if (auditionBtn) {
+    auditionPart(auditionBtn.dataset.mixerAudition, auditionBtn);
+    return;
+  }
   const muteBtn = target.closest('[data-mixer-mute]');
   if (muteBtn) {
     const c = mixerState().parts[muteBtn.dataset.mixerMute];
@@ -1018,8 +1095,9 @@ function onMixerClick(e) {
   if (soloBtn) {
     const c = mixerState().parts[soloBtn.dataset.mixerSolo];
     c.solo = !c.solo;
-    soloBtn.classList.toggle('on', c.solo);
     applyMixerToAudio();
+    /* 独奏会改变其他声部的可听状态，重绘一次让"变暗"状态同步 */
+    refreshMixerModal();
     return;
   }
   const presetBtn = target.closest('[data-mixer-preset]');
@@ -1032,6 +1110,7 @@ function applyMixerPreset(key) {
   const mapping = state.recipe.seed.genome.mapping;
   mapping.instruments = { ...DEFAULT_INSTRUMENTS, ...preset.instruments };
   mapping.mixer = normalizeMixer(preset.mixer);
+  state.mixerPresetKey = preset.key;
   markGenomeChanged();
   renderSoundPanel();
   refreshMixerModal();
@@ -2341,6 +2420,12 @@ function bindUI() {
   $('#panel-sound').addEventListener('click', onSoundClick);
   $('#panel-sound').addEventListener('input', onSoundInput);
   $('#panel-sound').addEventListener('change', onSoundChange);
+  $('#panel-sound').addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('.mixer-summary')) {
+      e.preventDefault();
+      openMixerModal();
+    }
+  });
   $('#panel-env').addEventListener('click', onEnvClick);
   $('#panel-env').addEventListener('input', onEnvInput);
 
@@ -2437,7 +2522,8 @@ function bindUI() {
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.target.matches('input, textarea, select')) return;
+    const t = e.target;
+    if (t && typeof t.matches === 'function' && t.matches('input, textarea, select')) return;
     if (e.code === 'Space') {
       e.preventDefault();
       if (state.view === 'compare') {

@@ -2753,6 +2753,13 @@ body::after {
 input[type="range"] { accent-color: var(--pink); }
 ::selection { background: var(--pink); color: #fff; }
 
+/* 清掉遗留的粉色氛围层：至上主义只留纸白 + 黑 + 朱红 */
+.ambient { background: var(--bg) !important; }
+.ambient::after { display: none !important; }
+/* 弹窗/引导的粉色蒙层 → 中性纸白与炭黑，避免整体泛粉 */
+.modal-layer { background: rgba(18, 18, 18, 0.3) !important; }
+.intro { background: rgba(242, 239, 230, 0.92) !important; }
+
 /* 红色实心按钮内的所有文字保持白色（含嵌套 b/span） */
 .btn.primary, .preset.active, .segmented button.active, #playBtn,
 .switch.on, .sound-btn[aria-pressed="true"], #nav button.active,
@@ -2777,7 +2784,12 @@ input[type="range"] { accent-color: var(--pink); }
   letter-spacing: 0.04em;
   color: var(--muted);
   margin-bottom: 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
+.mixer-summary:hover { background: var(--text); color: #fff; }
+.mixer-summary:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.mixer-summary:hover .solo-flag { color: #fff; }
 .mixer-summary .solo-flag { color: var(--pink); font-weight: 800; }
 
 .mixer-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
@@ -2805,19 +2817,25 @@ input[type="range"] { accent-color: var(--pink); }
 .mixer-table { display: flex; flex-direction: column; }
 .mix-head, .mix-row {
   display: grid;
-  grid-template-columns: 78px minmax(96px, 1.2fr) 28px 28px repeat(4, minmax(64px, 1fr));
+  grid-template-columns: 78px minmax(96px, 1.2fr) 28px 28px 28px repeat(4, minmax(64px, 1fr));
   gap: 8px;
   align-items: center;
 }
 .mix-head {
-  padding: 0 2px 6px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 6px 2px;
   border-bottom: 1.5px solid var(--text);
+  background: var(--surface);
   font-size: 11px;
   letter-spacing: 0.08em;
   color: var(--dim);
 }
-.mix-row { padding: 6px 2px; border-bottom: 1px solid var(--line); }
+.mix-row { padding: 6px 2px; border-bottom: 1px solid var(--line); transition: background 0.12s; }
+.mix-row:hover { background: var(--bg-2); }
 .mix-row.mute { opacity: 0.45; }
+.mix-row.solo-dim { opacity: 0.38; }
 .mix-name { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; }
 .mix-row .select { width: 100%; font-size: 12px; padding: 4px 6px; }
 .mix-btn {
@@ -2828,18 +2846,48 @@ input[type="range"] { accent-color: var(--pink); }
   font-weight: 800;
   cursor: pointer;
   color: var(--text);
+  transition: background 0.12s, color 0.12s;
 }
+.mix-btn:hover { background: var(--bg-2); }
 .mix-btn.on { background: var(--text); color: #fff; }
 .mix-btn.solo.on { background: var(--pink); color: #fff; }
+.mix-btn.audition { font-size: 13px; }
+.mix-btn.audition.on { background: var(--sky); color: #fff; }
 
 .mix-ctl.mini { display: flex; flex-direction: column; gap: 1px; align-items: stretch; }
 .mix-ctl.mini .mix-cap { font-size: 9px; letter-spacing: 0.08em; color: var(--dim); line-height: 1; }
 .mix-ctl.mini input[type="range"] { width: 100%; margin: 0; }
 .mix-ctl.mini .mix-val { font-size: 10px; text-align: center; font-family: var(--num); line-height: 1; }
+.mix-ctl input[type="range"]:focus-visible { outline: 2px solid var(--sky); outline-offset: 1px; }
+
+/* 歌声面板：乐器编制折叠区，降低长列表干扰 */
+.instrument-details {
+  margin-top: 10px;
+  border: 1.5px solid var(--text);
+  background: var(--surface);
+}
+.instrument-details summary {
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+  list-style: none;
+}
+.instrument-details summary::-webkit-details-marker { display: none; }
+.instrument-details summary::before { content: '▸ '; }
+.instrument-details[open] summary::before { content: '▾ '; }
+.instrument-details summary:hover { background: var(--bg-2); }
+.instrument-details[open] summary { border-bottom: 1.5px solid var(--text); }
+.instrument-list { padding: 10px; max-height: 320px; overflow-y: auto; }
 
 @media (max-width: 760px) {
+  .mixer-modal .modal-body { overflow-x: auto; }
+  .mixer-table { min-width: 660px; }
   .mix-head, .mix-row {
-    grid-template-columns: 54px minmax(72px, 1fr) 26px 26px repeat(4, minmax(46px, 1fr));
+    grid-template-columns: 54px minmax(72px, 1fr) 26px 26px 26px repeat(4, minmax(46px, 1fr));
     gap: 5px;
   }
   .mixer-global { grid-template-columns: 1fr; }

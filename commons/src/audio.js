@@ -404,6 +404,13 @@ export class AudioEngine {
       case 'bell': this._bell(f, when, amp, pan, part); break;
       case 'reed': this._reed(f, when, dur, amp, pan, part); break;
       case 'shimmer': this._tone(f, when, 1.6, amp, 'sine', 0.85, 0, pan, part); break;
+      case 'sub': this._sub(f, when, dur, amp, pan, part); break;
+      case 'organ': this._organ(f, when, dur, amp, pan, part); break;
+      case 'brass': this._brass(f, when, dur, amp, pan, part); break;
+      case 'vibes': this._vibes(f, when, amp, pan, part); break;
+      case 'glass': this._glass(f, when, amp, pan, part); break;
+      case 'clav': this._clav(f, when, amp, pan, part); break;
+      case 'musicbox': this._musicbox(f, when, amp, pan, part); break;
       case 'pad': this._chordTone(f, when, dur, amp, this.mapping?.wave || 'triangle', pan, part); break;
       case 'heart': this._heartbeatTone(f, when, amp, part); break;
       case 'drone': this._tone(f, when, dur, amp, 'sine', 0.3, 0, pan, part); break;
@@ -786,16 +793,17 @@ export class AudioEngine {
     if (heartVoice !== 'off' && this._heartbeatNext < now + 0.15) {
       // 心跳音：根音 1 octave 下的 sine + 极短 attack
       // Attention 音乐性增强：音量 × dyn.heartbeat（Pet mood → pp ↔ ff）
-      const hz = midiToFreq(rootMidi - 12);  // 低八度
+      const hzRaw = midiToFreq(rootMidi - 12);        // 低八度
+      const hz = this._applyOct(hzRaw, 'heart');       // 混音台八度
       if (heartVoice === 'heart') {
         this._heartbeatTone(hz, this._heartbeatNext, dyn.heartbeat, 'heart');
         if (hasSplitHeartbeat) {
           this._heartbeatTone(hz * 1.06, this._heartbeatNext + beat * 0.18, dyn.heartbeat * 0.25, 'heart');
         }
       } else {
-        this._play('heart', heartVoice, hz, this._heartbeatNext, { dur: 0.42, amp: dyn.heartbeat });
+        this._play('heart', heartVoice, hzRaw, this._heartbeatNext, { dur: 0.42, amp: dyn.heartbeat });
         if (hasSplitHeartbeat) {
-          this._play('heart', heartVoice, hz * 1.06, this._heartbeatNext + beat * 0.18, { dur: 0.3, amp: dyn.heartbeat * 0.25 });
+          this._play('heart', heartVoice, hzRaw * 1.06, this._heartbeatNext + beat * 0.18, { dur: 0.3, amp: dyn.heartbeat * 0.25 });
         }
       }
       this._heartbeatNext += beat;
@@ -962,11 +970,10 @@ export class AudioEngine {
     if (!this._audible(part)) return;
     const ctx = this.ctx;
     if (!Number.isFinite(freq) || freq <= 0) return;   // 防御：非法频率直接跳过
-    const f = freq * Math.pow(2, this._mix(part).oct || 0);
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(f, when);
+    osc.frequency.setValueAtTime(freq, when);
     // 心跳包络：attack 极短（10ms）→ 峰值 → 缓慢 decay（250ms）
     gain.gain.setValueAtTime(0.0001, when);
     gain.gain.exponentialRampToValueAtTime(peak, when + 0.01);
@@ -992,7 +999,7 @@ export class AudioEngine {
   _thin(now) {
     if (!this.built || !this.enabled) return;
     this._gateUntil = now + 1.2;
-    this._heartbeatTone(midiToFreq(this._rootMidi() - 12), now + 0.02, 0.2, 'heart');
+    this._heartbeatTone(this._applyOct(midiToFreq(this._rootMidi() - 12), 'heart'), now + 0.02, 0.2, 'heart');
   }
 
   /* ================================================================
@@ -1439,6 +1446,226 @@ export class AudioEngine {
     osc.connect(bp); bp.connect(g); g.connect(p); p.connect(this._bus(part));
     const s = ctx.createGain(); s.gain.value = 0.5; p.connect(s); s.connect(this.delay);
     osc.start(when); osc.stop(when + dur + 0.05);
+  }
+
+  /* ---- 低音 Sub：正弦基音 + 低八度 + 少量二次谐波，厚而不糊 ---- */
+  _sub(freq, when, dur, amp = 0.06, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.05;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(p); p.connect(this._bus(part));
+    out.gain.setValueAtTime(0.0001, when);
+    out.gain.linearRampToValueAtTime(amp, when + 0.02);
+    out.gain.setValueAtTime(amp, when + Math.max(0.04, dur * 0.72));
+    out.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    const ranks = [[1, 1, 'sine'], [2, 0.08, 'triangle']];
+    if (freq * 0.5 >= 25) ranks.push([0.5, 0.5, 'sine']);
+    for (const [r, a, type] of ranks) {
+      const osc = ctx.createOscillator();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq * r, when);
+      const g = ctx.createGain();
+      g.gain.value = a;
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + dur + 0.06);
+    }
+  }
+
+  /* ---- 管风琴：加法合成（1/2/3/4/6 次），稳定持续，适合铺底 ---- */
+  _organ(freq, when, dur, amp = 0.045, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.04;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(p); p.connect(this._bus(part));
+    const attack = Math.min(0.09, dur * 0.25);
+    out.gain.setValueAtTime(0.0001, when);
+    out.gain.linearRampToValueAtTime(amp, when + attack);
+    out.gain.setValueAtTime(amp, when + Math.max(attack, dur * 0.82));
+    out.gain.linearRampToValueAtTime(0.0001, when + dur);
+    const bars = [[1, 1], [2, 0.5], [3, 0.3], [4, 0.16], [6, 0.08]];
+    for (const [r, a] of bars) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * r, when);
+      const g = ctx.createGain();
+      g.gain.value = a;
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + dur + 0.06);
+    }
+  }
+
+  /* ---- 铜管：双锯齿 + 低通包络（开→收），有冲击力 ---- */
+  _brass(freq, when, dur, amp = 0.04, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.035;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'lowpass';
+    flt.frequency.setValueAtTime(Math.min(8000, freq * 1.4), when);
+    flt.frequency.exponentialRampToValueAtTime(Math.min(9000, freq * 7), when + 0.07);
+    flt.frequency.exponentialRampToValueAtTime(Math.max(400, freq * 2.4), when + dur);
+    flt.Q.value = 1.4;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(flt); flt.connect(p); p.connect(this._bus(part));
+    out.gain.setValueAtTime(0.0001, when);
+    out.gain.linearRampToValueAtTime(amp, when + 0.035);
+    out.gain.setValueAtTime(amp, when + Math.max(0.05, dur * 0.7));
+    out.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    for (const det of [-7, 7]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, when);
+      osc.detune.setValueAtTime(det, when);
+      const g = ctx.createGain();
+      g.gain.value = 0.5;
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + dur + 0.06);
+    }
+  }
+
+  /* ---- 颤音琴：基音 + 四次泛音，5Hz 振幅颤音 ---- */
+  _vibes(freq, when, amp = 0.05, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.045;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const trem = ctx.createGain();
+    trem.gain.value = 0.72;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(trem); trem.connect(p); p.connect(this._bus(part));
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 5;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 0.26;
+    lfo.connect(lfoGain); lfoGain.connect(trem.gain);
+    lfo.start(when); lfo.stop(when + 1.8);
+
+    const partials = [[1, 1, 1.5], [4, 0.28, 0.75], [10, 0.07, 0.35]];
+    for (const [r, a, d] of partials) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * r, when);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp * a), when + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + d);
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + d + 0.05);
+    }
+  }
+
+  /* ---- 玻璃琴：非谐泛音 + 长衰减，空灵透明 ---- */
+  _glass(freq, when, amp = 0.035, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.03;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(p); p.connect(this._bus(part));
+    const partials = [[1, 1, 2.6], [2.7, 0.42, 1.8], [5.2, 0.18, 1.1], [8.3, 0.07, 0.6]];
+    for (const [r, a, d] of partials) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * r, when);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp * a), when + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + d);
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + d + 0.05);
+    }
+  }
+
+  /* ---- 击弦琴（Clav）：方波 + 快速低通下扫，短促明亮 ---- */
+  _clav(freq, when, amp = 0.04, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.035;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(freq, when);
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'lowpass';
+    flt.frequency.setValueAtTime(Math.min(10000, freq * 10), when);
+    flt.frequency.exponentialRampToValueAtTime(Math.max(400, freq * 1.8), when + 0.12);
+    flt.Q.value = 2.2;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp), when + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + 0.26);
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    osc.connect(flt); flt.connect(g); g.connect(p); p.connect(this._bus(part));
+    const s = ctx.createGain(); s.gain.value = 0.4; p.connect(s); s.connect(this.delay);
+    osc.start(when); osc.stop(when + 0.3);
+  }
+
+  /* ---- 八音盒：高次泛音 + 快速衰减，清脆带金属感 ---- */
+  _musicbox(freq, when, amp = 0.04, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.035;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(p); p.connect(this._bus(part));
+    const partials = [[1, 1, 1.1], [3, 0.3, 0.55], [6, 0.12, 0.3]];
+    for (const [r, a, d] of partials) {
+      for (const det of [-3, 3]) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq * r, when);
+        osc.detune.setValueAtTime(det, when);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, when);
+        g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp * a * 0.5), when + 0.003);
+        g.gain.exponentialRampToValueAtTime(0.0001, when + d);
+        osc.connect(g); g.connect(out);
+        osc.start(when); osc.stop(when + d + 0.05);
+      }
+    }
+  }
+
+  /* ---- UI 试听：用指定声部当前音色发一个短音（混音台挑音色用）---- */
+  audition(part, at = null) {
+    if (!this.built) return;
+    const voice = this._voice(part);
+    if (voice === 'off' || !this._audible(part)) return;
+    const now = (Number.isFinite(at) ? at : this.ctx.currentTime) + 0.03;
+    const low = part === 'heart' || part === 'drone';
+    const freq = low ? midiToFreq(this._rootMidi() - 12) : this._degreeFreq(2, 1);
+    const sustained = part === 'pad' || part === 'strings' || part === 'choir' || part === 'drone';
+    const dur = sustained ? 1.3 : 0.7;
+    this._play(part, voice, freq, now, { dur, amp: 0.09 });
+    if (part === 'heart' && voice === 'heart') {
+      this._heartbeatTone(this._applyOct(freq, 'heart') * 1.06, now + 0.18, 0.18, 'heart');
+    }
   }
 
   triggerEvent(type, strength = 1) {

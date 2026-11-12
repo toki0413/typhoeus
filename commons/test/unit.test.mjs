@@ -90,6 +90,20 @@ test('mixer: 默认中性且旧配方可补齐', () => {
   assert.equal(fixed.parts.pad.gain, DEFAULT_MIXER.parts.pad.gain);
 });
 
+test('instruments: 新增音色都有标签且可被声部选择', () => {
+  const all = new Set();
+  for (const p of config.INSTRUMENT_PARTS) {
+    for (const o of p.opts) {
+      all.add(o);
+      assert.ok(config.INSTRUMENT_VOICE_LABELS[o], `${p.key} 缺少标签: ${o}`);
+    }
+  }
+  for (const voice of ['sub', 'organ', 'brass', 'vibes', 'glass', 'clav', 'musicbox']) {
+    assert.ok(all.has(voice), `没有声部提供 ${voice}`);
+    assert.ok(config.INSTRUMENT_VOICE_LABELS[voice]);
+  }
+});
+
 /* ================================================================
  * physics.js · B2 Pet → Physics
  * ================================================================ */
