@@ -7,6 +7,8 @@
     "test:unit": "node --test test/unit.test.mjs",
     "test:smoke": "node test/app-smoke.mjs",
     "test:e2e": "node e2e-test.mjs",
+    "audio:render": "node tools/audio-render.cjs",
+    "audio:check": "node tools/live-audio-check.cjs",
     "build": "node build.mjs",
     "build:web": "npx esbuild src/app.js --bundle --format=esm --minify --outfile=bundle.js",
     "build:www": "node build.mjs && cp commons.html www/index.html && npx cap sync android",
@@ -27,6 +29,7 @@
     "@capacitor/core": "^8.6.0"
   },
   "devDependencies": {
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "puppeteer-core": "^25.17.0"
   }
 }

@@ -161,6 +161,10 @@ export class AudioEngine {
     this._registerShift = 0;       // 结构态 → 八度位移（chaotic +1 / stable -1）
     this._scaleDegrees = null;     // 当前音阶（科学引擎用 Buehler，生命引擎用五声）
     this._structCd = {};           // 结构动机冷却（按类型）
+    this._shimmerNext = 0;         // 高频微光（稀疏八度泛音）
+    this._arpNext = 0;             // 五声琶音
+    this._arpIdx = 0;
+    this._chordTones = null;       // 当前和弦音，供琶音层使用
   }
 
   _build() {
@@ -257,45 +261,6 @@ export class AudioEngine {
     this.lfo.connect(this.lfoGain);
     this.lfoGain.connect(this.droneGain.gain);
     this.lfo.start();
-
-    /* 空气层：极轻的粉噪床 + 3.2kHz 带通，填补 2kHz 以上的空白，
-       让稀疏的心跳/旋律不显得"干"和"单薄"（电平很低，不会变噪声）。
-       左右各一条独立噪声 → 真实去相关，拓宽声场。 */
-    try {
-      const airChannels = [];
-      const airSpecs = [{ pan: -0.85, hz: 3000 }, { pan: 0.85, hz: 3600 }];
-      for (const spec of airSpecs) {
-        const len = Math.floor(ctx.sampleRate * 2);
-        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-        const data = buf.getChannelData(0);
-        let b0 = 0, b1 = 0, b2 = 0;
-        for (let i = 0; i < len; i++) {
-          const w = Math.random() * 2 - 1;
-          b0 = 0.99765 * b0 + w * 0.0990460;
-          b1 = 0.96300 * b1 + w * 0.2965164;
-          b2 = 0.57000 * b2 + w * 1.0526913;
-          data[i] = (b0 + b1 + b2 + w * 0.1848) * 0.18;
-        }
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        src.loop = true;
-        const bp = ctx.createBiquadFilter();
-        bp.type = 'bandpass';
-        bp.frequency.value = spec.hz;
-        bp.Q.value = 0.45;
-        const g = ctx.createGain();
-        g.gain.value = 0.014;
-        const p = ctx.createStereoPanner();
-        p.pan.value = spec.pan;
-        src.connect(bp);
-        bp.connect(g);
-        g.connect(p);
-        p.connect(this.master);
-        src.start();
-        airChannels.push({ src, gain: g, panner: p });
-      }
-      this.airBed = airChannels;
-    } catch (_) { /* 某些环境不支持 BufferSource 时静默跳过 */ }
 
     this.built = true;
   }
@@ -591,13 +556,6 @@ export class AudioEngine {
     this._intensity += (this._vitality - this._intensity) * rate;
     this._padCutoff = 1100 + lifeDensity * 2800;
 
-    /* 空气层电平随生命力起伏：繁盛时"空气更满"，沉寂时退到几乎听不见 */
-    if (this.airBed && now >= (this._airNext || 0)) {
-      this._airNext = now + 0.5;
-      const airTarget = 0.006 + this._intensity * 0.018;
-      for (const a of this.airBed) a.gain.gain.setTargetAtTime(airTarget, now, 0.8);
-    }
-
     /* 生命力跨过阈值 → 八度位移（滞回，避免抖动）：
        繁盛时旋律抬高一个八度，衰退时降低一个八度 —— 生命"换一种活法"时音区跟着换 */
     if (this._intensity > 0.52) this._registerShift = 1;
@@ -721,7 +679,34 @@ export class AudioEngine {
         const pan = (ci % 2 === 0 ? -1 : 1) * (0.18 + 0.1 * (ci % 3));
         this._chordTone(freq, this._chordNext, chordSec * 0.9, padAmp, waves.chordPad, pan);
       });
+      this._chordTones = chordMidi;
+      /* 低音根音：给和声一个地基（与 pad 同八度，避免掉到 30Hz 以下听不见） */
+      this._tone(midiToFreq(chordMidi[0]), this._chordNext + 0.02, chordSec * 1.05, 0.055, 'sine', 0.3, 0, 0);
+      /* 高八度叠层：繁盛时让和弦更"满" */
+      if (this._intensity > 0.35) {
+        this._chordTone(midiToFreq(chordMidi[0] + 12), this._chordNext, chordSec * 0.9, padAmp * 0.45, waves.chordPad, 0.3);
+      }
       this._chordNext += chordSec;
+    }
+
+    /* Layer 2b: 五声琶音 —— 用当前和弦音做温和流动，偶尔跳高两个八度增加亮色 */
+    if (this._chordTones && this._intensity > 0.35 && now >= (this._arpNext || 0)) {
+      this._arpNext = now + Math.max(0.16, beat / 2);
+      const pool = this._chordTones;
+      const midi = pool[this._arpIdx % pool.length] + (this._arpIdx % 5 === 4 ? 24 : 12);
+      this._arpIdx++;
+      this._tone(midiToFreq(midi), now + 0.01, 0.42, 0.038, 'triangle', 0.55, 0, this._arpIdx % 2 ? 0.32 : -0.32);
+    }
+
+    /* Layer 2c: 高频微光 —— 稀疏的高八度纯音（不是噪声） */
+    if (now >= (this._shimmerNext || 0)) {
+      this._shimmerNext = now + 1.2 + Math.random() * 1.2;
+      if (this._intensity > 0.35) {
+        const degs = this._scaleDegrees || scale.degrees;
+        const deg = Math.floor(Math.random() * degs.length);
+        const oct = Math.random() < 0.5 ? 2 : 3;
+        this._tone(this._degreeFreq(deg, oct), now + 0.04, 1.6, 0.05, 'sine', 0.85, 0, Math.random() * 1.4 - 0.7);
+      }
     }
 
     /* ================================================================ */
@@ -745,7 +730,7 @@ export class AudioEngine {
         this._tone(freq, this.nextNote, dur, amp, waves.melody, 0.5);
 
         /* Counter-melody：生命繁盛 + 混沌度高时 +1 声部（巴赫复调）*/
-        if (nVoices >= 2 && this._intensity > 0.45 && attractorType !== 'endangered' && attractorType !== 'extinct') {
+        if (nVoices >= 2 && this._intensity > 0.38 && attractorType !== 'endangered' && attractorType !== 'extinct') {
           /* counter-melody 从主 contour 高 2-3 度（五声里），register 差一个八度 */
           const counterDegree = (degree + 2) % 5;
           const counterOct   = octShift + 1;  /* 高八度对位 */
