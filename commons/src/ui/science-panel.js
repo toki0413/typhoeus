@@ -487,7 +487,7 @@ export function createSciencePanel({ state, toast, openModal, downloadJSON, appl
   function showHeatmap() {
     const r = state.scanResult;
     if (!r) { toast('先跑一次扫描', 1600); return; }
-    openModal({
+    const layer = openModal({
       eyebrow: '参数空间能量景观',
       title: `Heatmap · ${r.Nx}×${r.Ny}`,
       body: `<p class="dim">绿色边框=能量最低（最接近吸引子），红色边框=能量最高（最远离）。</p>
@@ -498,14 +498,10 @@ export function createSciencePanel({ state, toast, openModal, downloadJSON, appl
         { label: '导出扫描 JSON', cls: 'ghost', onClick: () => downloadJSON(`commons-scan-${Date.now()}.json`, r) },
         { label: '关闭', cls: 'ghost' },
       ],
-      onOpen: () => {
-        // renderHeatmap 需要 canvas 已经挂载到 DOM — openModal 的 body 渲染后
-        setTimeout(() => {
-          const c = $('#heatmapCanvas');
-          if (c) renderHeatmap(c, r, 'energy', 'viridis');
-        }, 50);
-      },
     });
+    /* openModal 会同步写入 body，画布此时已挂载，直接渲染 */
+    const canvas = $('#heatmapCanvas', layer);
+    if (canvas) renderHeatmap(canvas, r, 'energy', 'viridis');
   }
 
   return { render, renderLeaderboardList, runMcNow, startScan, showHeatmap };

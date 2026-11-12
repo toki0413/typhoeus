@@ -2743,6 +2743,55 @@ function updateResearchLabel() {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* 研究 · 侧门：可选的科研入口，不进入个人主循环                       */
+/* ------------------------------------------------------------------ */
+
+function openResearchDoor() {
+  openModal({
+    eyebrow: 'RESEARCH SIDE DOOR',
+    title: '研究 · 侧门',
+    body: `
+      <p>这是一扇可选的侧门。培育、挑战、花园与家谱仍然是你的主线；从这里进去做的事，不会改动你的生命，也不会影响花园。</p>
+      <div class="section-label">现在能做什么</div>
+      <p class="hint" style="line-height:1.9">
+        · 上传实验斑图，反推反应—扩散参数<br>
+        · 扫描参数空间，看能量景观<br>
+        · 与已发表斑图做结构比对<br>
+        · 把本地的发现导出成 JSON
+      </p>
+      <div class="section-label">边界</div>
+      <p class="hint">这些工具目前只在本机运行，还没有接入外部实验数据、服务端复核与共享榜单。所以它还不是公民科学，只是一扇入口：先让人玩到真问题，再谈让发现被专业的人检验。</p>`,
+    actions: [
+      {
+        label: '进入「看懂它」',
+        cls: 'primary',
+        onClick: () => {
+          closeModal();
+          switchView('cultivate');
+          requestAnimationFrame(() => {
+            $('#railTabs [data-tab="science"]')?.click();
+          });
+        },
+      },
+      {
+        label: '导出本地发现',
+        cls: 'ghost',
+        onClick: () => {
+          const lb = loadLeaderboard();
+          if (!lb.length) {
+            toast('还没有可导出的发现，先去「看懂它」保存一个', 'warn');
+            return;
+          }
+          downloadJSON(`commons-discoveries-${Date.now()}.json`, lb);
+          toast('本地发现已导出', 1600);
+        },
+      },
+      { label: '关闭', cls: 'ghost', onClick: closeModal },
+    ],
+  });
+}
+
 function downloadJSON(filename, obj) {
   const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -2953,6 +3002,7 @@ function bindUI() {
     if (share) return applyEnvPreset(share.dataset.envShare, 'share');
   });
   $('#clearLocal').addEventListener('click', openClearModal);
+  $('#researchDoor')?.addEventListener('click', openResearchDoor);
 
   $('#compareMode').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-mode]');

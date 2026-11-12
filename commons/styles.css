@@ -1809,6 +1809,12 @@ body.blind-listen .hud-tr {
   font-size: 16px;
   color: var(--muted);
 }
+.commons-foot-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 
 /* ==================== 对比视图 ==================== */
 
