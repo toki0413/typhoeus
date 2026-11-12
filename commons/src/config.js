@@ -188,17 +188,17 @@ export const AUDIO_CONSTANTS = {
 
 /* ---- 玩家可选乐器：每个声部可选一种音色（off = 关闭） ---- */
 export const INSTRUMENT_PARTS = [
-  { key: 'heart',   label: '心跳',     def: 'heart',   opts: ['heart', 'triangle', 'square', 'off'] },
-  { key: 'drone',   label: '低音床',   def: 'drone',   opts: ['drone', 'triangle', 'sawtooth', 'off'] },
-  { key: 'lead',    label: '主旋律',   def: 'lead',    opts: ['lead', 'flute', 'epiano', 'triangle', 'square', 'off'] },
-  { key: 'pad',     label: '和弦 Pad', def: 'pad',     opts: ['pad', 'sine', 'sawtooth', 'off'] },
-  { key: 'strings', label: '弦乐',     def: 'strings', opts: ['strings', 'choir', 'triangle', 'off'] },
-  { key: 'choir',   label: '人声',     def: 'choir',   opts: ['choir', 'strings', 'flute', 'off'] },
-  { key: 'arp',     label: '琶音',     def: 'pluck',   opts: ['pluck', 'marimba', 'epiano', 'triangle', 'off'] },
-  { key: 'flute',   label: '对位',     def: 'flute',   opts: ['flute', 'reed', 'epiano', 'triangle', 'off'] },
-  { key: 'marimba', label: '新生儿音', def: 'marimba', opts: ['marimba', 'epiano', 'pluck', 'sine', 'off'] },
-  { key: 'bell',    label: '钟琴',     def: 'bell',    opts: ['bell', 'epiano', 'marimba', 'shimmer', 'off'] },
-  { key: 'shimmer', label: '微光',     def: 'shimmer', opts: ['shimmer', 'bell', 'sine', 'off'] },
+  { key: 'heart',   label: '心跳',     def: 'heart',   opts: ['heart', 'sub', 'triangle', 'square', 'organ', 'off'] },
+  { key: 'drone',   label: '低音床',   def: 'drone',   opts: ['drone', 'sub', 'organ', 'triangle', 'sawtooth', 'off'] },
+  { key: 'lead',    label: '主旋律',   def: 'lead',    opts: ['lead', 'flute', 'epiano', 'organ', 'brass', 'glass', 'triangle', 'square', 'off'] },
+  { key: 'pad',     label: '和弦 Pad', def: 'pad',     opts: ['pad', 'organ', 'glass', 'sine', 'sawtooth', 'off'] },
+  { key: 'strings', label: '弦乐',     def: 'strings', opts: ['strings', 'choir', 'organ', 'brass', 'triangle', 'off'] },
+  { key: 'choir',   label: '人声',     def: 'choir',   opts: ['choir', 'strings', 'organ', 'flute', 'off'] },
+  { key: 'arp',     label: '琶音',     def: 'pluck',   opts: ['pluck', 'clav', 'marimba', 'epiano', 'vibes', 'glass', 'triangle', 'off'] },
+  { key: 'flute',   label: '对位',     def: 'flute',   opts: ['flute', 'reed', 'brass', 'organ', 'epiano', 'triangle', 'off'] },
+  { key: 'marimba', label: '新生儿音', def: 'marimba', opts: ['marimba', 'vibes', 'epiano', 'pluck', 'glass', 'sine', 'off'] },
+  { key: 'bell',    label: '钟琴',     def: 'bell',    opts: ['bell', 'glass', 'vibes', 'musicbox', 'epiano', 'marimba', 'shimmer', 'off'] },
+  { key: 'shimmer', label: '微光',     def: 'shimmer', opts: ['shimmer', 'glass', 'musicbox', 'bell', 'sine', 'off'] },
 ];
 
 export const INSTRUMENT_VOICE_LABELS = {
@@ -207,6 +207,8 @@ export const INSTRUMENT_VOICE_LABELS = {
   lead: '主旋律',
   pluck: '竖琴', flute: '长笛', marimba: '马林巴', epiano: '电钢', bell: '钟琴',
   reed: '簧片', shimmer: '微光',
+  sub: '低音 Sub', organ: '管风琴', brass: '铜管', vibes: '颤音琴',
+  glass: '玻璃琴', clav: '击弦琴', musicbox: '八音盒',
   sine: '正弦', triangle: '三角', sawtooth: '锯齿', square: '方波',
 };
 
