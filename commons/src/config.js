@@ -189,16 +189,16 @@ export const AUDIO_CONSTANTS = {
 /* ---- 玩家可选乐器：每个声部可选一种音色（off = 关闭） ---- */
 export const INSTRUMENT_PARTS = [
   { key: 'heart',   label: '心跳',     def: 'heart',   opts: ['heart', 'sub', 'triangle', 'square', 'organ', 'off'] },
-  { key: 'drone',   label: '低音床',   def: 'drone',   opts: ['drone', 'sub', 'organ', 'cello', 'accordion', 'triangle', 'sawtooth', 'off'] },
-  { key: 'lead',    label: '主旋律',   def: 'lead',    opts: ['lead', 'flute', 'epiano', 'organ', 'brass', 'glass', 'cello', 'sax', 'theremin', 'sitar', 'accordion', 'harp', 'triangle', 'square', 'off'] },
-  { key: 'pad',     label: '和弦 Pad', def: 'pad',     opts: ['pad', 'organ', 'glass', 'cello', 'accordion', 'sine', 'sawtooth', 'off'] },
-  { key: 'strings', label: '弦乐',     def: 'strings', opts: ['strings', 'choir', 'organ', 'brass', 'cello', 'accordion', 'triangle', 'off'] },
+  { key: 'drone',   label: '低音床',   def: 'drone',   opts: ['drone', 'sub', 'organ', 'cello', 'accordion', 'wavetable', 'triangle', 'sawtooth', 'off'] },
+  { key: 'lead',    label: '主旋律',   def: 'lead',    opts: ['lead', 'flute', 'epiano', 'organ', 'brass', 'glass', 'cello', 'sax', 'theremin', 'sitar', 'accordion', 'harp', 'shakuhachi', 'erhu', 'guzheng', 'fmmetal', 'triangle', 'square', 'off'] },
+  { key: 'pad',     label: '和弦 Pad', def: 'pad',     opts: ['pad', 'organ', 'glass', 'cello', 'accordion', 'wavetable', 'sine', 'sawtooth', 'off'] },
+  { key: 'strings', label: '弦乐',     def: 'strings', opts: ['strings', 'choir', 'organ', 'brass', 'cello', 'erhu', 'accordion', 'triangle', 'off'] },
   { key: 'choir',   label: '人声',     def: 'choir',   opts: ['choir', 'strings', 'organ', 'flute', 'theremin', 'off'] },
-  { key: 'arp',     label: '琶音',     def: 'pluck',   opts: ['pluck', 'clav', 'harp', 'marimba', 'epiano', 'vibes', 'steeldrum', 'sitar', 'glass', 'triangle', 'off'] },
-  { key: 'flute',   label: '对位',     def: 'flute',   opts: ['flute', 'reed', 'sax', 'brass', 'cello', 'organ', 'theremin', 'epiano', 'triangle', 'off'] },
-  { key: 'marimba', label: '新生儿音', def: 'marimba', opts: ['marimba', 'vibes', 'harp', 'steeldrum', 'epiano', 'pluck', 'glass', 'sine', 'off'] },
-  { key: 'bell',    label: '钟琴',     def: 'bell',    opts: ['bell', 'glass', 'vibes', 'musicbox', 'steeldrum', 'harp', 'epiano', 'marimba', 'shimmer', 'off'] },
-  { key: 'shimmer', label: '微光',     def: 'shimmer', opts: ['shimmer', 'glass', 'musicbox', 'bell', 'theremin', 'sine', 'off'] },
+  { key: 'arp',     label: '琶音',     def: 'pluck',   opts: ['pluck', 'clav', 'harp', 'marimba', 'epiano', 'vibes', 'steeldrum', 'sitar', 'guzheng', 'fmmetal', 'glass', 'triangle', 'off'] },
+  { key: 'flute',   label: '对位',     def: 'flute',   opts: ['flute', 'reed', 'sax', 'brass', 'cello', 'organ', 'theremin', 'shakuhachi', 'erhu', 'epiano', 'triangle', 'off'] },
+  { key: 'marimba', label: '新生儿音', def: 'marimba', opts: ['marimba', 'vibes', 'harp', 'steeldrum', 'guzheng', 'fmmetal', 'epiano', 'pluck', 'glass', 'sine', 'off'] },
+  { key: 'bell',    label: '钟琴',     def: 'bell',    opts: ['bell', 'glass', 'vibes', 'musicbox', 'steeldrum', 'fmmetal', 'harp', 'epiano', 'marimba', 'shimmer', 'off'] },
+  { key: 'shimmer', label: '微光',     def: 'shimmer', opts: ['shimmer', 'glass', 'musicbox', 'bell', 'theremin', 'wavetable', 'sine', 'off'] },
 ];
 
 export const INSTRUMENT_VOICE_LABELS = {
@@ -211,6 +211,8 @@ export const INSTRUMENT_VOICE_LABELS = {
   glass: '玻璃琴', clav: '击弦琴', musicbox: '八音盒',
   cello: '大提琴', harp: '竖琴', steeldrum: '钢鼓', sax: '萨克斯',
   sitar: '西塔琴', accordion: '手风琴', theremin: '特雷门',
+  shakuhachi: '尺八', erhu: '二胡', guzheng: '古筝',
+  fmmetal: 'FM 金属', wavetable: '波表 Pad',
   sine: '正弦', triangle: '三角', sawtooth: '锯齿', square: '方波',
 };
 

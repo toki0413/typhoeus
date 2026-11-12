@@ -101,6 +101,7 @@ test('instruments: 新增音色都有标签且可被声部选择', () => {
   for (const voice of [
     'sub', 'organ', 'brass', 'vibes', 'glass', 'clav', 'musicbox',
     'cello', 'harp', 'steeldrum', 'sax', 'sitar', 'accordion', 'theremin',
+    'shakuhachi', 'erhu', 'guzheng', 'fmmetal', 'wavetable',
   ]) {
     assert.ok(all.has(voice), `没有声部提供 ${voice}`);
     assert.ok(config.INSTRUMENT_VOICE_LABELS[voice]);
