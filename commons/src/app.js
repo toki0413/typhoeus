@@ -222,6 +222,55 @@ function syncRanges(root = document) {
   scope.querySelectorAll('input[type="range"]').forEach(syncRangeFill);
 }
 
+/* ---- 拖滑杆：数值气泡 + 抓取反馈 ---- */
+function rangeValueText(el) {
+  const parent = el.parentElement;
+  const label = parent?.querySelector('.field-head .val, .mix-val, #speedVal');
+  const text = label?.textContent?.trim();
+  return text || el.value;
+}
+
+function moveRangeBubble(el) {
+  /* 只在主参数滑杆上显示气泡；混音台/节奏有各自的常驻读数 */
+  if (!el.closest('.field')) return null;
+  const parent = el.parentElement;
+  if (!parent) return null;
+  let bubble = parent.querySelector(':scope > .range-bubble');
+  if (!bubble) {
+    bubble = document.createElement('span');
+    bubble.className = 'range-bubble';
+    bubble.setAttribute('aria-hidden', 'true');
+    parent.appendChild(bubble);
+  }
+  bubble.textContent = rangeValueText(el);
+  const pct = parseFloat(el.style.getPropertyValue('--fill'));
+  const ratio = Number.isFinite(pct) ? pct / 100 : 0.5;
+  const thumb = 14;
+  const rawX = el.offsetLeft + ratio * Math.max(0, el.clientWidth - thumb) + thumb / 2;
+  const maxX = Math.max(16, (parent.clientWidth || 0) - 16);
+  bubble.style.left = `${Math.max(16, Math.min(maxX, rawX))}px`;
+  bubble.style.top = `${el.offsetTop - 25}px`;
+  bubble.classList.add('show');
+  return bubble;
+}
+
+function beginRangeDrag(el) {
+  el.classList.add('dragging');
+  el.parentElement?.classList.add('range-active');
+  document.body.classList.add('range-dragging');
+  moveRangeBubble(el);
+}
+
+function endRangeDrag() {
+  for (const el of $$('input[type="range"].dragging')) {
+    el.classList.remove('dragging');
+    el.parentElement?.classList.remove('range-active');
+    const bubble = el.parentElement?.querySelector(':scope > .range-bubble');
+    if (bubble) bubble.classList.remove('show');
+  }
+  document.body.classList.remove('range-dragging');
+}
+
 function normalizeRecipe(rec) {
   if (!rec) return null;
   const out = deepClone(rec);
@@ -1036,6 +1085,7 @@ function onMixerDblClick(e) {
     const key = globalEl.dataset.mixerGlobal;
     mx[key] = DEFAULT_MIXER[key];
     globalEl.value = String(Math.round(mx[key] * 100));
+    syncRangeFill(globalEl);
     const valEl = $(`[data-mixer-val="global:${key}"]`);
     if (valEl) valEl.textContent = key === 'tempo' ? `×${mx.tempo.toFixed(2)}` : `${Math.round(mx[key] * 100)}`;
   } else {
@@ -1044,6 +1094,7 @@ function onMixerDblClick(e) {
     const def = DEFAULT_MIXER.parts[part]?.[param] ?? 0;
     mx.parts[part][param] = def;
     partEl.value = String(param === 'oct' ? def : Math.round(def * 100));
+    syncRangeFill(partEl);
     const valEl = $(`[data-mixer-val="${part}:${param}"]`);
     if (valEl) valEl.textContent = mixerValueLabel(param, def);
   }
@@ -2440,23 +2491,54 @@ function bindUI() {
     $('#speedVal').textContent = `${state.speed.toFixed(2).replace(/0$/, '')}×`;
   });
 
-  /* ---- 右侧控制台：单行 5 标签 + 键盘方向键 + 切页回到顶部 ---- */
+  /* ---- 右侧控制台：滑动指示块 + 方向切页 + 键盘操作 ---- */
   const railTabsEl = $('#railTabs');
+  const railInk = $('.rail-ink', railTabsEl);
   railTabsEl.setAttribute('role', 'tablist');
   $$('#railTabs button').forEach((b) => {
     b.setAttribute('role', 'tab');
     b.setAttribute('aria-selected', String(b.classList.contains('active')));
   });
+  const moveRailInk = (btn, animate = true) => {
+    if (!railInk || !btn) return;
+    if (!animate) railInk.style.transition = 'none';
+    railInk.style.width = `${btn.offsetWidth}px`;
+    railInk.style.transform = `translateX(${btn.offsetLeft}px)`;
+    if (!animate) {
+      void railInk.offsetWidth;
+      railInk.style.transition = '';
+    }
+  };
+  const isCompactLayout = () => window.matchMedia('(max-width: 1180px)').matches;
+  /* 手机上切页后，若标签栏已被滚出视口，把它带回顶部，避免内容高度变化造成跳页 */
+  const keepRailInView = () => {
+    if (!isCompactLayout()) return;
+    const topbar = $('.topbar');
+    const offset = (topbar?.offsetHeight || 0) + 8;
+    const y = railTabsEl.getBoundingClientRect().top + window.scrollY - offset;
+    if (window.scrollY > y + 2) window.scrollTo({ top: y, behavior: 'smooth' });
+  };
   const activateRailTab = (btn) => {
-    if (!btn) return;
-    for (const b of $$('#railTabs button')) {
+    if (!btn || btn.classList.contains('active')) return;
+    const tabs = $$('#railTabs button');
+    const oldIdx = tabs.findIndex((b) => b.classList.contains('active'));
+    const newIdx = tabs.indexOf(btn);
+    const dir = newIdx >= oldIdx ? 1 : -1;
+    moveRailInk(btn, true);
+    for (const b of tabs) {
       const on = b === btn;
       b.classList.toggle('active', on);
       b.setAttribute('aria-selected', String(on));
     }
-    for (const p of $$('.panel')) p.classList.toggle('active', p.id === `panel-${btn.dataset.tab}`);
+    for (const p of $$('.panel')) {
+      const on = p.id === `panel-${btn.dataset.tab}`;
+      p.classList.toggle('active', on);
+      p.classList.remove('panel-enter-left', 'panel-enter-right');
+      if (on) p.classList.add(dir > 0 ? 'panel-enter-right' : 'panel-enter-left');
+    }
     const railBody = $('.rail-body');
     if (railBody && railBody.scrollTop > 0) railBody.scrollTo({ top: 0, behavior: 'smooth' });
+    keepRailInView();
     if (btn.dataset.tab === 'struct') updateStructValues();
     if (btn.dataset.tab === 'science') sciencePanel.render();
   };
@@ -2479,11 +2561,38 @@ function bindUI() {
     tabs[n].focus();
     activateRailTab(tabs[n]);
   });
+  /* 首帧定位指示块（避免从 0 滑入），字体/窗口变化后重新对齐 */
+  const initRailInk = () => moveRailInk(railTabsEl.querySelector('button.active'), false);
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(initRailInk);
+  else initRailInk();
+  if (document.fonts?.ready) document.fonts.ready.then(initRailInk).catch(() => {});
+  let railInkRaf = 0;
+  window.addEventListener('resize', () => {
+    if (typeof requestAnimationFrame !== 'function') return;
+    if (railInkRaf) return;
+    railInkRaf = requestAnimationFrame(() => {
+      railInkRaf = 0;
+      moveRailInk(railTabsEl.querySelector('button.active'), false);
+    });
+  });
 
-  /* ---- 滑杆填充：输入时实时写 --fill，面板重绘后自动同步 ---- */
+  /* ---- 滑杆：实时填充 + 拖动气泡 + 抓取反馈 ---- */
   document.addEventListener('input', (e) => {
-    if (e.target && e.target.type === 'range') syncRangeFill(e.target);
+    const el = e.target;
+    if (!el || el.type !== 'range') return;
+    syncRangeFill(el);
+    if (typeof requestAnimationFrame !== 'function') return;
+    /* 等面板自己的 input 处理器更新完 .val 文本，再更新拖动气泡 */
+    requestAnimationFrame(() => {
+      if (el.classList.contains('dragging')) moveRangeBubble(el);
+    });
   }, true);
+  document.addEventListener('pointerdown', (e) => {
+    if (e.target && e.target.type === 'range') beginRangeDrag(e.target);
+  }, true);
+  document.addEventListener('pointerup', endRangeDrag, true);
+  document.addEventListener('pointercancel', endRangeDrag, true);
+  window.addEventListener('blur', endRangeDrag);
   const rangeObserver = typeof MutationObserver === 'function'
     ? new MutationObserver(() => syncRanges())
     : null;

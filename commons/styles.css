@@ -756,7 +756,7 @@ input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 10px;
+  height: 12px;
   border: 1.5px solid var(--text) !important;
   border-radius: 0 !important;
   background-color: var(--surface) !important;
@@ -771,21 +771,21 @@ input[type='range'] {
 }
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px;
-  height: 22px;
+  width: 14px;
+  height: 24px;
   border-radius: 0;
   background: var(--text);
   border: 1.5px solid var(--text);
   box-shadow: none;
   cursor: ew-resize;
-  transition: transform 0.12s;
+  transition: transform 0.1s, background 0.1s;
 }
 input[type='range']::-webkit-slider-thumb:hover {
   transform: scaleY(1.12);
 }
 input[type='range']::-moz-range-thumb {
-  width: 12px;
-  height: 22px;
+  width: 14px;
+  height: 24px;
   border-radius: 0;
   background: var(--text);
   border: 1.5px solid var(--text);
@@ -798,6 +798,57 @@ input[type='range']::-moz-range-track {
 input[type='range']:focus-visible {
   outline: 2px solid var(--sky) !important;
   outline-offset: 2px;
+}
+/* 拖动中：推子放大变朱红，旁边的数值同步高亮 */
+input[type='range'].dragging::-webkit-slider-thumb {
+  transform: scale(1.18);
+  background: var(--pink);
+}
+input[type='range'].dragging::-moz-range-thumb {
+  background: var(--pink);
+}
+body.range-dragging {
+  user-select: none;
+  cursor: ew-resize;
+}
+.field.range-active .val {
+  opacity: 0;
+}
+.field-head .val {
+  transition: opacity 0.1s;
+}
+.mix-ctl.range-active .mix-val,
+.speed.range-active #speedVal {
+  color: var(--pink) !important;
+}
+
+/* 拖动时跟随推子的数值气泡 */
+.field,
+.mix-ctl,
+.speed {
+  position: relative;
+}
+.range-bubble {
+  position: absolute;
+  top: -25px;
+  left: 0;
+  transform: translate(-50%, 5px);
+  padding: 2px 7px;
+  background: var(--text);
+  color: #fff;
+  font-family: var(--num);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 8;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.range-bubble.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 .speed input {
   width: 120px;
@@ -882,30 +933,62 @@ input[type='range']:focus-visible {
   box-shadow: var(--shadow);
 }
 .rail-tabs {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   border-bottom: 1.5px solid var(--line-2);
   background: rgba(255, 255, 255, 0.6);
 }
+/* 滑动黑色指示块：切页时平移过去，和标签文字一起构成"拨片"手感 */
+.rail-ink {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--text);
+  pointer-events: none;
+  z-index: 0;
+  transition: transform 0.28s cubic-bezier(0.22, 0.8, 0.26, 1),
+              width 0.28s cubic-bezier(0.22, 0.8, 0.26, 1);
+}
+.rail-ink::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--pink);
+}
 .rail-tabs button {
+  position: relative;
+  z-index: 1;
   padding: 12px 4px;
   font-size: 15px;
   line-height: 1.25;
   white-space: nowrap;
   color: var(--muted);
   border-bottom: 3px solid transparent;
-  transition: background 0.16s, color 0.16s, border-color 0.16s;
+  /* 失去选中时也延后变暗，让白字跟着黑色指示块一起离开 */
+  transition: background 0.16s, color 0.12s ease 0.12s;
   font-weight: 500;
+  background: transparent;
 }
 .rail-tabs button:hover {
   color: var(--text);
   background: rgba(17, 17, 17, 0.06);
+  transition: background 0.16s, color 0.1s;
 }
 .rail-tabs button.active {
   color: #fff;
-  background: var(--text);
-  border-bottom-color: var(--pink);
+  background: transparent;
   font-weight: 700;
+  /* 等黑色指示块滑到再变白，避免中途白字看不见 */
+  transition: color 0.12s ease 0.16s;
+}
+.rail-tabs button.active:hover {
+  background: transparent;
+  color: #fff;
 }
 .rail-body {
   padding: 22px 22px 10px;
@@ -924,10 +1007,20 @@ input[type='range']:focus-visible {
 }
 .panel.active {
   display: block;
-  animation: panelIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-@keyframes panelIn {
-  from { opacity: 0; transform: translateY(6px); }
+/* 切页方向感：往右切从右侧滑入，往左切从左侧滑入 */
+.panel.active.panel-enter-right {
+  animation: panelInRight 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.panel.active.panel-enter-left {
+  animation: panelInLeft 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes panelInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes panelInLeft {
+  from { opacity: 0; transform: translateX(-12px); }
   to   { opacity: 1; transform: none; }
 }
 @keyframes fadeIn {
