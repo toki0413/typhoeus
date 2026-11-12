@@ -688,6 +688,11 @@ export class AudioEngine {
         this._stringPad(midiToFreq(chordMidi[0]), this._chordNext, chordSec * 1.15, 0.03, -0.35);
         this._stringPad(midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)]), this._chordNext, chordSec * 1.15, 0.022, 0.35);
       }
+      /* 人声 Pad：更繁盛时加入，像远处合唱 */
+      if (this._intensity > 0.42) {
+        this._choir(midiToFreq(chordMidi[0] + 12), this._chordNext, chordSec * 1.1, 0.018, -0.5);
+        this._choir(midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)] + 12), this._chordNext, chordSec * 1.1, 0.014, 0.5);
+      }
       /* 高八度叠层：繁盛时让和弦更"满" */
       if (this._intensity > 0.35) {
         this._chordTone(midiToFreq(chordMidi[0] + 12), this._chordNext, chordSec * 0.9, padAmp * 0.45, waves.chordPad, 0.3);
@@ -768,7 +773,7 @@ export class AudioEngine {
         const freq = this._degreeFreq(degree, cellOctaveShift + 1);  // 高八度：新生儿更亮
         /* Attention 音乐性增强：amp × dyn.sparkle，wave 来自 waves.cell */
         const amp = dyn.sparkle + Math.random() * 0.02;
-        this._tone(freq, this.nextNote, attractorType === 'stable' ? 1.2 : 0.32, amp, waves.cell, 0.5);
+        this._marimba(freq, this.nextNote, amp * 1.1, (cell.x - 0.5) * 1.2);
 
         // Layer 4: Sparkle Crystal — 新生儿水晶闪烁
         this._emitSparkle(this.nextNote, cell.x, cell.y);
@@ -838,28 +843,26 @@ export class AudioEngine {
     switch (evt.type) {
       case 'glider':
         [0, 2, 4].forEach((deg, i) => {
-          this._tone(this._degreeFreq(deg, 1), now + i * 0.11, 0.22, 0.085, 'triangle', 0.6,
-            0, -0.55 + i * 0.55);
+          this._marimba(this._degreeFreq(deg, 1), now + i * 0.11, 0.07, -0.55 + i * 0.55);
         });
         break;
       case 'oscillator':
         [1, 3, 1, 3].forEach((deg, i) => {
-          this._tone(this._degreeFreq(deg, 1), now + i * 0.16, 0.16, 0.07, 'sine', 0.5,
-            0, i % 2 ? 0.22 : -0.22);
+          this._reed(this._degreeFreq(deg, 1), now + i * 0.16, 0.16, 0.05, i % 2 ? 0.22 : -0.22);
         });
         break;
       case 'still':
-        this._tone(this._degreeFreq(0, 0), now, 2.0, 0.05, 'sine', 0.45, 0, 0);
-        this._tone(this._degreeFreq(2, 0), now + 0.05, 1.9, 0.04, 'sine', 0.45, 0, 0);
+        this._epiano(this._degreeFreq(0, 0), now, 1.9, 0.05, 0);
+        this._epiano(this._degreeFreq(2, 0), now + 0.06, 1.7, 0.038, 0);
         break;
       case 'merge':
         [0, 2, 4].forEach((deg, i) => {
-          this._tone(this._degreeFreq(deg, 0), now + 0.02, 1.2, 0.06, 'triangle', 0.55, 0, (i - 1) * 0.5);
+          this._choir(this._degreeFreq(deg, 1), now + 0.02, 1.2, 0.016, (i - 1) * 0.5);
         });
         break;
       case 'split':
         [4, 2, 0].forEach((deg, i) => {
-          this._tone(this._degreeFreq(deg, 1), now + i * 0.1, 0.18, 0.075, 'triangle', 0.55, 0, 0.35 * (1 - i));
+          this._pluck(this._degreeFreq(deg, 1), now + i * 0.1, 0.06, 0.35 * (1 - i));
         });
         break;
       case 'birthSurge':
@@ -1135,6 +1138,111 @@ export class AudioEngine {
       osc.connect(gg); gg.connect(g);
       osc.start(when); osc.stop(when + dur + 0.05);
     }
+  }
+
+  /* ---- 电钢琴（2-op FM）：正弦载波 + 衰减调制，暖而有金属感 ---- */
+  _epiano(freq, when, dur, amp = 0.045, pan = 0) {
+    if (!this.built || !this.enabled) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.04;
+    const ctx = this.ctx;
+    const carrier = ctx.createOscillator();
+    carrier.type = 'sine';
+    carrier.frequency.setValueAtTime(freq, when);
+    const mod = ctx.createOscillator();
+    mod.type = 'sine';
+    mod.frequency.setValueAtTime(freq * 2, when);
+    const modGain = ctx.createGain();
+    modGain.gain.setValueAtTime(freq * 1.6, when);
+    modGain.gain.exponentialRampToValueAtTime(Math.max(0.01, freq * 0.12), when + 0.35);
+    mod.connect(modGain);
+    modGain.connect(carrier.frequency);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp), when + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    carrier.connect(g); g.connect(p); p.connect(this.noteBus);
+    const s = ctx.createGain(); s.gain.value = 0.5; p.connect(s); s.connect(this.delay);
+    carrier.start(when); carrier.stop(when + dur + 0.05);
+    mod.start(when); mod.stop(when + dur + 0.05);
+  }
+
+  /* ---- 马林巴/木琴：基音 + 四次谐波，短促木质 ---- */
+  _marimba(freq, when, amp = 0.05, pan = 0) {
+    if (!this.built || !this.enabled) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.045;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(p); p.connect(this.noteBus);
+    const s = ctx.createGain(); s.gain.value = 0.45; p.connect(s); s.connect(this.delay);
+    const parts = [[1, 1.0, 0.55], [4, 0.22, 0.14]];
+    for (const [r, a, d] of parts) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * r, when);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp * a), when + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + d);
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + d + 0.05);
+    }
+  }
+
+  /* ---- 人声 Pad：锯齿 + 900Hz 共振峰，慢起慢落 ---- */
+  _choir(freq, when, dur, amp = 0.02, pan = 0) {
+    if (!this.built || !this.enabled) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.018;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const formant = ctx.createBiquadFilter();
+    formant.type = 'bandpass';
+    formant.frequency.value = 900;
+    formant.Q.value = 1.8;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(formant); formant.connect(p); p.connect(this.master);
+    out.gain.setValueAtTime(0.0001, when);
+    out.gain.linearRampToValueAtTime(amp, when + Math.min(0.8, dur * 0.4));
+    out.gain.linearRampToValueAtTime(0.0001, when + dur);
+    for (const det of [-9, 9]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, when);
+      osc.detune.setValueAtTime(det, when);
+      osc.connect(out);
+      osc.start(when); osc.stop(when + dur + 0.1);
+    }
+  }
+
+  /* ---- 簧片/口琴：方波 + 1200Hz 带通，短促有鼻音 ---- */
+  _reed(freq, when, dur, amp = 0.04, pan = 0) {
+    if (!this.built || !this.enabled) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.035;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(freq, when);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1200;
+    bp.Q.value = 1.2;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.linearRampToValueAtTime(amp, when + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    osc.connect(bp); bp.connect(g); g.connect(p); p.connect(this.noteBus);
+    const s = ctx.createGain(); s.gain.value = 0.5; p.connect(s); s.connect(this.delay);
+    osc.start(when); osc.stop(when + dur + 0.05);
   }
 
   triggerEvent(type, strength = 1) {
