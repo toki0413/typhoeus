@@ -189,6 +189,11 @@ const state = {
   mcLabelsVisible: false,   // CPM Potts 标签 overlay 是否显示
   scanResult: null,         // 最近一次参数扫描结果（含 heatmap）
   scanRunning: false,       // 是否正在扫描
+  /* ---- 实验斑图拟合状态 ---- */
+  fit: {
+    field: null, w: 64, h: 64, features: null, result: null,
+    running: false, progress: 0, total: 0, kind: null, imageData: null, invert: false,
+  },
 };
 
 /* ------------------------------------------------------------------ */
@@ -196,7 +201,7 @@ const state = {
 /* 工厂闭包共享 state，宿主能力（toast/modal/下载/领养）由组合根注入。 */
 /* ------------------------------------------------------------------ */
 
-const sciencePanel = createSciencePanel({ state, toast, openModal, downloadJSON });
+const sciencePanel = createSciencePanel({ state, toast, openModal, downloadJSON, applyScientificParams });
 const lineageView = createLineageView({ state, findRecipe, adoptRecipe });
 
 /* ------------------------------------------------------------------ */
@@ -373,6 +378,29 @@ function metricsFor(sim) {
     stability: base.stability,
     typeTone: sci.typeTone || base.typeTone,
   };
+}
+
+/* 把实验斑图拟合出的参数应用到当前科学引擎 */
+function applyScientificParams(params) {
+  if (!params) return;
+  const g = state.recipe.seed.genome;
+  g.engine = 'scientific';
+  g.scientific = {
+    ...(g.scientific || {}),
+    preset: 'custom',
+    engineType: 'grayScott',
+    ...params,
+  };
+  if (state.sim?.applyGenome) {
+    state.sim.applyGenome(g);
+    state.sim.reset();
+  }
+  state.metrics = metricsFor(state.sim);
+  state.renderer?.setMetrics?.(state.metrics);
+  markGenomeChanged();
+  renderRulePanel();
+  sciencePanel.render();
+  toast('已应用拟合参数到当前科学引擎', 2000);
 }
 
 function normalizeRecipe(rec) {

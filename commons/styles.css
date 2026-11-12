@@ -3273,3 +3273,112 @@ body.modal-open .toast-layer { top: 12px; bottom: auto; }
 @media (max-width: 760px) {
   .toast-layer { left: 12px; right: 12px; align-items: stretch; }
 }
+
+/* ============================================================
+   实验斑图拟合
+   ============================================================ */
+.fit-section .fit-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border: 1.5px solid var(--text);
+  background: var(--surface);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fit-file input { display: none; }
+.fit-invert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.fit-invert input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--pink);
+  padding: 0;
+}
+.fit-preview-wrap {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  align-items: start;
+  margin: 14px 0;
+}
+#fitPreview {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  max-width: 240px;
+  border: 1.5px solid var(--text);
+  background: var(--bg-2);
+  image-rendering: pixelated;
+}
+.fit-meta {
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--muted);
+}
+.fit-meta b { color: var(--text); }
+.fit-progress {
+  min-height: 16px;
+  font-size: 12px;
+  color: var(--pink);
+  font-weight: 700;
+}
+.fit-best {
+  margin-top: 8px;
+  padding: 11px 12px;
+  border: 1.5px solid var(--text);
+  background: var(--bg-2);
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text);
+}
+.fit-rank {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+@media (max-width: 560px) {
+  .fit-preview-wrap { grid-template-columns: 1fr; }
+  #fitPreview { width: 100%; height: auto; aspect-ratio: 1 / 1; }
+}
+
+/* ============================================================
+   所有面板的统一呼吸感与防溢出
+   ============================================================ */
+.sci-section {
+  padding: 16px 16px 14px !important;
+  margin-bottom: 26px !important;
+}
+.sci-row { gap: 8px !important; margin-top: 8px !important; }
+.pattern-list { gap: 12px !important; }
+.metric-grid { gap: 14px; }
+.metric-card { padding: 16px 16px; }
+.preset-grid { gap: 10px; }
+.exotic-row { gap: 8px; }
+.switch-row { padding: 12px 0; }
+.instrument-list { padding: 14px; }
+.preset b,
+.preset span { overflow-wrap: anywhere; }
+
+/* 其余视图面板：与培育台保持同一套区块节奏 */
+.view-head { margin-bottom: 28px; }
+.seed-grid { gap: 24px; }
+.env-section { margin-bottom: 38px; }
+.compare-grid { gap: 24px; }
+.lineage-tree { gap: 28px; }
+.lineage-summary { gap: 12px; margin-bottom: 26px; }
+.section-label { overflow-wrap: anywhere; }
+.dim,
+.tiny { overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .seed-grid { gap: 18px; }
+  .compare-grid { gap: 18px; }
+  .lineage-tree { gap: 22px; }
+}

@@ -14,10 +14,221 @@ import {
 } from '../leaderboard.js';
 import { escapeHtml, sortLabel } from './format.js';
 import { SCIENCE_METRIC_LABELS } from '../config.js';
+import {
+  imageToField, extractPatternFeatures, makeReferencePattern, fitPattern,
+  DEFAULT_FIT_SIZE, DEFAULT_FIT_STEPS, DEFAULT_FIT_GRID,
+} from '../fit.js';
 
-export function createSciencePanel({ state, toast, openModal, downloadJSON }) {
+export function createSciencePanel({ state, toast, openModal, downloadJSON, applyScientificParams }) {
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+  /* ================= 实验斑图拟合 ================= */
+  const FIT_GRID_TOTAL = DEFAULT_FIT_GRID.f.length * DEFAULT_FIT_GRID.k.length * DEFAULT_FIT_GRID.Du.length;
+
+  function ensureFitState() {
+    if (!state.fit) {
+      state.fit = {
+        field: null, w: DEFAULT_FIT_SIZE, h: DEFAULT_FIT_SIZE,
+        features: null, result: null,
+        running: false, progress: 0, total: 0, kind: null, imageData: null, invert: false,
+      };
+    }
+    return state.fit;
+  }
+
+  function fitResultHTML(result) {
+    if (!result?.best) return '';
+    const b = result.best;
+    return `<div class="fit-best">
+      <b>最佳结构匹配 ${b.score.toFixed(1)}%</b>
+      <div>f ${b.params.f.toFixed(3)} · k ${b.params.k.toFixed(3)} · D_u ${b.params.D_u.toFixed(2)} · D_v ${b.params.D_v.toFixed(2)}</div>
+      <div class="dim">结构距离 ${b.distance.toFixed(3)} · 评估 ${result.evaluated} 组 · 只匹配结构统计，不是唯一解</div>
+    </div>
+    ${result.top.slice(0, 3).map((c, i) =>
+      `<div class="fit-rank">#${i + 1} f ${c.params.f.toFixed(3)} · k ${c.params.k.toFixed(3)} · D_u ${c.params.D_u.toFixed(2)} → ${c.score.toFixed(1)}%</div>`
+    ).join('')}`;
+  }
+
+  function fitSectionHTML() {
+    const fit = ensureFitState();
+    const label = fit.kind === 'demo'
+      ? '示例基准（已知参数生成，非实验数据）'
+      : fit.kind === 'image' ? '已载入实验图' : '尚未载入';
+    return `<div class="sci-section fit-section">
+      <h4>实验斑图参数拟合</h4>
+      <p class="dim">上传实验/显微斑图，或先用示例基准验证流程。拟合的是结构统计（密度 / H_v / L_c / D_box），不是像素级相位。</p>
+      <div class="sci-row">
+        <label class="fit-file">选择图片<input type="file" id="fitFile" accept="image/*"></label>
+        <button class="btn ghost tiny" id="fitDemo">使用示例基准</button>
+        <label class="fit-invert"><input type="checkbox" id="fitInvert" ${fit.invert ? 'checked' : ''}> 反相</label>
+      </div>
+      <div class="fit-preview-wrap">
+        <canvas id="fitPreview" width="240" height="240"></canvas>
+        <div class="fit-meta">
+          <div><b>目标</b> ${label}</div>
+          ${fit.features
+            ? `<div>ρ ${(fit.features.density * 100).toFixed(1)}% · H_v ${fit.features.entropy.toFixed(2)} · L_c ${fit.features.period} 格 · D_box ${fit.features.fractal.toFixed(2)}</div>`
+            : '<div class="dim">载入后显示结构特征</div>'}
+        </div>
+      </div>
+      <div class="sci-row">
+        <button class="btn" id="fitRun" ${!fit.features || fit.running ? 'disabled' : ''}>${fit.running ? '拟合中…' : '开始拟合'}</button>
+        <button class="btn ghost tiny" id="fitApply" ${!fit.result?.best ? 'disabled' : ''}>应用最佳参数</button>
+      </div>
+      <div id="fitProgress" class="fit-progress">${fit.running ? `已评估 ${fit.progress || 0}/${fit.total || 0}` : ''}</div>
+      <div id="fitResult" class="fit-result">${fitResultHTML(fit.result)}</div>
+    </div>`;
+  }
+
+  function drawFitPreview() {
+    const canvas = $('#fitPreview');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const fit = ensureFitState();
+    const cw = canvas.width;
+    const ch = canvas.height;
+    if (!fit.field) {
+      ctx.fillStyle = '#f2efe6';
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.fillStyle = '#5f5f5f';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('未载入斑图', cw / 2, ch / 2);
+      return;
+    }
+    const img = ctx.createImageData(cw, ch);
+    /* 仅用于显示：把场拉伸到 [0,1]，不参与拟合 */
+    let min = Infinity;
+    let max = -Infinity;
+    for (let i = 0; i < fit.field.length; i++) {
+      if (fit.field[i] < min) min = fit.field[i];
+      if (fit.field[i] > max) max = fit.field[i];
+    }
+    const span = max - min || 1;
+    for (let y = 0; y < ch; y++) {
+      const sy = Math.min(fit.h - 1, Math.floor((y * fit.h) / ch));
+      for (let x = 0; x < cw; x++) {
+        const sx = Math.min(fit.w - 1, Math.floor((x * fit.w) / cw));
+        const v = Math.max(0, Math.min(1, (fit.field[sy * fit.w + sx] - min) / span));
+        const c = Math.round(242 - v * 200);
+        const i = (y * cw + x) * 4;
+        img.data[i] = c;
+        img.data[i + 1] = c;
+        img.data[i + 2] = c;
+        img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  function loadImageFile(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = (err) => { URL.revokeObjectURL(url); reject(err); };
+      img.src = url;
+    });
+  }
+
+  function imageDataFromImage(img) {
+    const maxSide = 256;
+    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return ctx.getImageData(0, 0, canvas.width, canvas.height);
+  }
+
+  function applyImageData(imageData) {
+    const fit = ensureFitState();
+    const size = DEFAULT_FIT_SIZE;
+    const field = imageToField(imageData, size, size, { invert: fit.invert });
+    fit.field = field;
+    fit.w = size;
+    fit.h = size;
+    fit.features = extractPatternFeatures(field, size, size);
+    fit.result = null;
+    fit.kind = 'image';
+    render();
+  }
+
+  async function runFit() {
+    const fit = ensureFitState();
+    if (!fit.features || fit.running) return;
+    fit.running = true;
+    fit.progress = 0;
+    fit.total = FIT_GRID_TOTAL;
+    fit.result = null;
+    render();
+    try {
+      const result = await fitPattern(fit.features, {
+        w: fit.w,
+        h: fit.h,
+        steps: DEFAULT_FIT_STEPS,
+        onProgress: (done, total) => {
+          fit.progress = done;
+          fit.total = total;
+          const el = $('#fitProgress');
+          if (el) el.textContent = `已评估 ${done}/${total}`;
+        },
+      });
+      fit.result = result;
+      toast(`拟合完成：最佳结构匹配 ${result.best.score.toFixed(1)}%`, 2200);
+    } catch (err) {
+      toast(`拟合失败：${err?.message || err}`, 2600);
+    } finally {
+      fit.running = false;
+      render();
+    }
+  }
+
+  function bindFitEvents() {
+    drawFitPreview();
+    $('#fitFile')?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const img = await loadImageFile(file);
+        const data = imageDataFromImage(img);
+        const fit = ensureFitState();
+        fit.imageData = data;
+        fit.invert = !!$('#fitInvert')?.checked;
+        applyImageData(data);
+        toast('实验图已载入，结构特征已提取', 1800);
+      } catch (err) {
+        toast(`图片载入失败：${err?.message || err}`, 2600);
+      }
+    });
+    $('#fitDemo')?.addEventListener('click', () => {
+      const ref = makeReferencePattern();
+      const fit = ensureFitState();
+      fit.field = ref.field;
+      fit.w = ref.w;
+      fit.h = ref.h;
+      fit.features = extractPatternFeatures(ref.field, ref.w, ref.h);
+      fit.result = null;
+      fit.kind = 'demo';
+      fit.imageData = null;
+      render();
+      toast('示例基准已载入（已知参数生成，用于验证流程）', 2200);
+    });
+    $('#fitInvert')?.addEventListener('change', (e) => {
+      const fit = ensureFitState();
+      fit.invert = e.target.checked;
+      if (fit.imageData) applyImageData(fit.imageData);
+    });
+    $('#fitRun')?.addEventListener('click', runFit);
+    $('#fitApply')?.addEventListener('click', () => {
+      const best = ensureFitState().result?.best;
+      if (!best) return;
+      applyScientificParams?.(best.params);
+      toast(`已应用 f ${best.params.f.toFixed(3)} · k ${best.params.k.toFixed(3)}`, 2200);
+    });
+  }
 
   function render() {
     const panel = $('#panel-science');
@@ -37,6 +248,9 @@ export function createSciencePanel({ state, toast, openModal, downloadJSON }) {
       ${SCIENCE_METRIC_LABELS.energy.symbol} = ${SCIENCE_METRIC_LABELS.energy.note}。
       它们用于相对比较；λ_FT 是有限时间估计，不宣称收敛的渐近指数。
     </div>`;
+
+    /* ---- 实验斑图参数拟合 ---- */
+    html += fitSectionHTML();
 
     /* ---- Section 1: Pattern Match 已发表 Turing 模式匹配 ---- */
     html += `<div class="sci-section"><h4>🎯 已发表模式匹配</h4>`;
@@ -140,6 +354,7 @@ export function createSciencePanel({ state, toast, openModal, downloadJSON }) {
     panel.innerHTML = html;
 
     /* ---- Bindings ---- */
+    bindFitEvents();
     $('#mcBtn')?.addEventListener('click', runMcNow);
     $('#mcToggle')?.addEventListener('click', () => {
       state.mcLabelsVisible = !state.mcLabelsVisible;
