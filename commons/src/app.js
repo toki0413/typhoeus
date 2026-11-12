@@ -183,6 +183,7 @@ const state = {
   },
   lastPetMood: null,  // 用于检测 mood 变化 → console 反馈
   exoticEnvId: null,  // 当前极端环境 id（null = 无）
+  preExoticEnv: null, // 进入极端环境前的环境快照（取消时用来真正恢复）
 
   /* ---- 科学发现层 ---- */
   topPatterns: [],          // 最近一次 matchPatternLibrary 结果（Top-3）
@@ -741,7 +742,13 @@ function resetHistory() {
 function attachRecipe(recipe, opts = {}) {
   state.recipe = normalizeRecipe(recipe);
   state.mixerPresetKey = null;
+  /* 极端环境标记跟着配方走：分享/保存的极端环境配方重新载入后仍能恢复物理与徽标 */
+  const exoId = state.recipe.env?._exoticId;
+  state.exoticEnvId = EXOTIC_ENVIRONMENTS.some((x) => x.id === exoId) ? exoId : null;
+  if (!state.exoticEnvId) delete state.recipe.env._exoticId;
+  state.preExoticEnv = null;
   state.sim = createEngine(state.recipe.seed.genome, state.recipe.env, state.recipe.rngSeed);
+  injectExoticPhysics();
   /* 结构识别：只对 Conway/Lenia 这类有离散 grid 的引擎启用 */
   state.structure = state.sim?.grid ? new StructureTracker(state.sim.w, state.sim.h) : null;
   state.metrics = metricsFor(state.sim);
@@ -762,6 +769,7 @@ function attachRecipe(recipe, opts = {}) {
   renderStructPanel();
   updateHUD(true);
   updateStructValues();
+  renderPetHUD();
   if (state.audio && state.audioOn) {
     state.audio.updateMetrics(state.metrics);
   }
@@ -770,6 +778,8 @@ function attachRecipe(recipe, opts = {}) {
 
 function rebuildSim() {
   state.sim = createEngine(state.recipe.seed.genome, state.recipe.env, state.recipe.rngSeed);
+  /* 重建引擎（换引擎/重新播种）后，新 sim 没有旧的 _physics，需要重新注入 */
+  injectExoticPhysics();
   state.structure = state.sim?.grid ? new StructureTracker(state.sim.w, state.sim.h) : null;
   state.metrics = metricsFor(state.sim);
   resetHistory();
@@ -1490,7 +1500,15 @@ function renderPetHUD() {
   const hudPet = $('#hudPet');
   const hudPetMood = $('#hudPetMood');
   const hudPetBars = $('#hudPetBars');
-  if (!hudPet || !state.pet.state) return;
+  const exoticPill = $('#exoticPill');
+  const exoticTarget = state.exoticEnvId
+    ? EXOTIC_ENVIRONMENTS.find((x) => x.id === state.exoticEnvId)
+    : null;
+  if (!exoticTarget && state.exoticEnvId) state.exoticEnvId = null;
+  if (!hudPet || !state.pet.state) {
+    if (exoticPill) exoticPill.style.display = 'none';
+    return;
+  }
 
   const p = state.pet.state;
   const snap = p.snapshot();
@@ -1515,12 +1533,10 @@ function renderPetHUD() {
   }
 
   // 当前极端环境标签（右下角一个小 pill）
-  const exoticPill = $('#exoticPill');
   if (exoticPill) {
-    if (state.exoticEnvId) {
-      const target = EXOTIC_ENVIRONMENTS.find(x => x.id === state.exoticEnvId);
+    if (exoticTarget) {
       exoticPill.style.display = 'flex';
-      exoticPill.innerHTML = `${target.emoji} ${target.label} <button class="exotic-close" data-exotic-cancel title="切回普通环境">×</button>`;
+      exoticPill.innerHTML = `${exoticTarget.emoji} ${exoticTarget.label} <button class="exotic-close" data-exotic-cancel title="切回普通环境">×</button>`;
     } else {
       exoticPill.style.display = 'none';
     }
@@ -1538,6 +1554,11 @@ function petBar(label, value, color) {
 
 function renderEnvPanel() {
   const e = state.recipe.env;
+  /* 极端环境可能超出常规滑杆范围（噪声 60%、时间 5× / 0.05×），
+   * 动态扩展范围，避免 thumb 被浏览器夹住、读数与滑杆位置不一致。 */
+  const noiseMax = Math.max(30, Math.ceil((e.noise || 0) * 100));
+  const tsMin = Math.min(0.35, Math.floor((e.timeScale || 1) * 100) / 100);
+  const tsMax = Math.max(2, Math.ceil((e.timeScale || 1) * 100) / 100);
   $('#panel-env').innerHTML = `
     <div class="section-label">🌌 极端 / 外星环境</div>
     <div class="exotic-row">
@@ -1563,11 +1584,11 @@ function renderEnvPanel() {
       ${Object.entries(NEIGHBORHOODS).map(([n, info]) => `<button data-neighborhood="${n}" class="${state.recipe.seed.genome.life.neighborhood === parseInt(n) ? 'active' : ''}">${info.label.split('·')[0].trim()}</button>`).join('')}
     </div>
     <div class="section-label">扰动与资源</div>
-    ${sliderHTML('噪声扰动', Math.round(e.noise * 100), 0, 30, 0.5, 'data-env-param="noise"', '%')}
+    ${sliderHTML('噪声扰动', Math.round(e.noise * 100), 0, noiseMax, 0.5, 'data-env-param="noise"', '%')}
     ${sliderHTML('资源注入率', Math.round(e.resource.rate * 100), 0, 50, 1, 'data-env-param="rate"', '%')}
     ${sliderHTML('资源周期', e.resource.period, 20, 200, 2, 'data-env-param="period"', ' 代')}
     ${sliderHTML('约束强度', Math.round(e.constraint * 100), 0, 100, 1, 'data-env-param="constraint"', '%')}
-    ${sliderHTML('时间尺度', e.timeScale.toFixed(2), 0.35, 2, 0.05, 'data-env-param="timeScale"', '×')}
+    ${sliderHTML('时间尺度', e.timeScale.toFixed(2), tsMin, tsMax, 0.05, 'data-env-param="timeScale"', '×')}
     <div class="btn-row">
       <button class="ghost" data-action="reseed-env">按此环境重新播种</button>
     </div>
@@ -1892,11 +1913,18 @@ function applyEnvPreset(envId, mode) {
   const preset = ENV_PRESETS.find((e) => e.id === envId);
   if (!preset) return;
   if (mode === 'apply') {
+    /* 换成常规“家的环境”时，退出极端环境并清掉注入物理，避免徽标/物理残留 */
+    if (state.exoticEnvId) {
+      state.exoticEnvId = null;
+      state.preExoticEnv = null;
+      if (state.sim.clearPhysics) state.sim.clearPhysics();
+    }
     state.recipe.env = deepClone(preset.env);
     state.sim.setEnv(state.recipe.env);
     state.sim.reset();
     afterEnvReset();
     renderEnvPanel();
+    renderPetHUD();
     switchView('cultivate');
     toast(`家的环境换好啦：${preset.label} ♡`);
     return;
@@ -2897,8 +2925,13 @@ function bindUI() {
   });
   $('#panel-env').addEventListener('click', onEnvClick);
   $('#panel-env').addEventListener('input', onEnvInput);
-  /* 极端环境徽标在舞台上，不在环境面板内，需要单独绑定取消事件 */
-  $('#exoticPill')?.addEventListener('click', onEnvClick);
+  /* 极端环境徽标在舞台上，不在环境面板内，需要单独绑定取消事件；
+   * 同时阻止冒泡，避免点 × 时触发舞台的“开始聆听”。 */
+  $('#exoticPill')?.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-exotic-cancel]')) return;
+    e.stopPropagation();
+    onEnvClick(e);
+  });
 
   $('#stageHost').addEventListener('click', () => {
     if (!state.audioOn) {
@@ -3280,6 +3313,39 @@ function currentScienceEngineType() {
   return preset?.engine || state.recipe.seed.genome.engine;
 }
 
+/* 把当前极端环境的物理参数注入（或重新注入）到运行中的引擎。
+ * 新引擎/新生命创建后 `_physics` 是空的，必须在创建后调用一次。 */
+function injectExoticPhysics() {
+  if (!state.exoticEnvId || !state.sim?.setPhysics) return;
+  state.recipe.env._exoticId = state.exoticEnvId;
+  const physicsObj = applyExoticPhysics(
+    state.recipe.env,
+    currentScienceEngineType(),
+    state.sim.w,
+    state.sim.h,
+  );
+  if (physicsObj && !physicsObj._nonScientific) state.sim.setPhysics(physicsObj);
+}
+
+/* 退出极端环境：恢复进入前的环境快照（没有快照时回代码默认值），
+ * 并清掉注入物理，避免 slider 数值仍停留在极端预设。 */
+function restoreNormalEnv() {
+  const restore = state.preExoticEnv ? deepClone(state.preExoticEnv) : defaultEnv();
+  delete restore._exoticId;
+  state.exoticEnvId = null;
+  state.preExoticEnv = null;
+  if (state.sim.clearPhysics) state.sim.clearPhysics();
+  state.recipe.env = restore;
+  state.sim.setEnv(state.recipe.env);
+  state.sim.reset();
+  state.pet.state = new PetState();
+  state.lastPetMood = null;
+  afterEnvReset();
+  renderEnvPanel();
+  renderPetHUD();
+  refreshMainMetrics();
+}
+
 function onEnvClick(e) {
   /* ---- 🌌 极端环境一键切换 ---- */
   const exotic = e.target.closest('[data-exotic]');
@@ -3287,6 +3353,8 @@ function onEnvClick(e) {
     const id = exotic.dataset.exotic;
     const target = EXOTIC_ENVIRONMENTS.find(x => x.id === id);
     if (!target) return;
+    /* 首次进入极端环境时保存原环境；极端环境之间切换则保留最初的快照 */
+    if (!state.exoticEnvId) state.preExoticEnv = deepClone(state.recipe.env);
     // 深拷贝 env（避免 defaultEnv 共享引用）
     const newEnv = defaultEnv(target.env);
     newEnv._exoticId = id;  // 打上极端环境标记
@@ -3319,24 +3387,22 @@ function onEnvClick(e) {
   /* ---- 极端环境右上角取消 ---- */
   const cancelExotic = e.target.closest('[data-exotic-cancel]');
   if (cancelExotic) {
-    state.exoticEnvId = null;
-    /* ① 清 physics.js 注入的所有物理参数（D×0.5 / dt×0.4 / 潮汐场 / 热梯度等）*/
-    if (state.sim.clearPhysics) state.sim.clearPhysics();
-    /* ② env 恢复默认值（极端环境的 timeScale/noise/constraint 全部回正常）*/
-    state.recipe.env = defaultEnv(state.recipe.env);
-    delete state.recipe.env._exoticId;
-    state.sim.setEnv(state.recipe.env);
-    /* ③ reset sim 让新物理生效 */
-    state.sim.reset();
-    /* ④ Pet 情绪清零（从极端环境回来，一切 fresh start）*/
-    state.pet.state = new PetState();
-    state.lastPetMood = null;
-    /* ⑤ 刷新所有 UI + 指标 + Pet HUD */
-    afterEnvReset();
-    renderEnvPanel();
-    renderPetHUD();
-    refreshMainMetrics();
+    restoreNormalEnv();
     toast('♡ 已切回普通环境 · 物理清零 · 重新播种');
+    return;
+  }
+
+  /* ---- 邻域类型（Conway 系）：控制渲染在环境面板里，事件也必须在这里处理 ---- */
+  const neighborhood = e.target.closest('[data-neighborhood]');
+  if (neighborhood) {
+    const nb = neighborhood.dataset.neighborhood;
+    state.recipe.seed.genome.life.neighborhood = parseInt(nb, 10);
+    state.sim.applyGenome(state.recipe.seed.genome);
+    markGenomeChanged();
+    renderRulePanel();
+    renderEnvPanel();
+    refreshMainMetrics();
+    toast(`邻域：${NEIGHBORHOODS[nb]?.label || nb}`);
     return;
   }
 
