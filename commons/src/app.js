@@ -65,6 +65,7 @@ import { renderMixdownWav } from './export-wav.js';
 import { createSciencePanel } from './ui/science-panel.js';
 import { createLineageView } from './ui/lineage.js';
 import { createPuzzleView } from './ui/puzzle-view.js';
+import { PUZZLE_DU, PUZZLE_DV } from './puzzle.js';
 import { ENV_PRESETS, EXOTIC_ENVIRONMENTS, BOUNDARY_LABEL } from './ui/presets.js';
 import {
   esc, ENGINE_LABEL, TYPE_COLOR, TYPE_EVENT_LABEL,
@@ -204,7 +205,13 @@ const state = {
 
 const sciencePanel = createSciencePanel({ state, toast, openModal, downloadJSON, applyScientificParams });
 const lineageView = createLineageView({ state, findRecipe, adoptRecipe });
-const puzzleView = createPuzzleView({ state, toast });
+const puzzleView = createPuzzleView({
+  state,
+  toast,
+  getLifeParams: currentLifeScienceParams,
+  applyToLife: applyScientificParams,
+  makeLifeScientific: ensureScientificLife,
+});
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                            */
@@ -382,13 +389,16 @@ function metricsFor(sim) {
   };
 }
 
-/* 把实验斑图拟合出的参数应用到当前科学引擎 */
+/* 把参数应用到当前科学引擎（拟合与挑战共用） */
 function applyScientificParams(params) {
   if (!params) return;
   const g = state.recipe.seed.genome;
   g.engine = 'scientific';
+  const base = g.scientific && Number.isFinite(g.scientific.D_u)
+    ? g.scientific
+    : { D_u: PUZZLE_DU, D_v: PUZZLE_DV, dt: 1.0 };
   g.scientific = {
-    ...(g.scientific || {}),
+    ...base,
     preset: 'custom',
     engineType: 'grayScott',
     ...params,
@@ -402,7 +412,53 @@ function applyScientificParams(params) {
   markGenomeChanged();
   renderRulePanel();
   sciencePanel.render();
-  toast('已应用拟合参数到当前科学引擎', 2000);
+  toast('已把参数应用到当前科学引擎', 2000);
+}
+
+/* 把当前生命切换为反应-扩散（挑战页的“切换当前生命”按钮） */
+function ensureScientificLife() {
+  const g = state.recipe.seed.genome;
+  g.engine = 'scientific';
+  const sci = g.scientific = g.scientific || {};
+  if (!sci.preset || sci.preset === 'custom' || !Number.isFinite(sci.f)) {
+    const def = REACTION_DIFFUSION_PRESETS.gs_spots;
+    sci.preset = 'gs_spots';
+    sci.engineType = def.engine;
+    sci.D_u = def.D_u;
+    sci.D_v = def.D_v;
+    sci.f = def.f;
+    sci.k = def.k;
+    sci.dt = def.dt;
+  }
+  rebuildSim();
+  state.metrics = metricsFor(state.sim);
+  state.renderer?.setMetrics?.(state.metrics);
+  renderRulePanel();
+  renderStructPanel();
+  updateStructValues();
+  toast('当前生命已切换为反应-扩散，可以继承参数了', 2400);
+  return true;
+}
+
+/* 读取当前生命可继承的反应-扩散参数；不是科学引擎时返回 null */
+function currentLifeScienceParams() {
+  const sim = state.sim;
+  if (sim?.kind === 'reaction-diffusion' && sim._rd?.params) {
+    const p = sim._rd.params;
+    if (Number.isFinite(p.f) && Number.isFinite(p.k)) {
+      return {
+        f: p.f,
+        k: p.k,
+        D_u: p.D_u,
+        D_v: p.D_v,
+        engineType: p.engine,
+        preset: sim.genome?.scientific?.preset || 'custom',
+      };
+    }
+  }
+  const sci = state.recipe?.seed?.genome?.scientific;
+  if (sci && Number.isFinite(sci.f) && Number.isFinite(sci.k)) return { ...sci };
+  return null;
 }
 
 function normalizeRecipe(rec) {

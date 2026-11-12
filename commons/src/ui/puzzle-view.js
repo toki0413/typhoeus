@@ -11,7 +11,9 @@ import {
 
 const FIELD_SIZE = PUZZLE_SIZE;
 
-export function createPuzzleView({ state, toast }) {
+export function createPuzzleView({
+  state, toast, getLifeParams = null, applyToLife = null, makeLifeScientific = null,
+}) {
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
@@ -32,6 +34,7 @@ export function createPuzzleView({ state, toast }) {
   let statusText = '';
   let ghostOn = false;
   let undoStack = [];
+  let followingLife = true;
 
   /* ------------------------------------------------------------------ */
   /* 工具                                                                */
@@ -72,6 +75,108 @@ export function createPuzzleView({ state, toast }) {
 
   function checkToken(myToken) {
     return myToken === token && state.view === 'puzzle';
+  }
+
+  function readLifeParams() {
+    try {
+      return typeof getLifeParams === 'function' ? getLifeParams() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function sessionForLevel(id) {
+    if (!followingLife) return createSession(id);
+    const lp = readLifeParams();
+    return lp ? createSession(id, { f: lp.f, k: lp.k, inherited: lp }) : createSession(id);
+  }
+
+  function syncParamInputs() {
+    if (!session) return;
+    const fEl = $('#puzzleF');
+    const kEl = $('#puzzleK');
+    if (fEl) { fEl.value = String(session.f); syncFill(fEl); }
+    if (kEl) { kEl.value = String(session.k); syncFill(kEl); }
+    const fVal = $('#puzzleFVal');
+    const kVal = $('#puzzleKVal');
+    if (fVal) fVal.textContent = fmt(session.f);
+    if (kVal) kVal.textContent = fmt(session.k);
+  }
+
+  function lifeLinkInnerHTML() {
+    if (!session) return '';
+    if (session.inherited) {
+      const clampNote = session.inherited.clamped ? ' · 已按关卡范围裁剪' : '';
+      return `<span>从当前生命继承：f <b>${fmt(session.f)}</b> · k <b>${fmt(session.k)}</b>${clampNote}</span>
+        <button class="btn ghost tiny" id="puzzleRelink">重新继承</button>`;
+    }
+    if (!followingLife) {
+      return `<span>已手动调整参数，未跟随当前生命。</span>
+        <button class="btn ghost tiny" id="puzzleRelink">重新继承</button>`;
+    }
+    return `<span>当前生命不是反应-扩散形态，本关使用默认起始参数。</span>
+      ${typeof applyToLife === 'function'
+        ? '<button class="btn ghost tiny" id="puzzleAdoptRD">切换当前生命为反应-扩散</button>'
+        : ''}`;
+  }
+
+  function renderLifeLink() {
+    const host = $('#puzzleLifeLink');
+    if (!host) return;
+    host.classList.toggle('muted', !session?.inherited);
+    host.innerHTML = lifeLinkInnerHTML();
+    $('#puzzleRelink')?.addEventListener('click', relinkLife);
+    $('#puzzleAdoptRD')?.addEventListener('click', adoptReactionDiffusion);
+  }
+
+  function relinkLife() {
+    if (!session || running) return;
+    const lp = readLifeParams();
+    if (!lp) {
+      toast('当前生命不是反应-扩散形态，先在培育台切换引擎', 2200);
+      return;
+    }
+    followingLife = true;
+    const next = createSession(session.levelId, { f: lp.f, k: lp.k, inherited: lp });
+    session.f = next.f;
+    session.k = next.k;
+    session.inherited = next.inherited;
+    markEdited();
+    syncParamInputs();
+    draw();
+    renderLifeLink();
+    schedulePreview(380);
+    toast(`已继承当前生命：f ${fmt(session.f)} · k ${fmt(session.k)}`, 2200);
+  }
+
+  function adoptReactionDiffusion() {
+    if (!session || running) return;
+    if (typeof makeLifeScientific === 'function') {
+      makeLifeScientific();
+    } else if (typeof applyToLife === 'function') {
+      applyToLife({ preset: 'gs_spots' });
+    } else {
+      return;
+    }
+    followingLife = true;
+    const lp = readLifeParams();
+    if (lp) {
+      const next = createSession(session.levelId, { f: lp.f, k: lp.k, inherited: lp });
+      session.f = next.f;
+      session.k = next.k;
+      session.inherited = next.inherited;
+    }
+    markEdited();
+    syncParamInputs();
+    draw();
+    renderLifeLink();
+    if (!lp) toast('已切换引擎，但暂未读到参数；回培育台看一眼再回来', 2600);
+    schedulePreview(420);
+  }
+
+  function writeToLife() {
+    if (!session || typeof applyToLife !== 'function') return;
+    applyToLife({ f: session.f, k: session.k });
   }
 
   function schedulePreview(delay = 480) {
@@ -423,6 +528,8 @@ export function createPuzzleView({ state, toast }) {
     const myToken = token;
     const beforeF = session.f;
     const beforeK = session.k;
+    const beforeInherited = session.inherited;
+    const beforeFollowing = followingLife;
     const beforeTotal = lastResult ? lastResult.total : null;
     setRunning('wiggle');
     setStatus('Wiggle：局部搜索 f / k…');
@@ -437,17 +544,19 @@ export function createPuzzleView({ state, toast }) {
       if (!checkToken(myToken)) return;
       session.f = res.f;
       session.k = res.k;
-      const applySliders = () => {
-        const fEl = $('#puzzleF');
-        const kEl = $('#puzzleK');
-        if (fEl) { fEl.value = String(session.f); syncFill(fEl); }
-        if (kEl) { kEl.value = String(session.k); syncFill(kEl); }
-        const fVal = $('#puzzleFVal');
-        const kVal = $('#puzzleKVal');
-        if (fVal) fVal.textContent = fmt(session.f);
-        if (kVal) kVal.textContent = fmt(session.k);
+      const markManual = () => {
+        const changed = Math.abs(session.f - beforeF) > 1e-9 || Math.abs(session.k - beforeK) > 1e-9;
+        if (changed) {
+          followingLife = false;
+          session.inherited = null;
+        } else {
+          followingLife = beforeFollowing;
+          session.inherited = beforeInherited;
+        }
+        syncParamInputs();
+        renderLifeLink();
       };
-      applySliders();
+      markManual();
       setRunning(null);
       setStatus('');
       await runPreview({ silent: true });
@@ -455,7 +564,10 @@ export function createPuzzleView({ state, toast }) {
       if (beforeTotal != null && lastResult && lastResult.total < beforeTotal - 0.5) {
         session.f = beforeF;
         session.k = beforeK;
-        applySliders();
+        followingLife = beforeFollowing;
+        session.inherited = beforeInherited;
+        syncParamInputs();
+        renderLifeLink();
         await runPreview({ silent: true });
         toast('Wiggle 没找到更好的参数，已保留原值', 2400);
       } else {
@@ -530,6 +642,7 @@ export function createPuzzleView({ state, toast }) {
       </div>
       <span class="puzzle-chip" id="puzzleSeedChip">种子 ${countPainted(session.mask)} 格</span>
     </div>
+    <div id="puzzleLifeLink" class="puzzle-life-link"></div>
 
     <div class="puzzle-canvases">
       <figure class="puzzle-canvas-card">
@@ -577,6 +690,7 @@ export function createPuzzleView({ state, toast }) {
       <button class="btn ghost" id="puzzleWiggle">Wiggle · 机器调参</button>
       <button class="btn ghost" id="puzzleShake">Shake · 抖动种子</button>
       <button class="btn" id="puzzleSubmit">提交评分</button>
+      ${typeof applyToLife === 'function' ? '<button class="btn ghost" id="puzzleWriteLife">写回当前生命</button>' : ''}
     </div>
     <div id="puzzleStatus" class="puzzle-status">${statusText}</div>
     <div id="puzzleScore" class="puzzle-score"></div>
@@ -600,6 +714,7 @@ export function createPuzzleView({ state, toast }) {
     }
     $('#puzzleErase')?.addEventListener('click', toggleErase);
     $('#puzzleUndo')?.addEventListener('click', undo);
+    $('#puzzleWriteLife')?.addEventListener('click', writeToLife);
     $('#puzzleGhost')?.addEventListener('click', () => {
       ghostOn = !ghostOn;
       const el = $('#puzzleGhost');
@@ -622,7 +737,8 @@ export function createPuzzleView({ state, toast }) {
     $('#puzzleReset')?.addEventListener('click', () => {
       if (!session || running) return;
       undoStack = [];
-      session = createSession(session.levelId);
+      followingLife = true;
+      session = sessionForLevel(session.levelId);
       previewField = null;
       lastResult = null;
       submitted = false;
@@ -654,6 +770,11 @@ export function createPuzzleView({ state, toast }) {
       if (kv) kv.textContent = fmt(session.k);
       syncFill(fEl);
       syncFill(kEl);
+      if (followingLife) {
+        followingLife = false;
+        session.inherited = null;
+        renderLifeLink();
+      }
       previewField = null;
       lastResult = null;
       submitted = false;
@@ -678,7 +799,8 @@ export function createPuzzleView({ state, toast }) {
       return;
     }
     token += 1;
-    session = createSession(id);
+    followingLife = true;
+    session = sessionForLevel(id);
     target = getTarget(id);
     previewField = null;
     lastResult = null;
@@ -693,7 +815,8 @@ export function createPuzzleView({ state, toast }) {
     const root = $('#view-puzzle');
     if (!root) return;
     if (!session) {
-      session = createSession(PUZZLE_LEVELS[0].id);
+      followingLife = true;
+      session = sessionForLevel(PUZZLE_LEVELS[0].id);
       target = getTarget(session.levelId);
     }
     if (!target) target = getTarget(session.levelId);
@@ -703,7 +826,7 @@ export function createPuzzleView({ state, toast }) {
         <div class="view-title">
           <div class="eyebrow">FORM CHALLENGES · 形态挑战</div>
           <h2>用最少的墨，种出目标形态</h2>
-          <p>花园里的形态考试：画种子 → 预览 → Wiggle / Shake → 提交。挑战成绩单独保存，不影响你正在养的生命。</p>
+          <p>花园里的形态考试：默认继承当前生命的参数；也可以手动调整后写回生命。画种子 → 预览 → Wiggle / Shake → 提交。</p>
         </div>
         <span class="puzzle-source">合成标定关卡 · 非实验数据</span>
       </header>
@@ -713,6 +836,7 @@ export function createPuzzleView({ state, toast }) {
       </div>`;
 
     bindEvents();
+    renderLifeLink();
     draw();
     updateScoreUI();
   }
@@ -720,7 +844,8 @@ export function createPuzzleView({ state, toast }) {
   function activate() {
     token += 1;
     if (!session) {
-      session = createSession(PUZZLE_LEVELS[0].id);
+      followingLife = true;
+      session = sessionForLevel(PUZZLE_LEVELS[0].id);
       target = getTarget(session.levelId);
     }
     progress = loadPuzzleProgress();

@@ -282,14 +282,33 @@ export function shakeSession(session) {
 /* 会话与评分                                                          */
 /* ------------------------------------------------------------------ */
 
-export function createSession(levelId) {
+function snapToRange(value, range) {
+  if (!Number.isFinite(value)) return null;
+  const clamped = Math.max(range.min, Math.min(range.max, value));
+  const step = range.step || 0.001;
+  return Math.round((Math.round(clamped / step) * step) * 1e6) / 1e6;
+}
+
+/**
+ * 创建关卡会话。
+ * opts.f / opts.k：从当前生命继承的参数；会按关卡允许范围裁剪。
+ * opts.inherited：继承来源元数据，只用于 UI 展示。
+ */
+export function createSession(levelId, { f, k, inherited = null } = {}) {
   const level = getLevel(levelId);
+  const fv = snapToRange(f, level.knobs.f);
+  const kv = snapToRange(k, level.knobs.k);
+  const clamped = (fv !== null && Math.abs(fv - f) > 1e-9)
+    || (kv !== null && Math.abs(kv - k) > 1e-9);
   return {
     levelId: level.id,
     level,
     mask: makeStarterMask(),
-    f: level.start.f,
-    k: level.start.k,
+    f: fv ?? level.start.f,
+    k: kv ?? level.start.k,
+    inherited: inherited
+      ? { ...inherited, clamped, requestedF: f, requestedK: k }
+      : null,
     shakes: 0,
     token: 0,
   };

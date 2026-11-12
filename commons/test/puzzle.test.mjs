@@ -82,6 +82,24 @@ test('Wiggle: 同输入可复现、预算受限、mask 不变', async () => {
   assert.equal(fieldHash(session.mask), before, 'Wiggle 不应修改玩家的种子');
 });
 
+test('继承: 当前生命参数被写入会话并按关卡范围裁剪', () => {
+  const inherited = createSession('spots-garden', {
+    f: 0.033, k: 0.058, inherited: { from: 'current-life' },
+  });
+  assert.equal(inherited.f, 0.033);
+  assert.equal(inherited.k, 0.058);
+  assert.equal(inherited.inherited.from, 'current-life');
+  assert.equal(inherited.inherited.clamped, false);
+
+  const clamped = createSession('spots-garden', { f: 0.2, k: 0.001 });
+  assert.equal(clamped.f, 0.040, 'f 应被裁剪到关卡上限');
+  assert.equal(clamped.k, 0.052, 'k 应被裁剪到关卡下限');
+
+  const fallback = createSession('spots-garden');
+  assert.equal(fallback.f, fallback.level.start.f);
+  assert.equal(fallback.inherited, null);
+});
+
 test('Shake: 同 index 字节相等，墨量变化不超过 20 格', () => {
   const base = makeStarterMask();
   const a = shakeMask(base, 12345);

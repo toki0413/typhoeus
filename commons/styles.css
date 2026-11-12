@@ -3524,6 +3524,28 @@ body.modal-open .toast-layer { top: 12px; bottom: auto; }
   font-weight: 700;
   white-space: nowrap;
 }
+.puzzle-life-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px dashed var(--text);
+  background: var(--surface);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.puzzle-life-link.muted {
+  border-color: var(--line-2);
+  background: var(--bg-2);
+  color: var(--muted);
+}
+.puzzle-life-link b {
+  font-family: var(--num);
+  color: var(--text);
+}
+.puzzle-life-link .btn { margin-left: auto; }
 .puzzle-canvases {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);
