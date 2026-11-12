@@ -277,6 +277,11 @@ export class AudioEngine {
     return 12 * (m.octave + 1) + m.root;
   }
 
+  /* 玩家自选乐器：缺省视为开 */
+  _inst(name) {
+    return this.mapping?.instruments?.[name] !== false;
+  }
+
   _tuneDrone() {
     const now = this.ctx.currentTime;
     const rootHz = midiToFreq(this._rootMidi());
@@ -500,7 +505,8 @@ export class AudioEngine {
     /* ---- drone 层（保留原有，但 BPM 改为 heartbeat 驱动）---- */
     const droneLevel = 0.012 + density * 0.32;
     const energyShift = (0.5 - energyNorm) * 140;
-    this.droneGain.gain.setTargetAtTime(mapping.drone === false ? 0.0001 : droneLevel, now, 0.5);
+    const droneOn = mapping.drone !== false && this._inst('drone');
+    this.droneGain.gain.setTargetAtTime(droneOn ? droneLevel : 0.0001, now, 0.5);
     this.droneFilter.frequency.setTargetAtTime(
       (260 + entropy * 2600 * (0.35 + (mapping.brightness ?? 0.55)) + activity * 500)
       + energyShift,
@@ -635,7 +641,7 @@ export class AudioEngine {
     // attractor 决定心跳的"是否有第二心音"（stable 更稳，只有一个；chaotic 有两个间隔很近）
     const hasSplitHeartbeat = attractorType === 'chaotic' || attractorType === 'drifting';
 
-    if (this._heartbeatNext < now + 0.15) {
+    if (this._inst('heart') && this._heartbeatNext < now + 0.15) {
       // 心跳音：根音 1 octave 下的 sine + 极短 attack
       // Attention 音乐性增强：音量 × dyn.heartbeat（Pet mood → pp ↔ ff）
       const hz = midiToFreq(rootMidi - 12);  // 低八度
@@ -676,6 +682,7 @@ export class AudioEngine {
       const noteCount = Math.max(3, Math.min(chordMidi.length, 3 + Math.round(lifeDensity * 8)));
       const padAmp = (dyn.chordPad ?? 0.07) * (0.65 + this._intensity * 0.7);
       chordMidi.slice(0, noteCount).forEach((midi, ci) => {
+        if (!this._inst('pad')) return;
         const freq = midiToFreq(midi);
         const pan = (ci % 2 === 0 ? -1 : 1) * (0.18 + 0.1 * (ci % 3));
         this._chordTone(freq, this._chordNext, chordSec * 0.9, padAmp, waves.chordPad, pan);
@@ -684,24 +691,24 @@ export class AudioEngine {
       /* 低音根音：给和声一个地基（与 pad 同八度，避免掉到 30Hz 以下听不见） */
       this._tone(midiToFreq(chordMidi[0]), this._chordNext + 0.02, chordSec * 1.05, 0.055, 'sine', 0.3, 0, 0);
       /* 弦乐铺底：根音 + 五音，慢起慢落，给和弦加身体 */
-      if (this._intensity > 0.3) {
+      if (this._inst('strings') && this._intensity > 0.3) {
         this._stringPad(midiToFreq(chordMidi[0]), this._chordNext, chordSec * 1.15, 0.03, -0.35);
         this._stringPad(midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)]), this._chordNext, chordSec * 1.15, 0.022, 0.35);
       }
       /* 人声 Pad：更繁盛时加入，像远处合唱 */
-      if (this._intensity > 0.42) {
+      if (this._inst('choir') && this._intensity > 0.42) {
         this._choir(midiToFreq(chordMidi[0] + 12), this._chordNext, chordSec * 1.1, 0.018, -0.5);
         this._choir(midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)] + 12), this._chordNext, chordSec * 1.1, 0.014, 0.5);
       }
       /* 高八度叠层：繁盛时让和弦更"满" */
-      if (this._intensity > 0.35) {
+      if (this._inst('pad') && this._intensity > 0.35) {
         this._chordTone(midiToFreq(chordMidi[0] + 12), this._chordNext, chordSec * 0.9, padAmp * 0.45, waves.chordPad, 0.3);
       }
       this._chordNext += chordSec;
     }
 
     /* Layer 2b: 五声琶音 —— 用当前和弦音做温和流动，偶尔跳高两个八度增加亮色 */
-    if (this._chordTones && this._intensity > 0.35 && now >= (this._arpNext || 0)) {
+    if (this._inst('arp') && this._chordTones && this._intensity > 0.35 && now >= (this._arpNext || 0)) {
       this._arpNext = now + Math.max(0.16, beat / 2);
       const pool = this._chordTones;
       const midi = pool[this._arpIdx % pool.length] + (this._arpIdx % 5 === 4 ? 24 : 12);
@@ -710,7 +717,7 @@ export class AudioEngine {
     }
 
     /* Layer 2c: 高频微光 —— 稀疏的高八度纯音（不是噪声） */
-    if (now >= (this._shimmerNext || 0)) {
+    if (this._inst('shimmer') && now >= (this._shimmerNext || 0)) {
       this._shimmerNext = now + 1.2 + Math.random() * 1.2;
       if (this._intensity > 0.35) {
         const degs = this._scaleDegrees || scale.degrees;
@@ -721,7 +728,7 @@ export class AudioEngine {
     }
 
     /* Layer 2d: 钟琴/铃音 —— 每 4–8 秒一个高音动机，偶尔两音"叮—咚" */
-    if (now >= (this._bellNext || 0)) {
+    if (this._inst('bell') && now >= (this._bellNext || 0)) {
       this._bellNext = now + 4 + Math.random() * 4;
       if (this._intensity > 0.3) {
         const degs = this._scaleDegrees || scale.degrees;
@@ -762,7 +769,11 @@ export class AudioEngine {
           const counterFreq = this._degreeFreq(counterDegree, counterOct);
           const counterAmp = dyn.counter;
           const counterDur = dur * 0.8;
-          this._flute(counterFreq, this.nextNote, counterDur, counterAmp * 0.7, 0.42);
+          if (this._inst('flute')) {
+            this._flute(counterFreq, this.nextNote, counterDur, counterAmp * 0.7, 0.42);
+          } else {
+            this._tone(counterFreq, this.nextNote, counterDur, counterAmp, waves.counter, 0.5, 0, 0.42);
+          }
         }
       }
       // 保留原有 cell 触发音（新生儿）
@@ -773,7 +784,11 @@ export class AudioEngine {
         const freq = this._degreeFreq(degree, cellOctaveShift + 1);  // 高八度：新生儿更亮
         /* Attention 音乐性增强：amp × dyn.sparkle，wave 来自 waves.cell */
         const amp = dyn.sparkle + Math.random() * 0.02;
-        this._marimba(freq, this.nextNote, amp * 1.1, (cell.x - 0.5) * 1.2);
+        if (this._inst('marimba')) {
+          this._marimba(freq, this.nextNote, amp * 1.1, (cell.x - 0.5) * 1.2);
+        } else {
+          this._tone(freq, this.nextNote, 0.32, amp, waves.cell, 0.5);
+        }
 
         // Layer 4: Sparkle Crystal — 新生儿水晶闪烁
         this._emitSparkle(this.nextNote, cell.x, cell.y);

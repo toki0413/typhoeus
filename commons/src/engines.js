@@ -74,7 +74,7 @@ import {
   computeScientificMetrics,
   SCIENCE_VERSION,
 } from './scientific.js';
-import { ENGINE_GRID, ENV_DEFAULTS } from './config.js';
+import { ENGINE_GRID, ENV_DEFAULTS, DEFAULT_INSTRUMENTS } from './config.js';
 import { runPlayerMC } from './cpm.js';
 /* B3 读回路：众包发现学到的环境默认值（由 physics.js 的 crowdFeedbackBridge 写入） */
 import { getCrowdDefaultEnv } from './physics.js';
@@ -247,6 +247,8 @@ export function defaultGenome(engine = 'life', preset = 'conway') {
       drone: true,
       pulse: true,
       events: true,
+      /* 玩家自选乐器：false = 关闭该声部（缺省视为开） */
+      instruments: { ...DEFAULT_INSTRUMENTS },
     },
   };
   if (engine === 'life') applyLifePreset(genome, preset);

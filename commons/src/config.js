@@ -186,6 +186,12 @@ export const AUDIO_CONSTANTS = {
   },
 };
 
+/* ---- 玩家可选乐器默认编制（false = 关闭该声部） ---- */
+export const DEFAULT_INSTRUMENTS = {
+  heart: true, drone: true, pad: true, strings: true, choir: true,
+  arp: true, flute: true, marimba: true, bell: true, shimmer: true,
+};
+
 /* ---- defaultEnv() 默认值 ---- */
 export const ENV_DEFAULTS = {
   pattern: 'soup',

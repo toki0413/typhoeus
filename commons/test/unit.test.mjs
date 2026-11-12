@@ -19,7 +19,7 @@ import {
   petToPhysicsBridge, autoTunePhysics, crowdFeedbackBridge, getCrowdDefaultEnv,
   applyExoticPhysics,
 } from '../src/physics.js';
-import { defaultEnv } from '../src/engines.js';
+import { defaultEnv, defaultGenome } from '../src/engines.js';
 import {
   selectiveImperfectionScale, edgeOfChaosKnob, attractorToSonicGenre, rhythmComplexity,
 } from '../src/music2.js';
@@ -61,6 +61,12 @@ test('format: 标签表覆盖 6 种结构态', () => {
   assert.equal(sortLabel('energy'), '能量最低');
   assert.equal(sortLabel('unknown'), 'unknown');
   assert.ok(diagnosisShort({ type: 'chaotic' }).length > 0);
+});
+
+test('instruments: 默认编制 10 件全开', () => {
+  const inst = defaultGenome('life', 'conway').mapping.instruments;
+  assert.equal(Object.keys(inst).length, 10);
+  assert.ok(Object.values(inst).every((v) => v === true));
 });
 
 /* ================================================================

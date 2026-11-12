@@ -59,6 +59,7 @@ import { saveAsDiscovery, buildOpenScienceIssue, loadLeaderboard, rankDiscoverie
 import { PlayerPredictor, toMorphoEmbedding, jepaSoundFeedback, morphoDistance } from './jepa.js';
 import { PetState, PET_MOOD, PET_MOOD_EMOJI, PET_MOOD_LABEL, petMoodToOverlay, petMoodToAudio } from './pet.js';
 import { StructureTracker } from './structures.js';
+import { DEFAULT_INSTRUMENTS } from './config.js';
 /* ---- UI 子模块（从 app.js 拆出） ---- */
 import { createSciencePanel } from './ui/science-panel.js';
 import { createLineageView } from './ui/lineage.js';
@@ -74,6 +75,21 @@ import {
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+/* 玩家可选乐器（key 与 audio.js 的 _inst() 对应） */
+const INSTRUMENT_LIST = [
+  { key: 'heart', label: '心跳' },
+  { key: 'drone', label: '低音床' },
+  { key: 'pad', label: '和弦 Pad' },
+  { key: 'strings', label: '弦乐' },
+  { key: 'choir', label: '人声' },
+  { key: 'arp', label: '竖琴琶音' },
+  { key: 'flute', label: '长笛对位' },
+  { key: 'marimba', label: '马林巴' },
+  { key: 'bell', label: '钟琴' },
+  { key: 'shimmer', label: '高频微光' },
+];
+const instrumentOn = (mapping, key) => mapping?.instruments?.[key] !== false;
 
 /* ------------------------------------------------------------------ */
 /* State                                                              */
@@ -204,6 +220,8 @@ function normalizeRecipe(rec) {
   out.seed.lineage = out.seed.lineage || { parents: [], generation: 0 };
   out.env = { ...defaultEnv(), ...(out.env || {}) };
   out.env.resource = { ...defaultEnv().resource, ...((out.env || {}).resource || {}) };
+  /* 旧配方没有乐器编制 → 补默认（全开） */
+  if (!out.seed.genome.mapping.instruments) out.seed.genome.mapping.instruments = { ...DEFAULT_INSTRUMENTS };
   if (typeof out.rngSeed !== 'number') out.rngSeed = hashString(JSON.stringify(out.seed.genome));
   out.note = out.note || '';
   return out;
@@ -799,6 +817,13 @@ function renderSoundPanel() {
     <div class="section-label">音色</div>
     <div class="segmented">
       ${['sine', 'triangle', 'sawtooth', 'square'].map((w) => `<button data-wave="${w}" class="${m.wave === w ? 'active' : ''}">${w}</button>`).join('')}
+    </div>
+    <div class="section-label">乐器编制 · 玩家自选</div>
+    <div class="preset-grid">
+      ${INSTRUMENT_LIST.map((it) => {
+        const on = instrumentOn(m, it.key);
+        return `<button class="preset ${on ? 'active' : ''}" data-instrument="${it.key}"><b>${it.label}</b><span>${on ? '开' : '关'}</span></button>`;
+      }).join('')}
     </div>
     <div class="btn-row">
       <button class="primary soft" data-action="listen">试听一个事件</button>
@@ -2385,6 +2410,22 @@ function onRuleInput(e) {
 }
 
 function onSoundClick(e) {
+  const instBtn = e.target.closest('[data-instrument]');
+  if (instBtn) {
+    const key = instBtn.dataset.instrument;
+    const mapping = state.recipe.seed.genome.mapping;
+    if (!mapping.instruments) mapping.instruments = { ...DEFAULT_INSTRUMENTS };
+    mapping.instruments[key] = mapping.instruments[key] === false;   // 切换
+    const on = mapping.instruments[key] !== false;
+    instBtn.classList.toggle('active', on);
+    const tag = instBtn.querySelector('span');
+    if (tag) tag.textContent = on ? '开' : '关';
+    markGenomeChanged();
+    if (state.audio) state.audio.setGenome(state.recipe.seed.genome);
+    const item = INSTRUMENT_LIST.find((it) => it.key === key);
+    toast(`${item?.label ?? key}：${on ? '已加入编制' : '已关闭'}`, 1200);
+    return;
+  }
   const scale = e.target.closest('[data-scale]');
   if (scale) {
     state.recipe.seed.genome.mapping.scale = scale.dataset.scale;
