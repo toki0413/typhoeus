@@ -36,7 +36,7 @@ export function createSciencePanel({ state, toast, openModal, downloadJSON }) {
     } else if (state.topPatterns?.length) {
       html += `<ul class="pattern-list">`;
       for (const p of state.topPatterns) {
-        const color = p.similarity >= 80 ? 'var(--mint)' : p.similarity >= 60 ? 'var(--amber)' : 'var(--dim)';
+        const color = p.similarity >= 80 ? 'var(--text)' : p.similarity >= 60 ? 'var(--pink)' : 'var(--muted)';
         html += `<li class="pattern-item">
           <div class="pattern-head">
             <span class="pattern-name">${p.label}</span>

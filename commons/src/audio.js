@@ -542,9 +542,9 @@ export class AudioEngine {
     if (!this.built || !this.enabled) return;
     const now = this.ctx.currentTime;
     const mapping = this.mapping || {};
-    const density = clamp(m.density, 0, 1);
-    const entropy = clamp(m.entropy, 0, 1);
-    const activity = clamp(m.activity, 0, 1);
+    const density = clamp(Number.isFinite(m.density) ? m.density : 0, 0, 1);
+    const entropy = clamp(Number.isFinite(m.entropy) ? m.entropy : 0, 0, 1);
+    const activity = clamp(Number.isFinite(m.activity) ? m.activity : 0, 0, 1);
     const attractorType = m.type || 'stable';
 
     /* ---- 科学指标 ---- */
@@ -704,7 +704,7 @@ export class AudioEngine {
     if (!m || !mapping) return;
     if (mapping.pulse === false && mapping.drone !== false) return;
 
-    const activity = clamp(m.activity, 0, 1);
+    const activity = clamp(Number.isFinite(m.activity) ? m.activity : 0, 0, 1);
     const attractorType = m.type || 'stable';
     const scale = SCALES[mapping.scale || 'major'];
     const rootMidi = this._rootMidi();
@@ -716,7 +716,7 @@ export class AudioEngine {
     /*   - 种群上升 → 上行琶音（bloom）                                   */
     /*   - 种群骤降 → 低频闷响 + 短暂留白（thinning）                     */
     /* ================================================================ */
-    const lifeDensity = clamp(m.density, 0, 1);
+    const lifeDensity = clamp(Number.isFinite(m.density) ? m.density : 0, 0, 1);
     this._vitality = clamp(activity * 0.65 + lifeDensity * 0.35, 0, 1);
     /* 编曲强度：快起慢落 —— 生命活跃时层次迅速进入，安静时缓慢退场 */
     const rate = this._vitality > this._intensity ? 0.22 : 0.05;

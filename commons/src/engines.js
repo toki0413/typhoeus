@@ -331,6 +331,7 @@ function translationInvariantSignature(isAlive, w, h) {
 }
 
 export function detectPeriod(history) {
+  if (!history || typeof history.length !== 'number') return 0;
   const n = history.length;
   if (n < 6) return 0;
   for (let p = 1; p <= 24; p++) {
@@ -1180,11 +1181,11 @@ export function computeMetrics(sim) {
   const diameter = largest.length > 1 ? componentDiameter(largest, isAlive, w, h) : 0;
   const diameterNorm = clamp(diameter / Math.min(w, h), 0, 1);
 
-  // period from translation-invariant signatures
-  const period = detectPeriod(sim.sigHistory);
+  // period from translation-invariant signatures（科学引擎没有 sigHistory）
+  const period = sim.sigHistory ? detectPeriod(sim.sigHistory) : 0;
 
   // trend over recent density history
-  const dh = sim.densityHistory;
+  const dh = sim.densityHistory || [];
   const trendWindow = dh.slice(-32);
   let trend = 0;
   if (trendWindow.length > 4) {
@@ -1209,9 +1210,9 @@ export function computeMetrics(sim) {
     );
   }
 
-  const activity = clamp(sim.activity, 0, 1.5);
+  const activity = clamp(Number.isFinite(sim.activity) ? sim.activity : 0, 0, 1.5);
   const metrics = {
-    gen: sim.gen,
+    gen: Number.isFinite(sim.gen) ? sim.gen : 0,
     alive,
     density,
     entropy,
