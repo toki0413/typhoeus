@@ -411,6 +411,13 @@ export class AudioEngine {
       case 'glass': this._glass(f, when, amp, pan, part); break;
       case 'clav': this._clav(f, when, amp, pan, part); break;
       case 'musicbox': this._musicbox(f, when, amp, pan, part); break;
+      case 'cello': this._cello(f, when, dur, amp, pan, part); break;
+      case 'harp': this._harp(f, when, amp, pan, part); break;
+      case 'steeldrum': this._steeldrum(f, when, amp, pan, part); break;
+      case 'sax': this._sax(f, when, dur, amp, pan, part); break;
+      case 'sitar': this._sitar(f, when, amp, pan, part); break;
+      case 'accordion': this._accordion(f, when, dur, amp, pan, part); break;
+      case 'theremin': this._theremin(f, when, dur, amp, pan, part); break;
       case 'pad': this._chordTone(f, when, dur, amp, this.mapping?.wave || 'triangle', pan, part); break;
       case 'heart': this._heartbeatTone(f, when, amp, part); break;
       case 'drone': this._tone(f, when, dur, amp, 'sine', 0.3, 0, pan, part); break;
@@ -1649,6 +1656,253 @@ export class AudioEngine {
         osc.connect(g); g.connect(out);
         osc.start(when); osc.stop(when + d + 0.05);
       }
+    }
+  }
+
+  /* ---- 大提琴：锯齿+三角，慢起音 + 5Hz 揉弦，温暖有身体 ---- */
+  _cello(freq, when, dur, amp = 0.04, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.035;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'lowpass';
+    flt.frequency.value = Math.max(420, Math.min(3200, freq * 4));
+    flt.Q.value = 0.9;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(flt); flt.connect(p); p.connect(this._bus(part));
+    const attack = Math.min(0.14, dur * 0.32);
+    out.gain.setValueAtTime(0.0001, when);
+    out.gain.linearRampToValueAtTime(amp, when + attack);
+    out.gain.setValueAtTime(amp, when + Math.max(attack, dur * 0.82));
+    out.gain.linearRampToValueAtTime(0.0001, when + dur);
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 5.2;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 5;
+    lfo.connect(lfoGain);
+    lfo.start(when); lfo.stop(when + dur + 0.05);
+
+    for (const [det, type, lvl] of [[-4, 'sawtooth', 0.55], [4, 'triangle', 0.45]]) {
+      const osc = ctx.createOscillator();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, when);
+      osc.detune.setValueAtTime(det, when);
+      lfoGain.connect(osc.detune);
+      const g = ctx.createGain();
+      g.gain.value = lvl;
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + dur + 0.08);
+    }
+  }
+
+  /* ---- 竖琴：三角基音 + 二次/三次泛音，长衰减，干净 ---- */
+  _harp(freq, when, amp = 0.04, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.035;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(p); p.connect(this._bus(part));
+    const partials = [[1, 1, 1.25, 'triangle'], [2, 0.32, 0.7, 'sine'], [3, 0.12, 0.4, 'sine']];
+    for (const [r, a, d, type] of partials) {
+      const osc = ctx.createOscillator();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq * r, when);
+      if (r === 1) osc.detune.setValueAtTime(3, when);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp * a), when + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + d);
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + d + 0.05);
+    }
+  }
+
+  /* ---- 钢鼓：基音微降 + 2.02/3/4.5 泛音，明亮的金属敲击 ---- */
+  _steeldrum(freq, when, amp = 0.04, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.035;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(p); p.connect(this._bus(part));
+    const partials = [[1, 1, 0.85], [2.02, 0.45, 0.6], [3.0, 0.2, 0.38], [4.5, 0.07, 0.22]];
+    for (const [r, a, d] of partials) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      if (r === 1) {
+        osc.frequency.setValueAtTime(freq * 1.02, when);
+        osc.frequency.exponentialRampToValueAtTime(freq, when + 0.08);
+      } else {
+        osc.frequency.setValueAtTime(freq * r, when);
+      }
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp * a), when + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + d);
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + d + 0.05);
+    }
+  }
+
+  /* ---- 萨克斯：锯齿+方波，1kHz 共振峰 + 揉弦，带鼻音 ---- */
+  _sax(freq, when, dur, amp = 0.04, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.035;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1100;
+    bp.Q.value = 1.6;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(bp); bp.connect(p); p.connect(this._bus(part));
+    const attack = Math.min(0.05, dur * 0.25);
+    out.gain.setValueAtTime(0.0001, when);
+    out.gain.linearRampToValueAtTime(amp, when + attack);
+    out.gain.setValueAtTime(amp, when + Math.max(attack, dur * 0.78));
+    out.gain.linearRampToValueAtTime(0.0001, when + dur);
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 5.5;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 4;
+    lfo.connect(lfoGain);
+    lfo.start(when); lfo.stop(when + dur + 0.05);
+
+    for (const [type, lvl, det] of [['sawtooth', 0.7, -2], ['square', 0.3, 2]]) {
+      const osc = ctx.createOscillator();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, when);
+      osc.detune.setValueAtTime(det, when);
+      lfoGain.connect(osc.detune);
+      const g = ctx.createGain();
+      g.gain.value = lvl;
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + dur + 0.08);
+    }
+  }
+
+  /* ---- 西塔琴：锯齿 + 高 Q 共振 + 起音弯音，带 sympathetic 泛音 ---- */
+  _sitar(freq, when, amp = 0.035, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.03;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = Math.min(4800, freq * 2.4);
+    bp.Q.value = 4.5;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(bp); bp.connect(p); p.connect(this._bus(part));
+
+    const saw = ctx.createOscillator();
+    saw.type = 'sawtooth';
+    saw.frequency.setValueAtTime(freq * 1.012, when);
+    saw.frequency.exponentialRampToValueAtTime(freq, when + 0.06);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp * 1.3), when + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + 1.2);
+    saw.connect(g); g.connect(out);
+    saw.start(when); saw.stop(when + 1.25);
+
+    const sym = ctx.createOscillator();
+    sym.type = 'sine';
+    sym.frequency.setValueAtTime(freq * 2, when);
+    const sg = ctx.createGain();
+    sg.gain.setValueAtTime(0.0001, when);
+    sg.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp * 0.16), when + 0.01);
+    sg.gain.exponentialRampToValueAtTime(0.0001, when + 0.9);
+    sym.connect(sg); sg.connect(out);
+    sym.start(when); sym.stop(when + 0.95);
+  }
+
+  /* ---- 手风琴：三簧片微失谐（musette），快起音，持续厚实 ---- */
+  _accordion(freq, when, dur, amp = 0.035, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.03;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'lowpass';
+    flt.frequency.value = Math.max(600, Math.min(6000, freq * 6));
+    flt.Q.value = 0.7;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(flt); flt.connect(p); p.connect(this._bus(part));
+    const attack = Math.min(0.03, dur * 0.2);
+    out.gain.setValueAtTime(0.0001, when);
+    out.gain.linearRampToValueAtTime(amp, when + attack);
+    out.gain.setValueAtTime(amp, when + Math.max(attack, dur * 0.8));
+    out.gain.linearRampToValueAtTime(0.0001, when + dur);
+    for (const det of [-9, 0, 9]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, when);
+      osc.detune.setValueAtTime(det, when);
+      const g = ctx.createGain();
+      g.gain.value = det === 0 ? 0.42 : 0.29;
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + dur + 0.08);
+    }
+  }
+
+  /* ---- 特雷门：正弦 + 慢起音 + 缓慢揉弦，空旷、无触点感 ---- */
+  _theremin(freq, when, dur, amp = 0.035, pan = 0, part = null) {
+    if (!this.built || !this.enabled) return;
+    if (part && !this._audible(part)) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.03;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(p); p.connect(this._bus(part));
+    const attack = Math.min(0.18, dur * 0.35);
+    out.gain.setValueAtTime(0.0001, when);
+    out.gain.linearRampToValueAtTime(amp, when + attack);
+    out.gain.setValueAtTime(amp, when + Math.max(attack, dur * 0.85));
+    out.gain.linearRampToValueAtTime(0.0001, when + dur);
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 5.8;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 12;
+    lfo.connect(lfoGain);
+    lfo.start(when); lfo.stop(when + dur + 0.05);
+
+    for (const [r, a] of [[1, 1], [2, 0.08]]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * r, when);
+      lfoGain.connect(osc.detune);
+      const g = ctx.createGain();
+      g.gain.value = a;
+      osc.connect(g); g.connect(out);
+      osc.start(when); osc.stop(when + dur + 0.08);
     }
   }
 
