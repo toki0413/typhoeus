@@ -223,11 +223,32 @@ function syncRanges(root = document) {
 }
 
 /* ---- 拖滑杆：数值气泡 + 抓取反馈 ---- */
+let _rangeDrag = null;
+
+function rangeBounds(el) {
+  const min = parseFloat(el.min || '0');
+  const max = parseFloat(el.max || '100');
+  const step = parseFloat(el.step || '1') || 1;
+  return { min, max, step };
+}
+
 function rangeValueText(el) {
   const parent = el.parentElement;
   const label = parent?.querySelector('.field-head .val, .mix-val, #speedVal');
   const text = label?.textContent?.trim();
   return text || el.value;
+}
+
+function commitRangeValue(el, value) {
+  const { min, max, step } = rangeBounds(el);
+  const v = Math.min(max, Math.max(min, value));
+  const q = Math.round(v / step) * step;
+  const qq = Math.round(q * 1000) / 1000;
+  if (+el.value !== qq) {
+    el.value = String(qq);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  return qq;
 }
 
 function moveRangeBubble(el) {
@@ -254,14 +275,81 @@ function moveRangeBubble(el) {
   return bubble;
 }
 
-function beginRangeDrag(el) {
+function beginRangeDrag(el, e) {
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  /* preventDefault 会抑制原生 dblclick，这里自己识别"双击复位" */
+  const last = el._lastDown;
+  if (last && now - last.t < 320
+    && Math.abs(e.clientX - last.x) < 8 && Math.abs(e.clientY - last.y) < 8) {
+    el._lastDown = null;
+    e.preventDefault();
+    el.dispatchEvent(new MouseEvent('dblclick', {
+      bubbles: true, clientX: e.clientX, clientY: e.clientY,
+    }));
+    return;
+  }
+  el._lastDown = { t: now, x: e.clientX, y: e.clientY };
+
+  const { min, max } = rangeBounds(el);
+  const trackW = Math.max(1, el.clientWidth - 14);
+  let value = parseFloat(el.value);
+  /* 不按 Shift 时保留"点哪跳哪"；按 Shift 则从当前值开始微调 */
+  if (!e.shiftKey) {
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left - 7) / trackW));
+    value = min + ratio * (max - min);
+    commitRangeValue(el, value);
+  }
+  _rangeDrag = {
+    el,
+    lastX: e.clientX,
+    lastT: now,
+    factor: e.shiftKey ? 0.18 : 1,
+    value,
+  };
   el.classList.add('dragging');
   el.parentElement?.classList.add('range-active');
   document.body.classList.add('range-dragging');
+  if (typeof el.setPointerCapture === 'function' && e.pointerId !== undefined) {
+    try { el.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
+  }
+  try { el.focus({ preventScroll: true }); } catch (_) { /* noop */ }
   moveRangeBubble(el);
+  e.preventDefault();
+}
+
+/* 速度自适应：慢拖 → 低灵敏度（精细），快拖 → 1:1；Shift 固定 0.18 */
+function handleRangeMove(e) {
+  const d = _rangeDrag;
+  if (!d) return;
+  e.preventDefault();
+  const dx = e.clientX - d.lastX;
+  if (!dx) return;
+  const el = d.el;
+  const { min, max, step } = rangeBounds(el);
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const dt = Math.max(8, now - d.lastT);
+  const speed = Math.abs(dx) / dt;
+  const target = e.shiftKey
+    ? 0.18
+    : (speed < 0.08 ? 0.4 : speed < 0.2 ? 0.7 : 1);
+  d.factor += (target - d.factor) * 0.35;
+
+  const trackW = Math.max(1, el.clientWidth - 14);
+  const perPx = (max - min) / trackW;
+  d.value = Math.min(max, Math.max(min, d.value + dx * perPx * d.factor));
+  const q = Math.round(d.value / step) * step;
+  const qq = Math.round(q * 1000) / 1000;
+  if (+el.value !== qq) {
+    el.value = String(qq);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  d.lastX = e.clientX;
+  d.lastT = now;
 }
 
 function endRangeDrag() {
+  _rangeDrag = null;
   for (const el of $$('input[type="range"].dragging')) {
     el.classList.remove('dragging');
     el.parentElement?.classList.remove('range-active');
@@ -913,7 +1001,7 @@ function renderSoundPanel() {
     </details>
     <p class="hint">
       <b>密度</b> → 低音音量 · <b>熵</b> → 滤波器亮度 · <b>活跃度</b> → 节奏与音符密度 ·
-      <b>周期</b> → 节奏规律性。所有音高被约束在五声音阶内，开箱即可听。
+      <b>周期</b> → 节奏规律性。拖动滑杆越慢越精细，按住 <b>Shift</b> 可微调，双击恢复默认。
     </p>`;
   if (detailsWasOpen) {
     const d = $('#panel-sound .instrument-details');
@@ -1011,7 +1099,7 @@ function mixerBodyHTML() {
       <div class="mix-head"><span>声部</span><span>音色</span><span>♪</span><span>M</span><span>S</span><span>音量</span><span>声像</span><span>八度</span><span>发送</span></div>
       ${rows}
     </div>
-    <p class="hint">♪ 试听当前音色 · 双击任意滑块恢复默认 · 音量 0–150% · 声像 L/C/R · 八度 −2…+2 · 发送 = 混响量。M 静音；S 独奏（独奏时其余声部自动变暗静音）。</p>`;
+    <p class="hint">♪ 试听当前音色 · 慢拖更精细，按住 Shift 微调 · 双击任意滑块恢复默认 · 音量 0–150% · 声像 L/C/R · 八度 −2…+2 · 发送 = 混响量。M 静音；S 独奏（独奏时其余声部自动变暗静音）。</p>`;
 }
 
 function openMixerModal() {
@@ -2588,7 +2676,10 @@ function bindUI() {
     });
   }, true);
   document.addEventListener('pointerdown', (e) => {
-    if (e.target && e.target.type === 'range') beginRangeDrag(e.target);
+    if (e.target && e.target.type === 'range') beginRangeDrag(e.target, e);
+  }, true);
+  document.addEventListener('pointermove', (e) => {
+    if (_rangeDrag) handleRangeMove(e);
   }, true);
   document.addEventListener('pointerup', endRangeDrag, true);
   document.addEventListener('pointercancel', endRangeDrag, true);
