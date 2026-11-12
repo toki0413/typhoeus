@@ -8,6 +8,7 @@ import {
   loadPuzzleProgress, savePuzzleProgress, starsFor, isLevelUnlocked,
 } from '../src/puzzle.js';
 import { laplacian } from '../src/scientific.js';
+import { createEngine, defaultGenome, defaultEnv } from '../src/engines.js';
 
 function fieldHash(field) {
   let h = 0x811c9dc5;
@@ -98,6 +99,35 @@ test('继承: 当前生命参数被写入会话并按关卡范围裁剪', () => 
   const fallback = createSession('spots-garden');
   assert.equal(fallback.f, fallback.level.start.f);
   assert.equal(fallback.inherited, null);
+});
+
+test('挑战配方: custom + mask 可被引擎复现', () => {
+  const mask = new Array(64 * 64).fill(0);
+  for (let y = 20; y < 44; y++) {
+    for (let x = 20; x < 44; x++) {
+      if (Math.hypot(x - 32, y - 32) < 8) mask[y * 64 + x] = 255;
+    }
+  }
+  const build = () => {
+    const g = defaultGenome('life', 'conway');
+    g.engine = 'scientific';
+    g.scientific = {
+      preset: 'custom', engineType: 'grayScott',
+      D_u: 0.16, D_v: 0.08, dt: 1.0, f: 0.035, k: 0.062,
+      mask, maskW: 64, maskH: 64,
+    };
+    const sim = createEngine(g, defaultEnv({ boundary: 'torus', pattern: 'soup', noise: 0 }), 123);
+    for (let i = 0; i < 120; i++) sim.step();
+    return sim;
+  };
+  const a = build();
+  const b = build();
+  const ma = a.metrics();
+  const mb = b.metrics();
+  assert.ok(Number.isFinite(ma.density) && Number.isFinite(ma.fractal));
+  assert.ok(ma.density > 0, 'mask 应该种出非空斑图');
+  assert.equal(ma.density, mb.density, '同一 mask + 参数应可复现');
+  assert.equal(ma.fractal, mb.fractal);
 });
 
 test('Shake: 同 index 字节相等，墨量变化不超过 20 格', () => {

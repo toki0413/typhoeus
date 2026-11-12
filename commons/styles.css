@@ -3624,6 +3624,14 @@ body.modal-open .toast-layer { top: 12px; bottom: auto; }
   font-weight: 700;
   color: var(--text);
 }
+.puzzle-saved {
+  margin: 10px 0 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--text);
+  background: var(--bg-2);
+  font-weight: 700;
+  color: var(--text);
+}
 .puzzle-tip {
   margin: 8px 0 0;
   font-size: 11.5px;

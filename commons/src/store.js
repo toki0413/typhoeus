@@ -188,8 +188,23 @@ export function profileRecipe(recipe, steps) {
   const sim = createEngine(recipe.seed.genome, recipe.env, recipe.rngSeed);
   const n = steps ?? (sim.kind === 'lenia' ? 110 : 150);
   for (let i = 0; i < n; i++) sim.step();
-  recipe.metrics = computeMetrics(sim);
-  recipe.snapshot = encodeSnapshot(sim.snapshot(2));
+  const baseMetrics = computeMetrics(sim);
+  recipe.metrics = (sim.kind === 'reaction-diffusion' && typeof sim.metrics === 'function')
+    ? {
+        ...baseMetrics,
+        ...sim.metrics(),
+        diameter: baseMetrics.diameter,
+        diameterNorm: baseMetrics.diameterNorm,
+        components: baseMetrics.components,
+        stability: baseMetrics.stability,
+      }
+    : baseMetrics;
+  const rawSnap = sim.snapshot(2);
+  /* ScientificEngine 的 snapshot 直接返回 Uint8Array；Life/Lenia 返回 {data,w,h} */
+  const snap = rawSnap && rawSnap.data
+    ? rawSnap
+    : { data: rawSnap, w: sim.w, h: sim.h };
+  recipe.snapshot = encodeSnapshot(snap);
   recipe.fingerprint = recipeFingerprint(recipe.seed, recipe.env, recipe.rngSeed, recipe.metrics);
   return recipe;
 }

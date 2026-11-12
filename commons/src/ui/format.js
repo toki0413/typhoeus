@@ -39,6 +39,10 @@ export function ruleLabel(genome) {
     const s = genome.life.survive.join('');
     return `B${b || '∅'}/S${s || '∅'}`;
   }
+  if (genome.engine === 'scientific') {
+    const sci = genome.scientific || {};
+    return `GS f${Number(sci.f ?? 0).toFixed(3)} k${Number(sci.k ?? 0).toFixed(3)}`;
+  }
   return `Lenia μ${genome.lenia.mu.toFixed(2)} σ${genome.lenia.sigma.toFixed(3)} R${genome.lenia.radius}`;
 }
 

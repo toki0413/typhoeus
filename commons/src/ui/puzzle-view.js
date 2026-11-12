@@ -13,6 +13,7 @@ const FIELD_SIZE = PUZZLE_SIZE;
 
 export function createPuzzleView({
   state, toast, getLifeParams = null, applyToLife = null, makeLifeScientific = null,
+  saveToGarden = null, openGarden = null,
 }) {
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -35,6 +36,7 @@ export function createPuzzleView({
   let ghostOn = false;
   let undoStack = [];
   let followingLife = true;
+  let lastSave = null;
 
   /* ------------------------------------------------------------------ */
   /* 工具                                                                */
@@ -334,11 +336,18 @@ export function createPuzzleView({
           <div>类别：${session.level.classLabel} · 你的 f ${fmt(session.f)} · k ${fmt(session.k)}</div>
           <div class="dim">目标由已知参数与固定种子合成，是<b>合成标定关卡</b>，不是实验数据。参数不唯一；同浏览器、同种子可复现。</div>
           <div class="dim">参考：${session.level.refs.join(' · ')}</div>
+          ${lastSave?.saved
+            ? `<div class="puzzle-saved">已存入花园 · 第 ${lastSave.generation} 代 · ${lastSave.name}</div>
+               ${typeof openGarden === 'function' ? '<button class="btn tiny" id="puzzleGoGarden">去花园看看</button>' : ''}`
+            : lastSave?.duplicate ? '<div class="dim">花园里已有相同形态，没有重复写入。</div>' : ''}
           ${next
             ? `<button class="btn tiny" id="puzzleNext" ${nextUnlocked ? '' : 'disabled'}>进入下一关 →</button>`
             : '<div class="puzzle-done">全部关卡完成 ♡</div>'}`;
         $('#puzzleNext')?.addEventListener('click', () => {
           if (nextUnlocked) selectLevel(next.id);
+        });
+        $('#puzzleGoGarden')?.addEventListener('click', () => {
+          if (typeof openGarden === 'function') openGarden();
         });
       } else {
         reveal.hidden = true;
@@ -367,6 +376,7 @@ export function createPuzzleView({
   function markEdited() {
     lastResult = null;
     submitted = false;
+    lastSave = null;
     previewField = null;
     displayMode = 'seed';
     updateSeedChip();
@@ -593,7 +603,27 @@ export function createPuzzleView({
     const idx = PUZZLE_LEVELS.findIndex((l) => l.id === session.levelId);
     const next = PUZZLE_LEVELS[idx + 1];
     const unlocked = next && isLevelUnlocked(idx + 1, progress);
-    toast(`提交：${lastResult.total.toFixed(0)} 分 · ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}${unlocked ? ' · 解锁下一关' : ''}`, 3200);
+    lastSave = null;
+    if (lastResult.total >= 50 && typeof saveToGarden === 'function') {
+      try {
+        lastSave = saveToGarden({
+          levelId: session.levelId,
+          levelName: session.level.name,
+          f: session.f,
+          k: session.k,
+          mask: session.mask,
+          total: lastResult.total,
+          stars,
+          steps: session.level.steps,
+        });
+      } catch (_) {
+        toast('挑战成绩已保存，但写回花园失败', 2600);
+      }
+    }
+    const savedText = lastSave?.saved
+      ? ` · 已存入花园（第 ${lastSave.generation} 代）`
+      : lastSave?.duplicate ? ' · 花园里已有相同形态' : '';
+    toast(`提交：${lastResult.total.toFixed(0)} 分 · ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}${unlocked ? ' · 解锁下一关' : ''}${savedText}`, 3800);
     render();
   }
 
@@ -741,6 +771,7 @@ export function createPuzzleView({
       session = sessionForLevel(session.levelId);
       previewField = null;
       lastResult = null;
+      lastSave = null;
       submitted = false;
       displayMode = 'seed';
       render();
@@ -804,6 +835,7 @@ export function createPuzzleView({
     target = getTarget(id);
     previewField = null;
     lastResult = null;
+    lastSave = null;
     submitted = false;
     displayMode = 'seed';
     statusText = '';

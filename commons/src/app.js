@@ -211,6 +211,8 @@ const puzzleView = createPuzzleView({
   getLifeParams: currentLifeScienceParams,
   applyToLife: applyScientificParams,
   makeLifeScientific: ensureScientificLife,
+  saveToGarden: savePuzzleResult,
+  openGarden: () => switchView('commons'),
 });
 
 /* ------------------------------------------------------------------ */
@@ -438,6 +440,71 @@ function ensureScientificLife() {
   updateStructValues();
   toast('当前生命已切换为反应-扩散，可以继承参数了', 2400);
   return true;
+}
+
+/* 把挑战通关结果写回花园与家谱（作为当前生命的一代后代） */
+function savePuzzleResult(payload) {
+  if (!payload || !(payload.total >= 50)) {
+    return { saved: false, reason: 'not-cleared' };
+  }
+  const parent = state.recipe.seed;
+  const mask = payload.mask
+    ? Array.from(payload.mask, (v) => Math.round(Math.max(0, Math.min(1, v)) * 255))
+    : null;
+  const genome = defaultGenome('life', 'conway');
+  genome.engine = 'scientific';
+  genome.scientific = {
+    preset: 'custom',
+    engineType: 'grayScott',
+    D_u: PUZZLE_DU,
+    D_v: PUZZLE_DV,
+    dt: 1.0,
+    f: payload.f,
+    k: payload.k,
+    mask,
+    maskW: 64,
+    maskH: 64,
+  };
+  const env = defaultEnv({ boundary: 'torus', pattern: 'soup', noise: 0 });
+  const name = `${payload.levelName} · ${Math.round(payload.total)}分`;
+  const rec = makeRecipe(
+    {
+      id: uid('s'),
+      name,
+      latin: 'Challengia forma',
+      genome,
+      lineage: {
+        parents: [parent.id],
+        parentNames: [parent.name],
+        generation: (parent.lineage?.generation || 0) + 1,
+      },
+    },
+    env,
+    hashString(`${payload.levelId}|${payload.f}|${payload.k}|${payload.total}`),
+    null,
+    null,
+    { note: `挑战模式「${payload.levelName}」通关解 · ${payload.stars ?? 0} 星` },
+  );
+  try {
+    profileRecipe(rec, 480);
+  } catch (_) {
+    /* 即使剖析失败，也保留配方本身，花园里仍能看到这条记录 */
+  }
+  const duplicate = state.lib.recipes.some((r) => r.fingerprint && r.fingerprint === rec.fingerprint);
+  if (duplicate) {
+    return { saved: false, duplicate: true, name, generation: rec.seed.lineage.generation };
+  }
+  state.lib.recipes.push(rec);
+  saveLibrary(state.lib);
+  renderCommons();
+  refreshCompareOptions();
+  return {
+    saved: true,
+    duplicate: false,
+    name,
+    generation: rec.seed.lineage.generation,
+    fingerprint: rec.fingerprint,
+  };
 }
 
 /* 读取当前生命可继承的反应-扩散参数；不是科学引擎时返回 null */
@@ -1736,10 +1803,10 @@ function renderCommons() {
           </div>
           <div class="card-note">${esc(r.note || (m ? diagnosisShort(m) : '正在剖析结构指纹…'))}</div>
           <div class="card-metrics">
-            ${m ? `<span>密度<b>${(m.density * 100).toFixed(1)}%</b></span>
-            <span>熵<b>${m.entropy.toFixed(2)}</b></span>
+            ${m ? `<span>密度<b>${((m.density || 0) * 100).toFixed(1)}%</b></span>
+            <span>熵<b>${(m.entropy || 0).toFixed(2)}</b></span>
             <span>${m.periodKind === 'correlation-length' ? 'L_c' : '周期'}<b>${m.period || '∅'}</b></span>
-            <span>型<b>${m.typeLabel}</b></span>` : '<span>结构剖析中…</span>'}
+            <span>型<b>${m.typeLabel || '—'}</b></span>` : '<span>结构剖析中…</span>'}
           </div>
           <div class="card-actions">
             <button class="act-primary" data-adopt="${esc(r.id)}">领养</button>

@@ -176,6 +176,26 @@ export class ReactionDiffusionEngine {
     this.v.fill(0);        // 均匀 v = 0
     const cx = w / 2, cy = h / 2;
     const excite = (idx) => { this.u[idx] = 0.5; this.v[idx] = 0.25; };
+
+    /* 挑战种子：0..255 的 64×64 掩膜，优先于预设形状。
+     * 按最近邻缩放到当前网格，避免 64×64 配方在 96×96 引擎里错位。 */
+    const mask = this.params.mask;
+    if (mask && mask.length) {
+      const mw = this.params.maskW || Math.round(Math.sqrt(mask.length));
+      const mh = this.params.maskH || mw;
+      for (let y = 0; y < h; y++) {
+        const my = Math.min(mh - 1, Math.floor((y * mh) / h));
+        for (let x = 0; x < w; x++) {
+          const mx = Math.min(mw - 1, Math.floor((x * mw) / w));
+          const m = Math.max(0, Math.min(1, (mask[my * mw + mx] || 0) / 255));
+          if (m <= 0) continue;
+          const idx = y * w + x;
+          this.u[idx] = 1 - 0.5 * m;
+          this.v[idx] = 0.25 * m;
+        }
+      }
+      return;
+    }
     if (pattern === 'ring') {
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {

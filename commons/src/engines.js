@@ -908,8 +908,26 @@ export class ScientificEngine {
     this.genome = genome;
     this.env = env;
     this.rngSeed = rngSeed;
-    const preset = genome.scientific?.preset || 'gs_spots';
-    this._rd = new ReactionDiffusionEngine(w, h, { preset, boundary: env.boundary });
+    const sci = genome.scientific || {};
+    const preset = sci.preset || 'gs_spots';
+    this._rd = new ReactionDiffusionEngine(w, h, {
+      preset, boundary: env.boundary, mask: sci.mask,
+    });
+    /* custom 配方（例如挑战结果）需要在构造时就写入参数，
+     * 因为 createEngine 不会再调用 applyGenome。 */
+    if (preset === 'custom') {
+      const params = this._rd.params;
+      const def = REACTION_DIFFUSION_PRESETS.gs_spots;
+      params.engine = sci.engineType || 'grayScott';
+      for (const key of ['D_u', 'D_v', 'f', 'k', 'a', 'b', 'c', 'A', 'B', 'dt', 'mask']) {
+        if (sci[key] !== undefined) params[key] = sci[key];
+      }
+      if (!Number.isFinite(params.D_u)) params.D_u = def.D_u;
+      if (!Number.isFinite(params.D_v)) params.D_v = def.D_v;
+      if (!Number.isFinite(params.f)) params.f = def.f;
+      if (!Number.isFinite(params.k)) params.k = def.k;
+      this._rd.dt = Number.isFinite(params.dt) ? params.dt : def.dt;
+    }
     this.grid = this._rdSnapshotAsGrid();
     this.age = new Uint8Array(w * h);
     /* 有限时间 Lyapunov：tangent-space 线性化 + 周期重归一化 */
@@ -1086,7 +1104,7 @@ export class ScientificEngine {
     if (sci.preset && sci.preset !== 'custom') {
       const p = REACTION_DIFFUSION_PRESETS[sci.preset];
       if (p) {
-        this._rd.params = { ...p };
+        this._rd.params = { ...p, mask: sci.mask };
         this._rd.dt = p.dt;
       }
     } else {
@@ -1095,9 +1113,10 @@ export class ScientificEngine {
       const engineType = sci.engineType || this._rd.params.engine;
       this._rd.params.engine = engineType;
       // 逐项覆盖（undefined 保留原值）
-      for (const key of ['D_u','D_v','f','k','a','b','c','A','B','dt']) {
+      for (const key of ['D_u','D_v','f','k','a','b','c','A','B','dt','mask']) {
         if (sci[key] !== undefined) this._rd.params[key] = sci[key];
       }
+      if (sci.mask === undefined) delete this._rd.params.mask;
       this._rd.dt = this._rd.params.dt;
     }
     this._resetLyapunov();
