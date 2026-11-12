@@ -13,6 +13,7 @@ import {
   buildOpenScienceIssue,
 } from '../leaderboard.js';
 import { escapeHtml, sortLabel } from './format.js';
+import { SCIENCE_METRIC_LABELS } from '../config.js';
 
 export function createSciencePanel({ state, toast, openModal, downloadJSON }) {
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -26,6 +27,14 @@ export function createSciencePanel({ state, toast, openModal, downloadJSON }) {
     const isScientific = sim?.kind === 'reaction-diffusion';
 
     let html = '';
+
+    /* ---- 指标说明：明确这些是估计量，避免过度声称 ---- */
+    html += `<div class="sci-glossary">
+      <b>指标说明</b>：${SCIENCE_METRIC_LABELS.lyapunov.symbol} = ${SCIENCE_METRIC_LABELS.lyapunov.note}；
+      ${SCIENCE_METRIC_LABELS.fractal.symbol} = ${SCIENCE_METRIC_LABELS.fractal.note}；
+      ${SCIENCE_METRIC_LABELS.energy.symbol} = ${SCIENCE_METRIC_LABELS.energy.note}。
+      它们只用于本工具内的相对比较，不是严格物理量。
+    </div>`;
 
     /* ---- Section 1: Pattern Match 已发表 Turing 模式匹配 ---- */
     html += `<div class="sci-section"><h4>🎯 已发表模式匹配</h4>`;
@@ -44,10 +53,10 @@ export function createSciencePanel({ state, toast, openModal, downloadJSON }) {
           </div>
           <div class="pattern-desc">${p.desc}</div>
           <div class="pattern-diff">
-            Lyap ${p.diff.lyapunov > 0 ? '+' : ''}${p.diff.lyapunov}
-            · D ${p.diff.fractal > 0 ? '+' : ''}${p.diff.fractal}
-            · E ${p.diff.energy}
-            · T ${p.diff.period > 0 ? '+' : ''}${p.diff.period}
+            Δλ_est ${p.diff.lyapunov > 0 ? '+' : ''}${p.diff.lyapunov}
+            · ΔD_box ${p.diff.fractal > 0 ? '+' : ''}${p.diff.fractal}
+            · ΔE_field ${p.diff.energy}
+            · ΔT ${p.diff.period > 0 ? '+' : ''}${p.diff.period}
           </div>
           <div class="pattern-refs dim">${p.refs?.join(' · ') ?? ''}</div>
         </li>`;

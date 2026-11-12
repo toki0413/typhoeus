@@ -48,7 +48,13 @@ export function formatFp(fp) {
 }
 
 export function sortLabel(s) {
-  return { similarity: '相似度', energy: '能量最低', lyapunov: '混沌度', fractal: '分形最优', recent: '最新' }[s] ?? s;
+  return {
+    similarity: '相似度',
+    energy: 'E_field 低',
+    lyapunov: 'λ_est 低',
+    fractal: 'D_box 最优',
+    recent: '最新',
+  }[s] ?? s;
 }
 
 export function diagnosisShort(m) {

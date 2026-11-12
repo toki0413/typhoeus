@@ -171,11 +171,13 @@ export function buildOpenScienceIssue(record, opts = {}) {
 
 | 指标 | 值 | 范围 |
 |------|-----|------|
-| Lyapunov λ | ${record.metrics?.lyapunov?.toFixed(4) ?? '—'} | -0.3 ~ +0.3 |
-| 分形维数 D | ${record.metrics?.fractal?.toFixed(3) ?? '—'} | 1.0 ~ 2.0 |
-| 自由能 E | ${record.metrics?.energy?.total?.toFixed(4) ?? '—'} | 0.2 ~ 8.0 |
+| λ_est（边界敏感度，估计） | ${record.metrics?.lyapunov?.toFixed(4) ?? '—'} | -0.3 ~ +0.3 |
+| D_box（盒计数维数，估计） | ${record.metrics?.fractal?.toFixed(3) ?? '—'} | 1.0 ~ 2.0 |
+| E_field（场能量估计） | ${record.metrics?.energy?.total?.toFixed(4) ?? '—'} | 0.2 ~ 8.0 |
 | 密度 | ${((record.metrics?.density ?? 0) * 100).toFixed(1)}% | |
 | 空间周期 | ${record.metrics?.period ?? '—'} 格 | |
+
+> 注：λ_est / D_box / E_field 为启发式估计量，不等同于严格的 Lyapunov 指数、分形维数或物理自由能，仅用于本工具内的相对比较。
 
 ### 已发表模式匹配
 

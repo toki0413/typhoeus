@@ -112,6 +112,15 @@ export const EXTREME_AUDIO_TEMPO = {
   'exo-blackhole': 0.35,
 };
 
+/* ---- 科学指标命名 ----
+ * 内部变量名（lyapunov/fractal/energy）保持不变，避免牵动计算；
+ * UI 统一使用估计量符号，明确它们是启发式估计而非严格物理量。 */
+export const SCIENCE_METRIC_LABELS = {
+  lyapunov: { symbol: 'λ_est', name: '边界敏感度', note: '空间拉普拉斯相对变化率，非轨迹 Lyapunov 指数' },
+  fractal: { symbol: 'D_box', name: '盒计数维数', note: '5 个尺度的阈值盒计数回归' },
+  energy: { symbol: 'E_field', name: '场能量估计', note: '梯度平方 + 非线性项，非物理自由能' },
+};
+
 /* ---- 科学指标判定阈值 ---- */
 export const SCIENCE_THRESHOLDS = {
   /* Lyapunov → attractor 类型 */

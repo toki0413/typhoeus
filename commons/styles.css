@@ -3223,3 +3223,43 @@ body.modal-open .toast-layer { top: 12px; bottom: auto; }
   border-color: rgba(242, 239, 230, 0.28) !important;
 }
 .osr-body th { background: rgba(255, 255, 255, 0.1) !important; }
+
+/* 指标说明：明确估计量边界 */
+.sci-glossary {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--text);
+  background: var(--bg-2);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.sci-glossary b { color: var(--text); }
+
+/* ============================================================
+   呼吸感：更松的区块节奏与留白
+   ============================================================ */
+.view { padding: 36px 36px 108px; }
+.cultivate { gap: 32px; }
+.stage-head { margin-bottom: 24px; }
+.rail-body { padding: 26px 24px 22px; }
+.panel .section-label { margin: 26px 0 14px; }
+.panel .field { margin-bottom: 18px; }
+.param-grid { gap: 8px 16px; }
+.param-grid .field { margin-bottom: 12px; }
+.field-head { margin-bottom: 9px; }
+.hint { margin-top: 14px; line-height: 1.85; }
+.transport { margin-top: 22px; padding: 16px 18px; }
+.timeline { margin-top: 22px; padding: 16px 20px 18px; }
+.mix-row { padding: 9px 2px; }
+.mix-head { padding: 8px 2px; }
+.mixer-global { gap: 12px; margin-bottom: 20px; }
+.mixer-presets { gap: 10px; margin-bottom: 18px; }
+
+@media (max-width: 1180px) {
+  .view { padding: 26px 20px 92px; }
+}
+@media (max-width: 760px) {
+  .mix-sliders { gap: 8px; }
+  .mix-row { padding: 11px 2px; }
+}
