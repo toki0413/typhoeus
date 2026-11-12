@@ -276,6 +276,60 @@
 
     <main id="view-puzzle" class="view"></main>
 
+    <main id="view-research" class="view">
+      <header class="view-head">
+        <div class="view-title">
+          <div class="eyebrow">RESEARCH SIDE DOOR · 可选的侧门</div>
+          <h2>研究 · 侧门</h2>
+          <p>
+            培育、挑战、花园与家谱仍是你的主线。这里不会改动你的生命，也不会影响花园；
+            它只是一扇可选的入口，通向更接近真实问题的工具。挑战关里，人画种子给出全局假设，
+            Wiggle 负责局部下降——侧门想继续的，也是这种分工。
+          </p>
+          <button id="researchBack" class="btn ghost tiny compare-back">← 回花园</button>
+        </div>
+        <div class="research-actions">
+          <button id="researchEnterSci" class="primary">进入「看懂它」</button>
+          <button id="researchExport" class="ghost">导出本地发现</button>
+        </div>
+      </header>
+
+      <section class="research-grid">
+        <article class="research-card">
+          <div class="rc-index">01 / FIT</div>
+          <h3>实验斑图拟合</h3>
+          <p>上传一张实验或显微斑图，反推反应—扩散的参数组合。拟合的是密度、熵、相关长度与盒维数这些结构统计，而不是像素级的相位。</p>
+          <span class="rc-note">本机运行 · 反问题 · 非唯一解</span>
+        </article>
+        <article class="research-card">
+          <div class="rc-index">02 / SCAN</div>
+          <h3>参数空间扫描</h3>
+          <p>在 N×M 网格上逐点跑反应—扩散，画出能量景观，用颜色找出低能区与最差点。它回答的是「参数往哪边调更接近稳定形态」。</p>
+          <span class="rc-note">能量景观 · 网格搜索</span>
+        </article>
+        <article class="research-card">
+          <div class="rc-index">03 / MATCH</div>
+          <h3>已发表斑图匹配</h3>
+          <p>把当前形态与已发表的图灵斑图做结构比对，给出相似度与分项差值。它比较的是统计特征，不是对实验结果的复现。</p>
+          <span class="rc-note">结构统计 · 相对比较</span>
+        </article>
+        <article class="research-card">
+          <div class="rc-index">04 / RECORD</div>
+          <h3>本地发现</h3>
+          <p>每次发现会自动存进浏览器，可按相似度、能量、Lyapunov 等排序，也可以导出成 JSON。记录里保留配方与指纹，便于自己复核。</p>
+          <span class="rc-note">隐私优先 · 仅存本机</span>
+        </article>
+      </section>
+
+      <section class="research-boundary">
+        <h3>边界</h3>
+        <p>
+          这些工具目前只在本机运行，还没有接入外部实验数据、服务端复核与共享榜单。
+          所以它还不是公民科学，只是一扇入口：先让人玩到真问题，再谈让发现被专业的人检验。
+        </p>
+      </section>
+    </main>
+
     <div id="toastLayer" class="toast-layer"></div>
     <div id="modalLayer" class="modal-layer hidden"></div>
 
