@@ -14,12 +14,13 @@ export const esc = escapeHtml;
 export const ENGINE_LABEL = { life: 'Conway 系', lenia: 'Lenia 简化', scientific: '反应-扩散（科学）' };
 
 export const TYPE_COLOR = {
-  stable: '#7cffb2',
-  periodic: '#57d8ff',
-  chaotic: '#c39bff',
-  endangered: '#ffc46b',
-  extinct: '#ff7a9c',
-  drifting: '#8a9a95',
+  /* 构成主义色板：黑 / 朱红 / 蓝 / 铬黄 */
+  stable: '#121212',
+  periodic: '#1f4ea3',
+  chaotic: '#d7261e',
+  endangered: '#d9a400',
+  extinct: '#b81d13',
+  drifting: '#4d4d4d',
 };
 
 export const TYPE_EVENT_LABEL = {

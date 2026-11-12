@@ -162,44 +162,42 @@ function blurCanvas(ctx, w, h, sigma = 0.6) {
 // bg: 画布底色（RGB）；hue: 细胞色相；body/accent: 高光色
 
 const TINTS = {
-  // 主题 A：樱花粉 × 薰衣草紫（默认）
+  // 主题 A：纸白 × 朱红 × 黑（构成主义）
   a: {
-    bg: [250, 232, 242],        // 淡樱花粉底
-    hue: 340,                    // 主细胞色相：粉红
-    hue2: 285,                   // 次色相：薰衣草紫
-    accent: '#ff8eb5',           // 少女粉
-    accent2: '#c59df2',          // 薰衣草紫
-    body: [255, 170, 200],       // 粉白身体色
+    bg: [242, 239, 230],        // 纸白
+    hue: 4,                      // 主细胞色相：朱红
+    hue2: 0,
+    accent: '#d7261e',           // 朱红
+    accent2: '#121212',          // 黑
+    body: [215, 38, 30],
   },
-  // 主题 B：晴空蓝 × 蜜桃橙
+  // 主题 B：黑底 × 朱红 × 铬黄
   b: {
-    bg: [236, 238, 250],        // 淡薰衣草粉底
-    hue: 280,                    // 主细胞色相：薰衣草
-    hue2: 40,                    // 次色相：蜜桃
-    accent: '#a8d8ea',           // 晴空蓝
-    accent2: '#ffb89e',          // 蜜糖橙
-    body: [180, 160, 230],       // 淡紫身体色
+    bg: [18, 18, 18],            // 墨黑
+    hue: 4,
+    hue2: 44,                    // 铬黄
+    accent: '#d7261e',
+    accent2: '#d9a400',
+    body: [240, 235, 220],
   },
 };
 
 /* ------------------------------------------------------------------ */
 /* Lenia 连续场渐变色（5 节点）                                          */
 /* ------------------------------------------------------------------ */
-// ramp A：樱花 × 薄荷 × 奶油（治愈）
+// ramp A：纸白 → 朱红 → 墨黑（构成主义）
 const LENIA_RAMP_A = [
-  [240, 220, 248],   // 淡薰衣草 (0)
-  [220, 180, 230],   // 薰衣草紫 (0.25)
-  [255, 170, 200],   // 樱花粉 (0.5)
-  [240, 210, 200],   // 蜜桃奶 (0.75)
-  [255, 248, 250],   // 奶油白 (1)
+  [242, 239, 230],   // 纸白 (0)
+  [215, 38, 30],     // 朱红 (0.35)
+  [150, 22, 18],     // 暗红 (0.7)
+  [18, 18, 18],      // 墨黑 (1)
 ];
-// ramp B：薰衣草 × 蜜桃 × 暖白
+// ramp B：墨黑 → 朱红 → 铬黄 → 纸白
 const LENIA_RAMP_B = [
-  [225, 210, 245],   // 淡紫 (0)
-  [200, 170, 230],   // 薰衣草 (0.25)
-  [255, 185, 200],   // 粉橘 (0.5)
-  [255, 220, 185],   // 蜜桃 (0.75)
-  [255, 248, 245],   // 暖白 (1)
+  [18, 18, 18],      // 墨黑 (0)
+  [215, 38, 30],     // 朱红 (0.35)
+  [217, 164, 0],     // 铬黄 (0.7)
+  [250, 246, 236],   // 纸白 (1)
 ];
 
 function rampColor(ramp, t) {
@@ -222,13 +220,13 @@ function rampColor(ramp, t) {
 // l: 亮度  s: 饱和度  a: 透明度
 
 const AGE_BUCKETS = [
-  { max: 0,   l: 92, s: 88, a: 1.0 },    // 新生儿：最亮的粉白色
-  { max: 1,   l: 82, s: 90, a: 0.98 },   // 幼崽：粉彩色
-  { max: 2,   l: 72, s: 92, a: 0.94 },   // 青年：最鲜明的粉紫
-  { max: 4,   l: 64, s: 88, a: 0.88 },   // 成熟
-  { max: 9,   l: 56, s: 82, a: 0.80 },   // 中年
-  { max: 19,  l: 50, s: 74, a: 0.68 },   // 老年
-  { max: Infinity, l: 48, s: 66, a: 0.55 }, // 最老：柔和灰紫
+  { max: 0,   l: 72, s: 96, a: 1.0 },    // 新生儿：朱红
+  { max: 1,   l: 58, s: 98, a: 0.98 },   // 幼崽
+  { max: 2,   l: 46, s: 100, a: 0.94 },  // 青年：纯朱红
+  { max: 4,   l: 34, s: 100, a: 0.92 },  // 成熟：暗红
+  { max: 9,   l: 24, s: 88, a: 0.86 },   // 中年：酒红
+  { max: 19,  l: 16, s: 60, a: 0.74 },   // 老年：近黑
+  { max: Infinity, l: 10, s: 30, a: 0.62 }, // 最老：墨黑
 ];
 
 function ageBucket(age, activity) {
@@ -396,7 +394,7 @@ export class StageRenderer {
     /* Layer 1: 超大柔和光晕（lighter 叠加，淡色）           */
     /* 每个细胞独立呼吸，按 ageFactor 减弱                    */
     /* ====================================================== */
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = 'source-over';
     for (let b = 0; b < Math.min(buckets.length, 5); b++) {
       const fakeAge = b === 0 ? 0 : b === 1 ? 1 : b === 2 ? 2 : b < 5 ? 4 : 20;
       const info = ageBucket(fakeAge, activity);
@@ -406,7 +404,7 @@ export class StageRenderer {
       const baseRadius = cell * (b === 0 ? 2.8 : b === 1 ? 2.2 : b === 2 ? 1.8 : 1.5);
       // 光晕的呼吸周期稍慢于实体（更柔和）
       const haloSig = { ...aSig, period: aSig.haloPeriod || aSig.period, amp: aSig.amp * 0.55 };
-      const baseAlpha = b === 0 ? 0.35 : b === 1 ? 0.18 : b === 2 ? 0.10 : 0.05;
+      const baseAlpha = b === 0 ? 0.24 : b === 1 ? 0.14 : b === 2 ? 0.08 : 0.04;
       for (let p = 0; p < 2; p++) {
         const arr = buckets[b][p];
         if (!arr.length) continue;
@@ -516,7 +514,7 @@ export class StageRenderer {
       }
     }
     offctx.putImageData(this.imgData, 0, 0);
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = 'source-over';
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(offscreen, ox, oy, w * scale, h * scale);
@@ -686,7 +684,7 @@ export function drawSnapshot(canvas, snapshot, tintKey = 'a', opts = {}) {
   if (maxX < 0) {
     /* ====== 休眠/绝灭种子：一颗安静的小圆点 + 光环 ====== */
     const c = Math.min(W, H) * 0.22;
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = 'source-over';
     // 外围柔和光环
     ctx.fillStyle = `hsla(${t.hue}, 70%, 70%, 0.08)`;
     ctx.beginPath();
@@ -734,7 +732,7 @@ export function drawSnapshot(canvas, snapshot, tintKey = 'a', opts = {}) {
   /* ====================================================== */
   /* Layer 1: 大柔光圆（lighter）—— 水彩晕染扩散层 + 呼吸    */
   /* ====================================================== */
-  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalCompositeOperation = 'source-over';
   ctx.filter = `blur(${aSig.blur.toFixed(1)}px)`;
   const haloSig = { ...aSig, period: aSig.haloPeriod || aSig.period, amp: aSig.amp * 0.55 };
   for (let y = minY; y <= maxY; y++) {
@@ -764,7 +762,7 @@ export function drawSnapshot(canvas, snapshot, tintKey = 'a', opts = {}) {
   /* ====================================================== */
   /* Layer 2: 实体圆（lighter）—— 细胞主体层 + 呼吸          */
   /* ====================================================== */
-  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalCompositeOperation = 'source-over';
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {
       const v = snapshot.data[y * w + x];

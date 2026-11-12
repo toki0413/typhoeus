@@ -855,10 +855,10 @@ function renderPetHUD() {
   // 四状态 bar
   if (hudPetBars) {
     hudPetBars.innerHTML = `
-      ${petBar('⚖ 平衡', snap.balance, '#c39bff')}
-      ${petBar('⚗ 均匀', snap.uniform, '#57d8ff')}
-      ${petBar('⚡ 能量', snap.energy, '#ffc46b')}
-      ${petBar('🔥 活跃', snap.activity, '#7cffb2')}
+      ${petBar('⚖ 平衡', snap.balance, '#d7261e')}
+      ${petBar('⚗ 均匀', snap.uniform, '#121212')}
+      ${petBar('⚡ 能量', snap.energy, '#d9a400')}
+      ${petBar('🔥 活跃', snap.activity, '#b81d13')}
     `;
   }
 
@@ -1928,7 +1928,7 @@ function renderCompareInsight() {
       const left = diff >= 0 ? 50 : 50 - width;
       return `<div class="delta">
         <div class="d-label"><span>${r.label}</span><span>${r.fmt(r.a, ma)} → ${r.fmt(r.b, mb)}</span></div>
-        <div class="d-bar"><i style="width:${width}%;left:${left}%;background:${diff >= 0 ? '#ffc46b' : '#7cffb2'}"></i></div>
+        <div class="d-bar"><i style="width:${width}%;left:${left}%;background:${diff >= 0 ? '#d9a400' : '#121212'}"></i></div>
       </div>`;
     })
     .join('');
