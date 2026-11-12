@@ -683,6 +683,11 @@ export class AudioEngine {
       this._chordTones = chordMidi;
       /* 低音根音：给和声一个地基（与 pad 同八度，避免掉到 30Hz 以下听不见） */
       this._tone(midiToFreq(chordMidi[0]), this._chordNext + 0.02, chordSec * 1.05, 0.055, 'sine', 0.3, 0, 0);
+      /* 弦乐铺底：根音 + 五音，慢起慢落，给和弦加身体 */
+      if (this._intensity > 0.3) {
+        this._stringPad(midiToFreq(chordMidi[0]), this._chordNext, chordSec * 1.15, 0.03, -0.35);
+        this._stringPad(midiToFreq(chordMidi[Math.min(2, chordMidi.length - 1)]), this._chordNext, chordSec * 1.15, 0.022, 0.35);
+      }
       /* 高八度叠层：繁盛时让和弦更"满" */
       if (this._intensity > 0.35) {
         this._chordTone(midiToFreq(chordMidi[0] + 12), this._chordNext, chordSec * 0.9, padAmp * 0.45, waves.chordPad, 0.3);
@@ -696,7 +701,7 @@ export class AudioEngine {
       const pool = this._chordTones;
       const midi = pool[this._arpIdx % pool.length] + (this._arpIdx % 5 === 4 ? 24 : 12);
       this._arpIdx++;
-      this._tone(midiToFreq(midi), now + 0.01, 0.42, 0.038, 'triangle', 0.55, 0, this._arpIdx % 2 ? 0.32 : -0.32);
+      this._pluck(midiToFreq(midi), now + 0.01, 0.045, this._arpIdx % 2 ? 0.32 : -0.32);
     }
 
     /* Layer 2c: 高频微光 —— 稀疏的高八度纯音（不是噪声） */
@@ -752,7 +757,7 @@ export class AudioEngine {
           const counterFreq = this._degreeFreq(counterDegree, counterOct);
           const counterAmp = dyn.counter;
           const counterDur = dur * 0.8;
-          this._tone(counterFreq, this.nextNote, counterDur, counterAmp, waves.counter, 0.5, 0, 0.42);
+          this._flute(counterFreq, this.nextNote, counterDur, counterAmp * 0.7, 0.42);
         }
       }
       // 保留原有 cell 触发音（新生儿）
@@ -1052,6 +1057,83 @@ export class AudioEngine {
       g.connect(out);
       osc.start(when);
       osc.stop(when + q.d + 0.1);
+    }
+  }
+
+  /* ---- 竖琴/拨弦：锯齿波 + 快速下扫低通，短促有颗粒感 ---- */
+  _pluck(freq, when, amp = 0.045, pan = 0) {
+    if (!this.built || !this.enabled) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.04;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, when);
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'lowpass';
+    flt.frequency.setValueAtTime(Math.min(9000, freq * 7), when);
+    flt.frequency.exponentialRampToValueAtTime(Math.max(260, freq * 1.3), when + 0.2);
+    flt.Q.value = 1.1;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, amp), when + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + 0.34);
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    osc.connect(flt); flt.connect(g); g.connect(p); p.connect(this.noteBus);
+    const s = ctx.createGain(); s.gain.value = 0.45; p.connect(s); s.connect(this.delay);
+    osc.start(when); osc.stop(when + 0.38);
+  }
+
+  /* ---- 弦乐铺底：两个微失谐锯齿 + 慢起慢落，给和弦加厚度 ---- */
+  _stringPad(freq, when, dur, amp = 0.028, pan = 0) {
+    if (!this.built || !this.enabled) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.025;
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    const flt = ctx.createBiquadFilter();
+    flt.type = 'lowpass';
+    flt.frequency.value = Math.max(500, Math.min(3200, freq * 5));
+    flt.Q.value = 0.6;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    out.connect(flt); flt.connect(p); p.connect(this.master);
+    out.gain.setValueAtTime(0.0001, when);
+    out.gain.linearRampToValueAtTime(amp, when + Math.min(1.0, dur * 0.35));
+    out.gain.linearRampToValueAtTime(0.0001, when + dur);
+    for (const det of [-6, 6]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, when);
+      osc.detune.setValueAtTime(det, when);
+      osc.connect(out);
+      osc.start(when); osc.stop(when + dur + 0.1);
+    }
+  }
+
+  /* ---- 长笛/木管：基音 + 少量二次谐波，柔起柔落 ---- */
+  _flute(freq, when, dur, amp = 0.05, pan = 0) {
+    if (!this.built || !this.enabled) return;
+    if (!Number.isFinite(freq) || freq <= 0) return;
+    if (!Number.isFinite(amp)) amp = 0.045;
+    const ctx = this.ctx;
+    const g = ctx.createGain();
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-0.8, Math.min(0.8, pan));
+    g.connect(p); p.connect(this.noteBus);
+    const attack = Math.min(0.09, dur * 0.3);
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.linearRampToValueAtTime(amp, when + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    for (const [r, a] of [[1, 1], [2, 0.16]]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * r, when);
+      const gg = ctx.createGain();
+      gg.gain.value = a;
+      osc.connect(gg); gg.connect(g);
+      osc.start(when); osc.stop(when + dur + 0.05);
     }
   }
 
