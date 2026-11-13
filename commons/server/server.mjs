@@ -15,9 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ReactionDiffusionEngine, normalizeField } from '../src/scientific.js';
-import { structuralSignature, signatureDistance } from './research/signature.mjs';
-import { hashString, mulberry32 } from '../src/rng.js';
+import { evaluateTarget } from './research/score.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PARENT = path.resolve(HERE, '..');
@@ -163,65 +161,7 @@ function allowRate(ip) {
   return true;
 }
 
-/* 没带种子时，用配方 id 派生一个确定性的 4 核种子，保证服务端复核可复现 */
-function deterministicMask(seedStr) {
-  const w = 64;
-  const h = 64;
-  const mask = new Uint8Array(w * h);
-  const rand = mulberry32(hashString(seedStr || 'commons'));
-  for (let d = 0; d < 4; d++) {
-    const cx = 8 + Math.floor(rand() * (w - 16));
-    const cy = 8 + Math.floor(rand() * (h - 16));
-    const r = 4 + Math.floor(rand() * 3);
-    for (let y = Math.max(0, cy - r); y <= Math.min(h - 1, cy + r); y++) {
-      for (let x = Math.max(0, cx - r); x <= Math.min(w - 1, cx + r); x++) {
-        if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) mask[y * w + x] = 255;
-      }
-    }
-  }
-  return mask;
-}
-
-function normalizeMask(input, maskW, maskH) {
-  if (!Array.isArray(input) || !input.length) return null;
-  const mw = Math.round(clamp(maskW, 8, 96, 64));
-  const mh = Math.round(clamp(maskH, 8, 96, 64));
-  const need = mw * mh;
-  if (input.length < need) return null;
-  const out = new Uint8Array(need);
-  for (let i = 0; i < need; i++) {
-    out[i] = Math.round(clamp(input[i], 0, 255, 0));
-  }
-  return { mask: out, maskW: mw, maskH: mh };
-}
-
-function evaluate(target, params) {
-  const w = 64;
-  const h = 64;
-  const maskInfo = normalizeMask(params.mask, params.maskW, params.maskH);
-  const seed = maskInfo ? maskInfo.mask : deterministicMask(params.recipeId || params.name);
-  const rd = new ReactionDiffusionEngine(w, h, {
-    preset: 'gs_spots',
-    engine: 'grayScott',
-    f: clamp(params.f, 0.005, 0.09, 0.035),
-    k: clamp(params.k, 0.005, 0.09, 0.062),
-    D_u: clamp(params.D_u, 0.02, 0.3, 0.16),
-    D_v: clamp(params.D_v, 0.02, 0.2, 0.08),
-    dt: clamp(params.dt, 0.2, 1.0, 1.0),
-    boundary: 'torus',
-    pattern: 'ring',
-    mask: seed,
-    maskW: maskInfo ? maskInfo.maskW : 64,
-    maskH: maskInfo ? maskInfo.maskH : 64,
-  });
-  const steps = Math.round(clamp(target.verify?.steps, 120, 1200, 480));
-  for (let i = 0; i < steps; i++) rd.step();
-  const field = normalizeField(rd.vField);
-  const features = structuralSignature(field, w, h);
-  const distance = signatureDistance(target.features, features);
-  const score = Math.round((100 / (1 + distance)) * 10) / 10;
-  return { score, distance: Math.round(distance * 1000) / 1000, features, steps, usedMask: !!maskInfo };
-}
+/* 没带种子时由 score.mjs 派生确定性种子，保证服务端复核可复现 */
 
 function publicTarget(t) {
   return {
@@ -233,6 +173,7 @@ function publicTarget(t) {
     h: t.h,
     field: t.field,
     features: t.features,
+    calibration: t.calibration || null,
     source: t.source || TARGETS.source || null,
   };
 }
@@ -312,7 +253,7 @@ async function handleApi(req, res, url) {
     };
     let result;
     try {
-      result = evaluate(target, params);
+      result = evaluateTarget(target, params);
     } catch (err) {
       console.error('[research] 复核失败：', err);
       return sendJson(res, 500, { ok: false, error: '服务端复核失败' });

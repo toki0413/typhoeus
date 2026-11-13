@@ -2798,10 +2798,11 @@ function renderResearchTarget() {
     const src = t.source
       ? `${esc(t.source.citation)}<br>${esc(t.source.license)} · ${esc(t.source.note || '')}`
       : '';
-    meta.innerHTML = `<b>${esc(t.label)}</b><br>${src}<br>
+    meta.innerHTML = `<b>${esc(t.label)}</b> · ${t.kind === 'real' ? '真实实验' : '文献校准'}<br>${src}<br>
       ρ ${(t.features.density * 100).toFixed(1)}% · A ${(t.features.anisotropy ?? 0).toFixed(2)} ·
       L_c ${t.features.period || '—'} · N ${Math.round((t.features.components ?? 0) * t.w * t.h)} ·
-      P ${(t.features.perimeter ?? 0).toFixed(2)}`;
+      P ${(t.features.perimeter ?? 0).toFixed(2)}
+      ${t.calibration ? `<br>参考上限 ~${Number(t.calibration.bestScore).toFixed(1)} · ${esc(t.calibration.note || '')}` : ''}`;
   }
 }
 
@@ -2834,6 +2835,8 @@ async function loadResearchTargets() {
       sel.value = data.targets[0].id;
     }
     $('#researchVerify').disabled = false;
+    const exportBtn = $('#researchExportBoard');
+    if (exportBtn) exportBtn.disabled = false;
     if (status) {
       status.textContent = '已连接研究服务。服务端会用确定性种子重跑 480 步，再按结构统计评分。';
       if (data.storage === 'ephemeral') {
@@ -2848,6 +2851,8 @@ async function loadResearchTargets() {
     if (sel) sel.innerHTML = '<option value="">未连接</option>';
     const verify = $('#researchVerify');
     if (verify) verify.disabled = true;
+    const exportBtn = $('#researchExportBoard');
+    if (exportBtn) exportBtn.disabled = true;
     if (status) {
       status.textContent = '未连接研究服务（当前为静态预览）。服务端复核与共享榜单需要 FunctionWeb 部署。';
     }
@@ -2866,6 +2871,28 @@ async function loadResearchBoard() {
     renderResearchBoard(data.items, target);
   } catch (_) {
     host.innerHTML = '<div class="rb-empty">榜单暂不可用</div>';
+  }
+}
+
+async function exportResearchBoard() {
+  const target = currentResearchTarget();
+  if (!target) return;
+  try {
+    const res = await fetch(`/api/research/leaderboard?targetId=${encodeURIComponent(target.id)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.items?.length) {
+      toast('还没有可导出的榜单记录', 'warn');
+      return;
+    }
+    downloadJSON(`commons-research-${target.id}-${Date.now()}.json`, {
+      target: target.id,
+      exportedAt: new Date().toISOString(),
+      items: data.items,
+    });
+    toast('榜单已导出', 1600);
+  } catch (err) {
+    toast(`导出失败：${err.message}`, 'warn');
   }
 }
 
@@ -3189,6 +3216,7 @@ function bindUI() {
   });
   $('#researchExport')?.addEventListener('click', exportLocalDiscoveries);
   $('#researchVerify')?.addEventListener('click', submitResearchVerification);
+  $('#researchExportBoard')?.addEventListener('click', exportResearchBoard);
   $('#researchTarget')?.addEventListener('change', () => {
     renderResearchTarget();
     loadResearchBoard();

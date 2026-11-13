@@ -306,6 +306,7 @@
               <option value="">连接中…</option>
             </select>
             <button id="researchVerify" class="primary" disabled>提交当前生命</button>
+            <button id="researchExportBoard" class="ghost" disabled>导出榜单</button>
           </div>
         </div>
         <div class="research-lab-body">
@@ -351,9 +352,10 @@
       <section class="research-boundary">
         <h3>边界</h3>
         <p>
-          外部目标来自公开的 CIMA 实验斑图（CC BY 4.0），复核由服务端用确定性种子重跑完成，
-          榜单也由服务端保存。但仍要说明：评分是结构统计距离，不比较相位，也不宣称恢复实验参数；
-          榜单目前存在运行实例的临时目录里，重启会清空，还没有账号、去重与长期存储。
+          外部目标来自公开的 CIMA 实验斑图（CC BY 4.0），另有两个文献参数生成的校准目标，用于验证评分链路。
+          复核由服务端用确定性种子重跑完成，榜单也由服务端保存，但可以随时导出 JSON。
+          仍需说明：评分是结构统计距离，不比较相位，也不宣称恢复实验参数；榜单目前存在运行实例的临时目录里，
+          重启会清空，长期存储需要外部数据库，当前平台没有持久卷。
         </p>
       </section>
     </main>
