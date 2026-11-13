@@ -18,6 +18,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TARGETS = JSON.parse(
   readFileSync(path.join(HERE, '..', 'server', 'research', 'targets.json'), 'utf8'),
 ).targets;
+const SURFACE = JSON.parse(
+  readFileSync(path.join(HERE, '..', 'server', 'research', 'surface.json'), 'utf8'),
+);
 
 const W = 64;
 const H = 64;
@@ -101,4 +104,27 @@ test('目标包完整：来源、许可、特征、校准', () => {
   assert.ok(real.length >= 2, '至少保留两个真实实验目标');
   const stripes = real.find((t) => t.pattern.includes('条纹'));
   assert.ok(stripes.features.anisotropy > 0.5, '真实条纹目标应具高各向异性');
+});
+
+test('响应面完整：网格点有限，且能给出高分候选', () => {
+  assert.ok(SURFACE.points.length >= 100, `响应面点数 ${SURFACE.points.length}`);
+  for (const p of SURFACE.points) {
+    assert.ok(Number.isFinite(p.f) && Number.isFinite(p.k));
+    for (const key of ['density', 'anisotropy', 'period', 'components', 'perimeter']) {
+      assert.ok(Number.isFinite(p.features[key]), `响应面缺特征 ${key}`);
+    }
+  }
+  const target = TARGETS.find((t) => t.id === 'gs-spots-lit');
+  const best = SURFACE.points
+    .map((p) => 100 / (1 + signatureDistance(target.features, p.features)))
+    .reduce((a, b) => Math.max(a, b), 0);
+  assert.ok(best > 80, `校准目标响应面最高预测 ${best.toFixed(1)}`);
+});
+
+test('固定种子校准目标不受提交种子影响', () => {
+  const target = TARGETS.find((t) => t.id === 'gs-maze-lit');
+  const a = evaluateTarget(target, { f: 0.026, k: 0.058, D_u: 0.16, D_v: 0.08, dt: 1, mask: [255], maskW: 1, maskH: 1 });
+  const b = evaluateTarget(target, { f: 0.026, k: 0.058, D_u: 0.16, D_v: 0.08, dt: 1 });
+  assert.equal(a.score, b.score);
+  assert.ok(a.usedFixedSeed);
 });

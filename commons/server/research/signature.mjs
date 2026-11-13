@@ -26,7 +26,8 @@ export function structuralSignature(field, w, h, threshold = 0.5) {
   }
   const density = occupied / Math.max(1, n);
 
-  /* 结构张量在各向异性上的投影：条纹接近 1，斑点接近 0 */
+  /* 全局结构张量：条纹方向一致时相干度接近 1，斑点接近 0。
+   * 局部窗口会把单个斑点的边缘也算成“局部有条理”，反而失去判别力。 */
   let jxx = 0;
   let jyy = 0;
   let jxy = 0;
@@ -41,7 +42,9 @@ export function structuralSignature(field, w, h, threshold = 0.5) {
     }
   }
   const trace = jxx + jyy;
-  const anisotropy = trace < 1e-12 ? 0 : Math.min(1, Math.sqrt((jxx - jyy) ** 2 + 4 * jxy * jxy) / trace);
+  const anisotropy = trace < 1e-12
+    ? 0
+    : Math.min(1, Math.sqrt((jxx - jyy) ** 2 + 4 * jxy * jxy) / trace);
 
   /* 相关长度：复用科学引擎的自相关定义，输入换成二值场 */
   const floats = new Float32Array(n);
@@ -86,6 +89,34 @@ export function structuralSignature(field, w, h, threshold = 0.5) {
     components: components / Math.max(1, n),
     perimeter: edges / Math.max(1, n),
   };
+}
+
+function localAnisotropy(bin, w, h, win) {
+  let weighted = 0;
+  let weight = 0;
+  for (let y0 = 0; y0 < h; y0 += win) {
+    for (let x0 = 0; x0 < w; x0 += win) {
+      let jxx = 0;
+      let jyy = 0;
+      let jxy = 0;
+      for (let y = Math.max(1, y0); y < Math.min(h - 1, y0 + win); y++) {
+        for (let x = Math.max(1, x0); x < Math.min(w - 1, x0 + win); x++) {
+          const i = y * w + x;
+          const gx = (bin[i + 1] - bin[i - 1]) * 0.5;
+          const gy = (bin[i + w] - bin[i - w]) * 0.5;
+          jxx += gx * gx;
+          jyy += gy * gy;
+          jxy += gx * gy;
+        }
+      }
+      const trace = jxx + jyy;
+      if (trace < 1e-12) continue;
+      const coherence = Math.sqrt((jxx - jyy) ** 2 + 4 * jxy * jxy) / trace;
+      weighted += coherence * trace;
+      weight += trace;
+    }
+  }
+  return weight > 0 ? Math.min(1, weighted / weight) : 0;
 }
 
 export function signatureDistance(target, candidate) {

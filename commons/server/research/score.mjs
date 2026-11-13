@@ -44,7 +44,14 @@ export function normalizeMask(input, maskW, maskH) {
 }
 
 export function evaluateTarget(target, params, { w = 64, h = 64 } = {}) {
-  const maskInfo = normalizeMask(params.mask, params.maskW, params.maskH);
+  const fixed = target.verify?.fixedMask;
+  const maskInfo = fixed
+    ? {
+        mask: deterministicMask(target.verify?.fixedMaskSeed || 'calibration-seed', w, h),
+        maskW: w,
+        maskH: h,
+      }
+    : normalizeMask(params.mask, params.maskW, params.maskH);
   const seed = maskInfo ? maskInfo.mask : deterministicMask(params.recipeId || params.name, w, h);
   const rd = new ReactionDiffusionEngine(w, h, {
     preset: 'gs_spots',
@@ -66,5 +73,5 @@ export function evaluateTarget(target, params, { w = 64, h = 64 } = {}) {
   const features = structuralSignature(field, w, h);
   const distance = signatureDistance(target.features, features);
   const score = Math.round((100 / (1 + distance)) * 10) / 10;
-  return { score, distance: Math.round(distance * 1000) / 1000, features, steps, usedMask: !!maskInfo };
+  return { score, distance: Math.round(distance * 1000) / 1000, features, steps, usedMask: !!maskInfo, usedFixedSeed: !!fixed };
 }

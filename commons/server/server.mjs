@@ -16,6 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { evaluateTarget } from './research/score.mjs';
+import { signatureDistance } from './research/signature.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PARENT = path.resolve(HERE, '..');
@@ -27,10 +28,14 @@ const TARGETS_FILE = path.join(HERE, 'research', 'targets.json');
 /* 部署环境的 dist 通常是只读的；优先写项目内目录，失败则回落到临时目录。
  * 临时目录只在当前实例生命周期内有效，health 会如实返回存储模式。 */
 function resolveStoreDir() {
+  const configured = process.env.COMMONS_DATA_DIR
+    ? path.resolve(process.env.COMMONS_DATA_DIR)
+    : null;
   const candidates = [
+    configured,
     path.join(HERE, 'research'),
     path.join(os.tmpdir(), 'commons-research'),
-  ];
+  ].filter(Boolean);
   for (const dir of candidates) {
     try {
       fs.mkdirSync(dir, { recursive: true });
@@ -38,16 +43,22 @@ function resolveStoreDir() {
       return dir;
     } catch (_) { /* 尝试下一个 */ }
   }
-  return candidates[0];
+  return candidates[candidates.length - 1];
 }
 
 const STORE_DIR = resolveStoreDir();
 const STORE_FILE = path.join(STORE_DIR, 'submissions.json');
-const STORE_MODE = STORE_DIR === path.join(os.tmpdir(), 'commons-research') ? 'ephemeral' : 'local';
+const CONFIGURED_STORE = process.env.COMMONS_DATA_DIR
+  ? path.resolve(process.env.COMMONS_DATA_DIR)
+  : null;
+const STORE_MODE = STORE_DIR === CONFIGURED_STORE
+  ? 'configured'
+  : STORE_DIR === path.join(os.tmpdir(), 'commons-research') ? 'ephemeral' : 'local';
 const PORT = Number(process.env.PORT) || 8000;
 const HOST = '0.0.0.0';
 
 const TARGETS = loadTargets();
+const SURFACE = loadSurface();
 const STORE = loadStore();
 const RATE = new Map(); // ip -> [timestamps]
 const RATE_WINDOW_MS = 10 * 60 * 1000;
@@ -70,6 +81,14 @@ function loadStore() {
     if (Array.isArray(raw.items)) return raw;
   } catch (_) { /* 首次运行没有文件 */ }
   return { version: 1, items: [] };
+}
+
+function loadSurface() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(HERE, 'research', 'surface.json'), 'utf8'));
+    if (Array.isArray(raw.points) && raw.points.length) return raw;
+  } catch (_) { /* 没有响应面时提议接口返回空 */ }
+  return { version: 1, seed: 'calibration-seed', points: [] };
 }
 
 function saveStore() {
@@ -225,6 +244,24 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { targetId, items: leaderboard(targetId) });
   }
 
+  /* 响应面代理：在固定校准种子下，用预先算好的 (f,k)→签名 网格排序候选。
+   * 这不是神经算子，只是第一级代理；最终分数必须由 /verify 重跑确认。 */
+  if (url.pathname === '/api/research/propose' && req.method === 'GET') {
+    const target = TARGETS.targets.find((t) => t.id === url.searchParams.get('targetId'));
+    if (!target) return sendJson(res, 404, { ok: false, error: '目标不存在' });
+    if (!SURFACE.points.length) return sendJson(res, 200, { ok: true, items: [], note: '响应面未载入' });
+    const limit = Math.min(6, Math.max(1, Number(url.searchParams.get('limit')) || 3));
+    const items = SURFACE.points
+      .map((p) => ({
+        f: p.f,
+        k: p.k,
+        predictedScore: Math.round((100 / (1 + signatureDistance(target.features, p.features))) * 10) / 10,
+      }))
+      .sort((a, b) => b.predictedScore - a.predictedScore)
+      .slice(0, limit);
+    return sendJson(res, 200, { ok: true, targetId: target.id, seed: SURFACE.seed, items });
+  }
+
   if (url.pathname === '/api/research/verify' && req.method === 'POST') {
     if (!allowRate(clientIp(req))) {
       return sendJson(res, 429, { ok: false, error: '提交太频繁了，休息一会儿再试' });
@@ -251,6 +288,8 @@ async function handleApi(req, res, url) {
       recipeId: cleanText(body.recipeId, 80),
       name: cleanText(body.name, 40),
     };
+    /* 候选参数复核：强制使用与响应面相同的固定校准种子，保证预测和重跑可比 */
+    if (body.useCalibrationSeed) params.recipeId = 'calibration-seed';
     let result;
     try {
       result = evaluateTarget(target, params);
@@ -297,6 +336,7 @@ async function handleApi(req, res, url) {
       targetFeatures: target.features,
       steps: result.steps,
       usedMask: result.usedMask,
+      usedFixedSeed: result.usedFixedSeed,
       persisted,
       rank: rank || null,
       leaderboard: board,

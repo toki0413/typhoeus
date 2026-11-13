@@ -2835,12 +2835,16 @@ async function loadResearchTargets() {
       sel.value = data.targets[0].id;
     }
     $('#researchVerify').disabled = false;
+    const proposeBtn = $('#researchPropose');
+    if (proposeBtn) proposeBtn.disabled = false;
     const exportBtn = $('#researchExportBoard');
     if (exportBtn) exportBtn.disabled = false;
     if (status) {
       status.textContent = '已连接研究服务。服务端会用确定性种子重跑 480 步，再按结构统计评分。';
       if (data.storage === 'ephemeral') {
         status.textContent += ' 榜单暂存于当前运行实例，重启后会清空。';
+      } else if (data.storage === 'configured') {
+        status.textContent += ' 榜单写入已配置的持久目录。';
       }
     }
     renderResearchTarget();
@@ -2851,6 +2855,8 @@ async function loadResearchTargets() {
     if (sel) sel.innerHTML = '<option value="">未连接</option>';
     const verify = $('#researchVerify');
     if (verify) verify.disabled = true;
+    const proposeBtn = $('#researchPropose');
+    if (proposeBtn) proposeBtn.disabled = true;
     const exportBtn = $('#researchExportBoard');
     if (exportBtn) exportBtn.disabled = true;
     if (status) {
@@ -2914,7 +2920,7 @@ function renderResearchResult(data) {
       <span class="rr-unit">/ 100 · 结构距离 ${Number(data.distance).toFixed(3)}</span>
     </div>
     <div class="rr-meta">
-      服务端重跑 ${data.steps} 步 · ${data.usedMask ? '使用你提交的种子' : '使用确定性默认种子'}
+      服务端重跑 ${data.steps} 步 · ${data.usedFixedSeed ? '目标固定校准种子' : data.usedMask ? '使用你提交的种子' : '使用确定性默认种子'}
       ${data.rank ? ` · 本轮排名 #${data.rank}` : ''}
       ${data.persisted === false ? ' · 榜单暂不可写' : ''}
     </div>
@@ -2923,7 +2929,25 @@ function renderResearchResult(data) {
     </div>`;
 }
 
-async function submitResearchVerification() {
+function researchPayloadBase() {
+  const g = state.recipe.seed.genome;
+  const sci = g.scientific || {};
+  return {
+    name: state.recipe.seed.name,
+    recipeId: state.recipe.id,
+    engine: g.engine,
+    f: Number.isFinite(sci.f) ? sci.f : REACTION_DIFFUSION_PRESETS.gs_spots.f,
+    k: Number.isFinite(sci.k) ? sci.k : REACTION_DIFFUSION_PRESETS.gs_spots.k,
+    D_u: Number.isFinite(sci.D_u) ? sci.D_u : PUZZLE_DU,
+    D_v: Number.isFinite(sci.D_v) ? sci.D_v : PUZZLE_DV,
+    dt: Number.isFinite(sci.dt) ? sci.dt : 1.0,
+    mask: Array.isArray(sci.mask) ? sci.mask : null,
+    maskW: sci.maskW || 64,
+    maskH: sci.maskH || 64,
+  };
+}
+
+async function runResearchVerify(payload) {
   const target = currentResearchTarget();
   if (!target) {
     toast('先选择一个研究目标', 'warn');
@@ -2936,30 +2960,11 @@ async function submitResearchVerification() {
     btn.textContent = '复核中…';
   }
   if (status) status.textContent = '服务端正在重跑反应—扩散…';
-
-  const g = state.recipe.seed.genome;
-  const sci = g.scientific || {};
-  const mask = Array.isArray(sci.mask) ? sci.mask : null;
-  const payload = {
-    targetId: target.id,
-    name: state.recipe.seed.name,
-    recipeId: state.recipe.id,
-    engine: g.engine,
-    f: Number.isFinite(sci.f) ? sci.f : REACTION_DIFFUSION_PRESETS.gs_spots.f,
-    k: Number.isFinite(sci.k) ? sci.k : REACTION_DIFFUSION_PRESETS.gs_spots.k,
-    D_u: Number.isFinite(sci.D_u) ? sci.D_u : PUZZLE_DU,
-    D_v: Number.isFinite(sci.D_v) ? sci.D_v : PUZZLE_DV,
-    dt: Number.isFinite(sci.dt) ? sci.dt : 1.0,
-    mask,
-    maskW: sci.maskW || 64,
-    maskH: sci.maskH || 64,
-  };
-
   try {
     const res = await fetch('/api/research/verify', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, targetId: target.id }),
     });
     const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
     if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -2978,6 +2983,66 @@ async function submitResearchVerification() {
     if (btn) {
       btn.disabled = false;
       btn.textContent = '提交当前生命';
+    }
+  }
+}
+
+async function submitResearchVerification() {
+  if (!currentResearchTarget()) {
+    toast('先选择一个研究目标', 'warn');
+    return;
+  }
+  await runResearchVerify(researchPayloadBase());
+}
+
+async function submitResearchCandidate(f, k) {
+  if (!currentResearchTarget()) {
+    toast('先选择一个研究目标', 'warn');
+    return;
+  }
+  await runResearchVerify({
+    ...researchPayloadBase(),
+    f,
+    k,
+    useCalibrationSeed: true,
+  });
+}
+
+async function proposeResearchCandidates() {
+  const target = currentResearchTarget();
+  if (!target) {
+    toast('先选择一个研究目标', 'warn');
+    return;
+  }
+  const host = $('#researchProposals');
+  const btn = $('#researchPropose');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '提议中…';
+  }
+  try {
+    const res = await fetch(`/api/research/propose?targetId=${encodeURIComponent(target.id)}&limit=3`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.items?.length) {
+      if (host) host.hidden = true;
+      toast('响应面未载入', 'warn');
+      return;
+    }
+    if (host) {
+      host.hidden = false;
+      host.innerHTML = `<div class="rp-head">响应面代理 · 固定校准种子 · 点击候选做服务端复核（非神经算子）</div>
+        ${data.items.map((it) => `<button class="rp-item" data-f="${it.f}" data-k="${it.k}">
+          <span>f ${Number(it.f).toFixed(3)} · k ${Number(it.k).toFixed(3)}</span>
+          <span class="rp-score">预测 ${Number(it.predictedScore).toFixed(1)}</span>
+        </button>`).join('')}`;
+    }
+  } catch (err) {
+    toast(`提议失败：${err.message}`, 'warn');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '代理提议';
     }
   }
 }
@@ -3216,8 +3281,18 @@ function bindUI() {
   });
   $('#researchExport')?.addEventListener('click', exportLocalDiscoveries);
   $('#researchVerify')?.addEventListener('click', submitResearchVerification);
+  $('#researchPropose')?.addEventListener('click', proposeResearchCandidates);
+  $('#researchProposals')?.addEventListener('click', (e) => {
+    const item = e.target.closest('[data-f][data-k]');
+    if (!item) return;
+    submitResearchCandidate(parseFloat(item.dataset.f), parseFloat(item.dataset.k));
+  });
   $('#researchExportBoard')?.addEventListener('click', exportResearchBoard);
   $('#researchTarget')?.addEventListener('change', () => {
+    const proposals = $('#researchProposals');
+    if (proposals) proposals.hidden = true;
+    const result = $('#researchResult');
+    if (result) result.hidden = true;
     renderResearchTarget();
     loadResearchBoard();
   });

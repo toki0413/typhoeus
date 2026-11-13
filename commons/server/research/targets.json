@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-13T05:43:00.971Z",
+  "generatedAt": "2026-11-13T06:03:05.772Z",
   "source": {
     "citation": "Kazarnikov et al. 2025, arXiv:2504.02530, Fig. 6 [I]",
     "license": "CC BY 4.0",
@@ -4135,8 +4135,8 @@
         "perimeter": 0.158447265625
       },
       "calibration": {
-        "bestScore": 69.4,
-        "note": "5×5 参考网格搜索的最高分，不公开参数"
+        "bestScore": 70.2,
+        "note": "固定校准种子下 7×6 参考搜索的最高分，不公开参数"
       }
     },
     {
@@ -8265,8 +8265,8 @@
         "perimeter": 0.223388671875
       },
       "calibration": {
-        "bestScore": 32.4,
-        "note": "5×5 参考网格搜索的最高分，不公开参数"
+        "bestScore": 34.8,
+        "note": "固定校准种子下 7×6 参考搜索的最高分，不公开参数"
       }
     },
     {
@@ -12385,11 +12385,8 @@
         "preset": "gs_spots",
         "steps": 480,
         "w": 64,
-        "h": 64
-      },
-      "calibration": {
-        "bestScore": 100,
-        "note": "固定校准种子下可达；不同种子会得到不同分数"
+        "h": 64,
+        "fixedMask": true
       },
       "features": {
         "density": 0.15673828125,
@@ -12397,11 +12394,15 @@
         "period": 12,
         "components": 0.001220703125,
         "perimeter": 0.072265625
+      },
+      "calibration": {
+        "bestScore": 100,
+        "note": "固定校准种子下可达；不同种子会得到不同分数"
       }
     },
     {
       "id": "gs-maze-lit",
-      "label": "文献 · 迷宫（校准）",
+      "label": "文献 · 条纹/迷宫（校准）",
       "pattern": "synthetic",
       "kind": "literature",
       "w": 64,
@@ -16515,11 +16516,8 @@
         "preset": "gs_spots",
         "steps": 480,
         "w": 64,
-        "h": 64
-      },
-      "calibration": {
-        "bestScore": 100,
-        "note": "固定校准种子下可达；不同种子会得到不同分数"
+        "h": 64,
+        "fixedMask": true
       },
       "features": {
         "density": 0.2763671875,
@@ -16527,6 +16525,10 @@
         "period": 17,
         "components": 0.00146484375,
         "perimeter": 0.10888671875
+      },
+      "calibration": {
+        "bestScore": 100,
+        "note": "固定校准种子下可达；不同种子会得到不同分数"
       }
     }
   ]
