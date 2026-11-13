@@ -2835,10 +2835,7 @@ function renderResearchTarget() {
   const verify = $('#researchVerify');
   if (verify) verify.textContent = isLE ? '用这些参数复核' : '提交当前生命';
   const propose = $('#researchPropose');
-  if (propose) {
-    propose.disabled = isLE;
-    propose.title = isLE ? 'LE 目标暂用参数面板，不使用 GS 响应面' : '';
-  }
+  if (propose) propose.disabled = false;
 }
 
 function renderResearchBoard(items, target) {
