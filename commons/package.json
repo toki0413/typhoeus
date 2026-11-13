@@ -4,7 +4,7 @@
   "description": "",
   "type": "module",
   "scripts": {
-    "test": "node --test test/unit.test.mjs && node --test test/science.test.mjs && node --test test/fit.test.mjs && node --test test/puzzle.test.mjs && node --test test/research.test.mjs && node test/app-smoke.mjs && node e2e-test.mjs",
+    "test": "node --test test/unit.test.mjs && node --test test/science.test.mjs && node --test test/fit.test.mjs && node --test test/puzzle.test.mjs && node --test test/research.test.mjs && node --test test/le.test.mjs && node test/app-smoke.mjs && node e2e-test.mjs",
     "test:unit": "node --test test/unit.test.mjs",
     "test:science": "node --test test/science.test.mjs",
     "test:fit": "node --test test/fit.test.mjs",

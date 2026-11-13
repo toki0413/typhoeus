@@ -1049,6 +1049,15 @@ function renderRulePanel() {
           ['扩散系数 D_v',          st.D_v ?? 0.2, 0.05, 1.0, 0.02, 'D_v'],
           ['时间步 dt',             st.dt  ?? 0.1, 0.01, 0.3, 0.01, 'dt'],
         ]},
+      lengyelEpstein: { label: 'Lengyel–Epstein · CIMA 化学斑图',
+        sliders: [
+          ['反应物 a',              st.a     ?? 8,    5, 14, 0.1, 'a'],
+          ['反应物 b',              st.b     ?? 6,    1, 8, 0.1, 'b'],
+          ['时间尺度 σ',            st.sigma ?? 0.6,  0.2, 3, 0.05, 'sigma'],
+          ['扩散系数 D_u',          st.D_u   ?? 1,    0.2, 3, 0.05, 'D_u'],
+          ['扩散系数 D_v',          st.D_v   ?? 10,   2, 20, 0.5, 'D_v'],
+          ['时间步 dt',             st.dt    ?? 0.02, 0.005, 0.05, 0.005, 'dt'],
+        ]},
     };
     const curType = st.engineType || 'grayScott';
     const curSci = sciParams[curType];
@@ -1065,7 +1074,8 @@ function renderRulePanel() {
       <p class="hint">
         <b>D_u / D_v</b> 扩散系数：越大越容易在空间传播；
         <b>f / k</b> Gray-Scott 里是"出生"和"死亡"的速率；
-        <b>a / b / c</b> FHN 里是阈值和恢复；
+        <b>a / b / c</b> FHN 里是阈值和恢复，Lengyel–Epstein 里是 CIMA 的反应物浓度；
+        <b>σ</b> 是 v 的反应时间尺度；
         <b>A / B</b> Brusselator 里是反应物浓度。
         所有都是真正的方程参数，不是游戏常量。
       </p>`;
@@ -3462,6 +3472,7 @@ function onRuleClick(e) {
     if (p.a !== undefined) sci.a = p.a;
     if (p.b !== undefined) sci.b = p.b;
     if (p.c !== undefined) sci.c = p.c;
+    if (p.sigma !== undefined) sci.sigma = p.sigma;
     if (p.A !== undefined) sci.A = p.A;
     if (p.B !== undefined) sci.B = p.B;
     state.sim.applyGenome(state.recipe.seed.genome);

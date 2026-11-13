@@ -73,6 +73,7 @@ import {
   computeSpatialPeriod,
   computeFieldEntropy,
   laplacian,
+  normalizeField,
   computeScientificMetrics,
   SCIENCE_VERSION,
 } from './scientific.js';
@@ -1032,6 +1033,15 @@ export class ScientificEngine {
           j01 = uu * uu;
           j10 = B - 2 * uu * vv;
           j11 = -uu * uu;
+        } else if (engine === 'lengyelEpstein') {
+          const sigma = Number.isFinite(params.sigma) ? params.sigma : 1;
+          const den = 1 + uu * uu;
+          const qu = 4 * vv * (1 - uu * uu) / (den * den);
+          const qv = 4 * uu / den;
+          j00 = -1 - qu;
+          j01 = -qv;
+          j10 = -sigma * qu;
+          j11 = -sigma * qv;
         }
         nextU[idx] = du[idx] + dtEff * (Du * lapDu + j00 * du[idx] + j01 * dv[idx]);
         nextV[idx] = dv[idx] + dtEff * (Dv * lapDv + j10 * du[idx] + j11 * dv[idx]);
@@ -1059,6 +1069,11 @@ export class ScientificEngine {
   _rdSnapshotAsGrid() {
     const n = this.w * this.h;
     const g = new Uint8Array(n);
+    if (this._rd.engineType === 'lengyelEpstein') {
+      const vn = normalizeField(this._rd.vField);
+      for (let i = 0; i < n; i++) g[i] = vn[i] > 0.5 ? 1 : 0;
+      return g;
+    }
     const v = this._rd.vField;
     for (let i = 0; i < n; i++) { g[i] = v[i] > 0.05 ? 1 : 0; }
     return g;
@@ -1113,7 +1128,7 @@ export class ScientificEngine {
       const engineType = sci.engineType || this._rd.params.engine;
       this._rd.params.engine = engineType;
       // 逐项覆盖（undefined 保留原值）
-      for (const key of ['D_u','D_v','f','k','a','b','c','A','B','dt','mask']) {
+      for (const key of ['D_u','D_v','f','k','a','b','c','A','B','sigma','dt','mask']) {
         if (sci[key] !== undefined) this._rd.params[key] = sci[key];
       }
       if (sci.mask === undefined) delete this._rd.params.mask;
@@ -1128,9 +1143,10 @@ export class ScientificEngine {
     const v = this._rd.vField;
     const u = this._rd.uField;
     const sci = computeScientificMetrics(v, u, this.w, this.h, 'reaction-diffusion');
+    const densityField = this._rd.engineType === 'lengyelEpstein' ? normalizeField(v) : v;
     let densitySum = 0;
-    for (let i = 0; i < v.length; i++) densitySum += v[i];
-    const density = densitySum / v.length;
+    for (let i = 0; i < densityField.length; i++) densitySum += densityField[i];
+    const density = densitySum / densityField.length;
 
     /* 真实指标：Shannon 场熵 / 二维自相关相关长度 / 有限时间 Lyapunov */
     const entropy = computeFieldEntropy(u);

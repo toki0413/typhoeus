@@ -91,6 +91,17 @@ export const REACTION_DIFFUSION_PRESETS = {
                 f: 0.030, k: 0.058, dt: 1.0,
                 note: 'Gray-Scott · 珊瑚状分枝' },
 
+  /* ---- Lengyel–Epstein（CIMA 反应的真实模型）----
+   * u_t = a - u - 4uv/(1+u²) + D_u∇²u
+   * v_t = σ(b - 4uv/(1+u²)) + D_v∇²v
+   * 参数取自线性稳定性筛选出的 Turing 失稳区；随机初值会长出条纹/六边形。 */
+  le_stripes: { label: 'CIMA 条纹', engine: 'lengyelEpstein',
+                a: 8, b: 6, sigma: 0.6, D_u: 1, D_v: 10, dt: 0.02,
+                note: 'Lengyel–Epstein · 化学条纹，CIMA 实验的同族模型' },
+  le_hex:     { label: 'CIMA 六边', engine: 'lengyelEpstein',
+                a: 8.5, b: 6, sigma: 0.6, D_u: 1, D_v: 10, dt: 0.02,
+                note: 'Lengyel–Epstein · 六边斑点，接近 CIMA 实验的蜂窝斑图' },
+
   /* ---- FitzHugh-Nagumo ---- */
   fhn_pulse:  { label: '神经脉冲', engine: 'fitzHughNagumo', D_u: 1.0, D_v: 1.0,
                 a: 0.7, b: 0.8, c: 10.0, dt: 0.5,
@@ -172,6 +183,10 @@ export class ReactionDiffusionEngine {
    * v=1 会瞬间耗尽 u，修正后的五点 Laplacian 下斑图会直接熄灭。 */
   _initField(pattern) {
     const { w, h } = this;
+    if (this.engineType === 'lengyelEpstein') {
+      this._initLengyelEpstein(pattern);
+      return;
+    }
     this.u.fill(1);        // 均匀 u = 1
     this.v.fill(0);        // 均匀 v = 0
     const cx = w / 2, cy = h / 2;
@@ -216,6 +231,53 @@ export class ReactionDiffusionEngine {
     }
   }
 
+  /* Lengyel–Epstein 的均匀稳态 + 扰动。
+   * u* = a - b，v* = b(1+u*²)/(4u*)；掩膜/图案只施加小幅扰动，
+   * 条纹与六边形由 Turing 失稳自行长出。 */
+  _initLengyelEpstein(pattern) {
+    const { w, h } = this;
+    const a = Number.isFinite(this.params.a) ? this.params.a : 8;
+    const b = Number.isFinite(this.params.b) ? this.params.b : 6;
+    const u0 = Math.max(0.05, a - b);
+    const v0 = b * (1 + u0 * u0) / (4 * u0);
+    this.u.fill(u0);
+    this.v.fill(v0);
+    const perturb = (idx, strength = 1) => {
+      this.u[idx] = u0 * (1 - 0.10 * strength);
+      this.v[idx] = v0 * (1 + 0.20 * strength);
+    };
+
+    const mask = this.params.mask;
+    if (mask && mask.length) {
+      const mw = this.params.maskW || Math.round(Math.sqrt(mask.length));
+      const mh = this.params.maskH || mw;
+      for (let y = 0; y < h; y++) {
+        const my = Math.min(mh - 1, Math.floor((y * mh) / h));
+        for (let x = 0; x < w; x++) {
+          const mx = Math.min(mw - 1, Math.floor((x * mw) / w));
+          const m = Math.max(0, Math.min(1, (mask[my * mw + mx] || 0) / 255));
+          if (m > 0) perturb(y * w + x, m);
+        }
+      }
+      return;
+    }
+    if (pattern === 'ring') {
+      const cx = w / 2;
+      const cy = h / 2;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (Math.hypot(x - cx, y - cy) < Math.min(w, h) * 0.15) perturb(y * w + x);
+        }
+      }
+    } else if (pattern === 'soup' || pattern === 'dot' || pattern === 'sparse') {
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (Math.random() < 0.02) perturb(y * w + x, 0.5 + Math.random());
+        }
+      }
+    }
+  }
+
   reset(pattern) {
     this.t = 0;
     this._initField(pattern || 'ring');
@@ -230,6 +292,7 @@ export class ReactionDiffusionEngine {
   /* ---- 一步 Euler 积分（D·dt 超限时自动分子步）---- */
   step() {
     const { w, h } = this;
+    const isLE = this.engineType === 'lengyelEpstein';
     const physics = this._physics;
     const diffMult = physics?.diffusionMult ?? PHYSICS_DEFAULTS.multipliers.diffusion;
     // Pet 情绪可乘性微调 dt（B2 反向 Bridge）：happy 节奏快、sick 节奏慢
@@ -240,7 +303,7 @@ export class ReactionDiffusionEngine {
     const gDecayV = physics?.globalDecayV ?? PHYSICS_DEFAULTS.multipliers.globalDecayV;
 
     // 土星环碎片：每 perturbation.rate 步注入扰动
-    if (physics?.perturbation && this.t % physics.perturbation.rate === 0) {
+    if (!isLE && physics?.perturbation && this.t % physics.perturbation.rate === 0) {
       const { intensity = 0.4 } = physics.perturbation;
       const fld = physics.noiseField;
       if (fld) {
@@ -257,7 +320,7 @@ export class ReactionDiffusionEngine {
     // Pet 情绪噪声（B2 反向 Bridge）：开心时偶尔注入小扰动制造生机。
     // 每 10 步一次、幅度 = _petNoiseBoost，避免每步注入把 Turing 斑图冲掉。
     const petNoise = physics?._petNoiseBoost ?? 0;
-    if (petNoise > 0 && this.t % 10 === 0) {
+    if (!isLE && petNoise > 0 && this.t % 10 === 0) {
       for (let i = 0; i < w * h; i++) {
         this.v[i] = clampSafe(this.v[i] + petNoise * (Math.random() - 0.5) * 2, 0, 1);
       }
@@ -368,6 +431,27 @@ export class ReactionDiffusionEngine {
           if (tidal) v_new[idx] *= tidal[idx];
         }
       }
+    } else if (engine === 'lengyelEpstein') {
+      const a = this.params.a;
+      const b = this.params.b;
+      const sigma = Number.isFinite(this.params.sigma) ? this.params.sigma : 1;
+      const baseD_u = D_u * diffMult;
+      const baseD_v = D_v * diffMult;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = y * w + x;
+          const lapU = laplacian(u, w, h, x, y, boundary);
+          const lapV = laplacian(v, w, h, x, y, boundary);
+          const uu = u[idx];
+          const vv = v[idx];
+          const q = 4 * uu * vv / (1 + uu * uu);
+          const Du = fU ? baseD_u * fU[idx] : baseD_u;
+          const Dv = fV ? baseD_v * fV[idx] : baseD_v;
+          u_new[idx] = clampSafe(uu + dtSub * (Du * lapU + a - uu - q), 0, 20);
+          v_new[idx] = clampSafe(vv + dtSub * (Dv * lapV + sigma * (b - q)), 0, 20);
+          if (tidal) v_new[idx] *= tidal[idx];
+        }
+      }
     }
 
     /* 双缓冲交换 */
@@ -381,6 +465,11 @@ export class ReactionDiffusionEngine {
   snapshot() {
     const n = this.w * this.h;
     const out = new Uint8Array(n);
+    if (this.engineType === 'lengyelEpstein') {
+      const vn = normalizeField(this.v);
+      for (let i = 0; i < n; i++) out[i] = clampSafe(Math.floor(vn[i] * 255), 0, 255);
+      return out;
+    }
     for (let i = 0; i < n; i++) {
       out[i] = clampSafe(Math.floor(this.v[i] * 255), 0, 255);
     }

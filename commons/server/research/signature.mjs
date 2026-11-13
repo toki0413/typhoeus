@@ -14,12 +14,37 @@ export const SIGNATURE_KEYS = ['density', 'anisotropy', 'period', 'components', 
 export const SIGNATURE_SCALES = { density: 0.2, anisotropy: 0.3, period: 10, components: 0.01, perimeter: 0.6 };
 export const SIGNATURE_WEIGHTS = { density: 1.0, anisotropy: 1.2, period: 1.0, components: 1.0, perimeter: 0.8 };
 
+function smoothField(field, w, h, passes = 1) {
+  let src = Float32Array.from(field);
+  let dst = new Float32Array(w * h);
+  for (let p = 0; p < passes; p++) {
+    for (let y = 0; y < h; y++) {
+      const y0 = Math.max(0, y - 1);
+      const y1 = Math.min(h - 1, y + 1);
+      for (let x = 0; x < w; x++) {
+        const x0 = Math.max(0, x - 1);
+        const x1 = Math.min(w - 1, x + 1);
+        let sum = 0;
+        for (let yy = y0; yy <= y1; yy++) {
+          for (let xx = x0; xx <= x1; xx++) sum += src[yy * w + xx];
+        }
+        dst[y * w + x] = sum / ((y1 - y0 + 1) * (x1 - x0 + 1));
+      }
+    }
+    const tmp = src; src = dst; dst = tmp;
+  }
+  return src;
+}
+
 export function structuralSignature(field, w, h, threshold = 0.5) {
   const n = w * h;
+  /* 先做两遍 3×3 平滑：实验图有纹理、仿真场有像素锯齿，
+   * 不平滑时边界密度会被噪声主导，跨域比较失真。 */
+  const smooth = smoothField(field, w, h, 2);
   const bin = new Uint8Array(n);
   let occupied = 0;
   for (let i = 0; i < n; i++) {
-    if (field[i] > threshold) {
+    if (smooth[i] > threshold) {
       bin[i] = 1;
       occupied++;
     }

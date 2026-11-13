@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-13T06:03:05.772Z",
+  "generatedAt": "2026-11-13T06:33:33.703Z",
   "source": {
     "citation": "Kazarnikov et al. 2025, arXiv:2504.02530, Fig. 6 [I]",
     "license": "CC BY 4.0",
@@ -4128,14 +4128,14 @@
         "h": 64
       },
       "features": {
-        "density": 0.2412109375,
-        "anisotropy": 0.06439893028787219,
-        "period": 13,
+        "density": 0.263427734375,
+        "anisotropy": 0.0654065349516765,
+        "period": 15,
         "components": 0.0068359375,
-        "perimeter": 0.158447265625
+        "perimeter": 0.163818359375
       },
       "calibration": {
-        "bestScore": 70.2,
+        "bestScore": 69.4,
         "note": "固定校准种子下 7×6 参考搜索的最高分，不公开参数"
       }
     },
@@ -8258,14 +8258,14 @@
         "h": 64
       },
       "features": {
-        "density": 0.3720703125,
-        "anisotropy": 0.6827482881702956,
+        "density": 0.388427734375,
+        "anisotropy": 0.7025377638356706,
         "period": 18,
-        "components": 0.00146484375,
-        "perimeter": 0.223388671875
+        "components": 0.001708984375,
+        "perimeter": 0.2158203125
       },
       "calibration": {
-        "bestScore": 34.8,
+        "bestScore": 33.7,
         "note": "固定校准种子下 7×6 参考搜索的最高分，不公开参数"
       }
     },
@@ -12389,11 +12389,11 @@
         "fixedMask": true
       },
       "features": {
-        "density": 0.15673828125,
-        "anisotropy": 0.014336917562724014,
-        "period": 12,
-        "components": 0.001220703125,
-        "perimeter": 0.072265625
+        "density": 0.1513671875,
+        "anisotropy": 0.030769444967295976,
+        "period": 10,
+        "components": 0.0009765625,
+        "perimeter": 0.06689453125
       },
       "calibration": {
         "bestScore": 100,
@@ -16520,11 +16520,11 @@
         "fixedMask": true
       },
       "features": {
-        "density": 0.2763671875,
-        "anisotropy": 0.06206278359364999,
-        "period": 17,
+        "density": 0.274658203125,
+        "anisotropy": 0.07405654722504487,
+        "period": 18,
         "components": 0.00146484375,
-        "perimeter": 0.10888671875
+        "perimeter": 0.10400390625
       },
       "calibration": {
         "bestScore": 100,
