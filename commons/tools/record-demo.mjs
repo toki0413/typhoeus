@@ -193,6 +193,24 @@ await safeClick('#researchDoor');
 await caption('研究 · 侧门：把结构变成可比较的数据');
 
 try {
+  await page.waitForFunction(() => document.querySelectorAll('.model-card').length === 4, { timeout: 15000 });
+  await caption('模型生命：四张可复现的模型卡');
+  await sleep(2500);
+  await safeClick('[data-replicate="model-gs-spots"]');
+  await page.waitForFunction(() => {
+    const r = document.querySelector('#researchResult');
+    return r && !r.hidden && r.textContent.includes('行为指纹');
+  }, { timeout: 15000 });
+  await page.evaluate(() => document.querySelector('#researchResult')?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  await caption('一键复现：结构签名 + 行为指纹 + 模型检查');
+  await sleep(5000);
+} catch (_) {
+  await caption('模型生命：固定参数、种子与检查项');
+}
+
+await sleepUntil(start, 66);
+
+try {
   await page.waitForFunction(
     () => document.querySelectorAll('#researchTarget option').length > 1,
     { timeout: 15000 },
@@ -215,19 +233,19 @@ try {
   await sleep(2000);
 }
 
-await sleepUntil(start, 88);
+await sleepUntil(start, 82);
 await safeClick('nav [data-view="puzzle"]');
 await caption('挑战：画种子 → Wiggle 调参 → 提交评分');
 
-await sleepUntil(start, 94);
+await sleepUntil(start, 88);
 await safeClick('nav [data-view="lineage"]');
 await caption('家谱：世代、双亲与血缘，可追溯的演化谱系');
 
-await sleepUntil(start, 99);
+await sleepUntil(start, 93);
 await safeClick('nav [data-view="cultivate"]');
 await caption('同一颗种子，放进不同的家，会长出不同的模样与歌');
 
-await sleepUntil(start, 103);
+await sleepUntil(start, 98);
 await page.evaluate((url) => window.__demoEnd(url), APP_URL.replace(/^https?:\/\//, ''));
 await caption('');
 await sleep(4500);
