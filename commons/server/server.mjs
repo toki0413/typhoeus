@@ -4,7 +4,8 @@
  * 职责：
  *   1. 提供真实实验斑图目标（server/research/targets.json，含来源与许可）
  *   2. 接收提交，用确定性种子在服务端重跑反应—扩散，按结构统计评分
- *   3. 把结果写入本地 JSON，形成共享榜单（同一进程内可读写）
+ *   3. 把结果写入共享榜单：COMMONS_STORE_URL 存在时走外部 HTTP KV，
+ *      否则回落到本地文件（部署环境通常是临时目录，重启即清空）
  *
  * 诚实边界：评分是结构统计距离，不宣称恢复实验参数，也不代表 CIMA 的真实动力学。
  * 运行：node server/server.mjs（PORT 默认 8000）
@@ -12,11 +13,12 @@
 
 import http from 'node:http';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { evaluateTarget } from './research/score.mjs';
 import { signatureDistance } from './research/signature.mjs';
+import { openStore } from './research/store.mjs';
+import { loadSurrogate, rankCandidates, surrogateSummary } from './research/surrogate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PARENT = path.resolve(HERE, '..');
@@ -25,44 +27,21 @@ const STATIC_ROOT = fs.existsSync(path.join(PARENT, 'index.html'))
   : path.join(PARENT, 'www');
 const TARGETS_FILE = path.join(HERE, 'research', 'targets.json');
 
-/* 部署环境的 dist 通常是只读的；优先写项目内目录，失败则回落到临时目录。
- * 临时目录只在当前实例生命周期内有效，health 会如实返回存储模式。 */
-function resolveStoreDir() {
-  const configured = process.env.COMMONS_DATA_DIR
-    ? path.resolve(process.env.COMMONS_DATA_DIR)
-    : null;
-  const candidates = [
-    configured,
-    path.join(HERE, 'research'),
-    path.join(os.tmpdir(), 'commons-research'),
-  ].filter(Boolean);
-  for (const dir of candidates) {
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-      fs.accessSync(dir, fs.constants.W_OK);
-      return dir;
-    } catch (_) { /* 尝试下一个 */ }
-  }
-  return candidates[candidates.length - 1];
-}
-
-const STORE_DIR = resolveStoreDir();
-const STORE_FILE = path.join(STORE_DIR, 'submissions.json');
-const CONFIGURED_STORE = process.env.COMMONS_DATA_DIR
-  ? path.resolve(process.env.COMMONS_DATA_DIR)
-  : null;
-const STORE_MODE = STORE_DIR === CONFIGURED_STORE
-  ? 'configured'
-  : STORE_DIR === path.join(os.tmpdir(), 'commons-research') ? 'ephemeral' : 'local';
 const PORT = Number(process.env.PORT) || 8000;
 const HOST = '0.0.0.0';
 
 const TARGETS = loadTargets();
 const SURFACE = loadSurface();
-const STORE = loadStore();
+const SURROGATE = loadSurrogate();
+const STORAGE = await openStore();
+const STORE = STORAGE.data;
 const RATE = new Map(); // ip -> [timestamps]
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT = 60;
+
+if (STORAGE.error) {
+  console.error('[research] 榜单存储载入失败：', STORAGE.error);
+}
 
 function loadTargets() {
   try {
@@ -75,14 +54,6 @@ function loadTargets() {
   }
 }
 
-function loadStore() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(STORE_FILE, 'utf8'));
-    if (Array.isArray(raw.items)) return raw;
-  } catch (_) { /* 首次运行没有文件 */ }
-  return { version: 1, items: [] };
-}
-
 function loadSurface() {
   try {
     const raw = JSON.parse(fs.readFileSync(path.join(HERE, 'research', 'surface.json'), 'utf8'));
@@ -91,11 +62,8 @@ function loadSurface() {
   return { version: 1, seed: 'calibration-seed', points: [] };
 }
 
-function saveStore() {
-  const tmp = `${STORE_FILE}.${process.pid}.tmp`;
-  fs.mkdirSync(path.dirname(STORE_FILE), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(STORE));
-  fs.renameSync(tmp, STORE_FILE);
+async function saveStore() {
+  await STORAGE.save(STORE);
 }
 
 const MIME = {
@@ -219,17 +187,16 @@ function leaderboard(targetId) {
 
 async function handleApi(req, res, url) {
   if (url.pathname === '/api/research/health') {
+    const info = STORAGE.store.describe();
     return sendJson(res, 200, {
       ok: true,
       targets: TARGETS.targets.length,
       submissions: STORE.items.length,
-      storage: STORE_MODE,
-      writable: (() => {
-        try {
-          fs.accessSync(STORE_DIR, fs.constants.W_OK);
-          return true;
-        } catch (_) { return false; }
-      })(),
+      storage: STORAGE.store.mode,
+      storageBackend: info.backend,
+      storageDetail: info,
+      storageError: STORAGE.error || STORAGE.store.configError || null,
+      surrogate: surrogateSummary(SURROGATE),
       version: 1,
     });
   }
@@ -237,7 +204,7 @@ async function handleApi(req, res, url) {
   if (url.pathname === '/api/research/targets' && req.method === 'GET') {
     return sendJson(res, 200, {
       version: TARGETS.version,
-      storage: STORE_MODE,
+      storage: STORAGE.store.mode,
       source: TARGETS.source,
       targets: TARGETS.targets.map(publicTarget),
     });
@@ -248,13 +215,44 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, { targetId, items: leaderboard(targetId) });
   }
 
-  /* 响应面代理：在固定校准种子下，用预先算好的 (f,k)→签名 网格排序候选。
-   * 这不是神经算子，只是第一级代理；最终分数必须由 /verify 重跑确认。 */
+  /* 候选提议：优先用 numpy 训练的降阶神经代理（参数 → 结构签名 + PCA 场），
+   * 没有权重时回落到 Gray–Scott 响应面。两者都只是排序器，不是裁判。 */
   if (url.pathname === '/api/research/propose' && req.method === 'GET') {
     const target = TARGETS.targets.find((t) => t.id === url.searchParams.get('targetId'));
     if (!target) return sendJson(res, 404, { ok: false, error: '目标不存在' });
-    if (!SURFACE.points.length) return sendJson(res, 200, { ok: true, items: [], note: '响应面未载入' });
     const limit = Math.min(6, Math.max(1, Number(url.searchParams.get('limit')) || 3));
+    const kind = target.verify?.model === 'lengyelEpstein' ? 'lengyelEpstein' : 'grayScott';
+
+    if (SURROGATE?.kinds?.[kind]) {
+      const items = rankCandidates(SURROGATE, kind, target.features, limit).map((it) => ({
+        params: kind === 'grayScott'
+          ? { f: it.f, k: it.k, D_u: it.D_u, D_v: it.D_v }
+          : { a: it.a, b: it.b, sigma: it.sigma, D_v: it.D_v },
+        f: it.f,
+        k: it.k,
+        a: it.a,
+        b: it.b,
+        sigma: it.sigma,
+        predictedScore: it.predictedScore,
+        predictedFeatures: it.features,
+      }));
+      const metrics = SURROGATE.kinds[kind].metrics?.holdout || null;
+      return sendJson(res, 200, {
+        ok: true,
+        targetId: target.id,
+        engine: 'mlp-surrogate',
+        model: 'mlp-field-pca',
+        note: '降阶神经代理排序，非裁判；最终分数由服务端重跑判定。',
+        metrics,
+        items,
+      });
+    }
+
+    if (kind !== 'grayScott' || !SURFACE.points.length) {
+      return sendJson(res, 200, {
+        ok: true, targetId: target.id, engine: 'none', items: [], note: '该目标暂无代理',
+      });
+    }
     const items = SURFACE.points
       .map((p) => ({
         f: p.f,
@@ -263,7 +261,9 @@ async function handleApi(req, res, url) {
       }))
       .sort((a, b) => b.predictedScore - a.predictedScore)
       .slice(0, limit);
-    return sendJson(res, 200, { ok: true, targetId: target.id, seed: SURFACE.seed, items });
+    return sendJson(res, 200, {
+      ok: true, targetId: target.id, seed: SURFACE.seed, engine: 'surface', items,
+    });
   }
 
   if (url.pathname === '/api/research/verify' && req.method === 'POST') {
@@ -327,7 +327,7 @@ async function handleApi(req, res, url) {
     if (STORE.items.length > 2000) STORE.items = STORE.items.slice(-2000);
     let persisted = true;
     try {
-      saveStore();
+      await saveStore();
     } catch (err) {
       persisted = false;
       console.error('[research] 榜单写入失败：', err.message);

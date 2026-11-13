@@ -51,7 +51,7 @@ export function normalizeMask(input, maskW, maskH) {
   return { mask: out, maskW: mw, maskH: mh };
 }
 
-export function evaluateTarget(target, params, { w = 64, h = 64 } = {}) {
+export function evaluateTarget(target, params, { w = 64, h = 64, includeField = false } = {}) {
   const isLE = target.verify?.model === 'lengyelEpstein';
   const fixed = target.verify?.fixedMask;
   let maskInfo = null;
@@ -121,5 +121,6 @@ export function evaluateTarget(target, params, { w = 64, h = 64 } = {}) {
     usedMask: !!maskInfo,
     usedFixedSeed: !!(fixed || isLE),
     model: isLE ? 'lengyelEpstein' : 'grayScott',
+    ...(includeField ? { field, w, h } : {}),
   };
 }

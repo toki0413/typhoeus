@@ -2875,11 +2875,13 @@ async function loadResearchTargets() {
     const exportBtn = $('#researchExportBoard');
     if (exportBtn) exportBtn.disabled = false;
     if (status) {
-      status.textContent = '已连接研究服务。服务端会用确定性种子重跑 480 步，再按结构统计评分。';
-      if (data.storage === 'ephemeral') {
+      status.textContent = '已连接研究服务。服务端会用确定性种子重跑反应—扩散（GS 480 步 / LE 12000 步），再按结构统计评分。';
+      if (data.storage === 'persistent') {
+        status.textContent += ' 榜单写入外部存储，实例重启不会清空。';
+      } else if (data.storage === 'ephemeral') {
         status.textContent += ' 榜单暂存于当前运行实例，重启后会清空。';
-      } else if (data.storage === 'configured') {
-        status.textContent += ' 榜单写入已配置的持久目录。';
+      } else if (data.storage === 'configured' || data.storage === 'local') {
+        status.textContent += ' 榜单写入可写的本地目录。';
       }
     }
     renderResearchTarget();
@@ -3033,16 +3035,18 @@ async function submitResearchVerification() {
   await runResearchVerify(researchPayloadBase());
 }
 
-async function submitResearchCandidate(f, k) {
+async function submitResearchCandidate(candidate) {
   if (!currentResearchTarget()) {
     toast('先选择一个研究目标', 'warn');
     return;
   }
   await runResearchVerify({
     ...researchPayloadBase(),
-    f,
-    k,
     useCalibrationSeed: true,
+    mask: null,
+    maskW: null,
+    maskH: null,
+    ...candidate,
   });
 }
 
@@ -3064,16 +3068,33 @@ async function proposeResearchCandidates() {
     const data = await res.json();
     if (!data.items?.length) {
       if (host) host.hidden = true;
-      toast('响应面未载入', 'warn');
+      toast(data.note || '该目标暂无代理', 'warn');
       return;
     }
     if (host) {
+      const metrics = data.metrics;
+      const top3 = metrics?.poolRecall?.top3Hit ?? metrics?.top3Hit;
+      const metricText = metrics
+        ? ` · 留出集候选池 Top-3 ${Math.round((top3 || 0) * 100)}% · 分数 MAE ${Number(metrics.scoreMae).toFixed(1)}`
+        : '';
+      const head = data.engine === 'mlp-surrogate'
+        ? `降阶神经代理（MLP · 签名级）· 非裁判${metricText}`
+        : '响应面代理 · 固定校准种子 · 非裁判';
       host.hidden = false;
-      host.innerHTML = `<div class="rp-head">响应面代理 · 固定校准种子 · 点击候选做服务端复核（非神经算子）</div>
-        ${data.items.map((it) => `<button class="rp-item" data-f="${it.f}" data-k="${it.k}">
-          <span>f ${Number(it.f).toFixed(3)} · k ${Number(it.k).toFixed(3)}</span>
-          <span class="rp-score">预测 ${Number(it.predictedScore).toFixed(1)}</span>
-        </button>`).join('')}`;
+      host.innerHTML = `<div class="rp-head">${head} · 点击候选做服务端复核</div>
+        ${data.items.map((it) => {
+          const isLE = Number.isFinite(it.a);
+          const attrs = isLE
+            ? `data-a="${it.a}" data-b="${it.b}" data-sigma="${it.sigma}"`
+            : `data-f="${it.f}" data-k="${it.k}"`;
+          const label = isLE
+            ? `a ${Number(it.a).toFixed(2)} · b ${Number(it.b).toFixed(2)} · σ ${Number(it.sigma).toFixed(2)}`
+            : `f ${Number(it.f).toFixed(3)} · k ${Number(it.k).toFixed(3)}`;
+          return `<button class="rp-item" ${attrs}>
+            <span>${label}</span>
+            <span class="rp-score">预测 ${Number(it.predictedScore).toFixed(1)}</span>
+          </button>`;
+        }).join('')}`;
     }
   } catch (err) {
     toast(`提议失败：${err.message}`, 'warn');
@@ -3321,9 +3342,23 @@ function bindUI() {
   $('#researchVerify')?.addEventListener('click', submitResearchVerification);
   $('#researchPropose')?.addEventListener('click', proposeResearchCandidates);
   $('#researchProposals')?.addEventListener('click', (e) => {
-    const item = e.target.closest('[data-f][data-k]');
+    const item = e.target.closest('.rp-item');
     if (!item) return;
-    submitResearchCandidate(parseFloat(item.dataset.f), parseFloat(item.dataset.k));
+    if (item.dataset.a) {
+      submitResearchCandidate({
+        a: parseFloat(item.dataset.a),
+        b: parseFloat(item.dataset.b),
+        sigma: parseFloat(item.dataset.sigma),
+        D_v: 80,
+        dt: 0.001,
+      });
+      return;
+    }
+    submitResearchCandidate({
+      f: parseFloat(item.dataset.f),
+      k: parseFloat(item.dataset.k),
+      useCalibrationSeed: true,
+    });
   });
   $('#researchExportBoard')?.addEventListener('click', exportResearchBoard);
   $('#researchTarget')?.addEventListener('change', () => {
