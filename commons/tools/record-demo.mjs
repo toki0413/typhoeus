@@ -178,10 +178,7 @@ await safeClick('[data-sci-preset="gs_stripes"]');
 await caption('同一套规则，换一组参数，斑点就变成条纹');
 
 await sleepUntil(start, 40);
-await safeClick('[data-action="save"]');
 await caption('存入花园：配方可保存、分享、还原');
-await sleep(1200);
-try { await page.keyboard.press('Escape'); } catch (_) {}
 
 await sleepUntil(start, 46);
 await safeClick('nav [data-view="commons"]');
@@ -189,63 +186,59 @@ await caption('花园：一座可以继续繁殖的形态库');
 await page.evaluate(() => window.scrollTo({ top: 420, behavior: 'smooth' }));
 
 await sleepUntil(start, 52);
-await safeClick('#researchDoor');
-await caption('研究 · 侧门：把结构变成可比较的数据');
+const mark = (label) => console.log(`[demo] ${((Date.now() - start) / 1000).toFixed(1)}s ${label}`);
+mark('research click');
+await page.evaluate(() => document.querySelector('#researchDoor')?.click());
+await page.waitForFunction(
+  () => document.querySelector('#view-research')?.classList.contains('active'),
+  { timeout: 15000 },
+);
+mark('research active');
+await page.waitForFunction(
+  () => document.querySelectorAll('.model-card').length === 4,
+  { timeout: 15000 },
+);
+await sleep(800);
+await page.evaluate(() => document.querySelector('#researchModelLives')?.scrollIntoView({ block: 'center', behavior: 'auto' }));
+await sleep(700);
+mark('model cards visible');
+await caption('MODEL LIVES：四张可复现的模型卡');
+await sleep(7000);
 
-try {
-  await page.waitForFunction(() => document.querySelectorAll('.model-card').length === 4, { timeout: 15000 });
-  await caption('模型生命：四张可复现的模型卡');
-  await sleep(2500);
-  await safeClick('[data-replicate="model-gs-spots"]');
-  await page.waitForFunction(() => {
-    const r = document.querySelector('#researchResult');
-    return r && !r.hidden && r.textContent.includes('行为指纹');
-  }, { timeout: 15000 });
-  await page.evaluate(() => document.querySelector('#researchResult')?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
-  await caption('一键复现：结构签名 + 行为指纹 + 模型检查');
-  await sleep(5000);
-} catch (_) {
-  await caption('模型生命：固定参数、种子与检查项');
-}
+await safeClick('[data-replicate="model-gs-spots"]');
+await page.waitForFunction(() => {
+  const r = document.querySelector('#researchResult');
+  return r && !r.hidden && r.textContent.includes('行为指纹') && r.textContent.includes('Gray–Scott 斑点');
+}, { timeout: 15000 });
+await page.evaluate(() => document.querySelector('#researchResult')?.scrollIntoView({ block: 'center', behavior: 'auto' }));
+mark('GS result');
+await caption('一键复现：结构签名 + 行为指纹 + 模型检查');
+await sleep(7000);
 
-await sleepUntil(start, 66);
+await safeClick('[data-replicate="model-le-stripes"]');
+await page.waitForFunction(() => {
+  const r = document.querySelector('#researchResult');
+  return r && !r.hidden && r.textContent.includes('行为指纹')
+    && (r.textContent.includes('Lengyel') || r.textContent.includes('38.7'));
+}, { timeout: 20000 });
+await page.evaluate(() => document.querySelector('#researchResult')?.scrollIntoView({ block: 'center', behavior: 'auto' }));
+mark('LE result');
+await caption('LE 条纹：固定噪声种子，慢速稳定，行为指纹不同');
+await sleep(7000);
 
-try {
-  await page.waitForFunction(
-    () => document.querySelectorAll('#researchTarget option').length > 1,
-    { timeout: 15000 },
-  );
-  await page.select('#researchTarget', 'cima-hexagons');
-  await sleep(800);
-  await page.waitForFunction(() => {
-    const b = document.querySelector('#researchPropose');
-    return b && !b.disabled;
-  }, { timeout: 8000 });
-  await safeClick('#researchPropose');
-  await page.waitForFunction(
-    () => document.querySelectorAll('#researchProposals .rp-item').length > 0,
-    { timeout: 12000 },
-  );
-  await caption('神经代理给出候选 → 点击候选，由服务端重跑复核');
-  await sleep(4500);
-} catch (_) {
-  await caption('研究 · 侧门：结构统计与参数探索');
-  await sleep(2000);
-}
-
-await sleepUntil(start, 82);
+await sleepUntil(start, 90);
 await safeClick('nav [data-view="puzzle"]');
 await caption('挑战：画种子 → Wiggle 调参 → 提交评分');
 
-await sleepUntil(start, 88);
+await sleepUntil(start, 96);
 await safeClick('nav [data-view="lineage"]');
 await caption('家谱：世代、双亲与血缘，可追溯的演化谱系');
 
-await sleepUntil(start, 93);
+await sleepUntil(start, 101);
 await safeClick('nav [data-view="cultivate"]');
 await caption('同一颗种子，放进不同的家，会长出不同的模样与歌');
 
-await sleepUntil(start, 98);
+await sleepUntil(start, 106);
 await page.evaluate((url) => window.__demoEnd(url), APP_URL.replace(/^https?:\/\//, ''));
 await caption('');
 await sleep(4500);

@@ -2981,7 +2981,7 @@ function renderResearchResult(data) {
       <span class="rr-unit">/ 100 · 结构距离 ${Number(data.distance).toFixed(3)}</span>
     </div>
     <div class="rr-meta">
-      ${isReplicate ? `模型复现 · ${esc(modelLabel)} · 服务端重跑 ${data.steps} 步` : `服务端重跑 ${data.steps} 步 · ${(data.modelType || data.model) === 'lengyelEpstein' ? 'LE 固定噪声种子' : data.usedFixedSeed ? '目标固定校准种子' : data.usedMask ? '使用你提交的种子' : '使用确定性默认种子'}`}
+      ${isReplicate ? `模型复现 · ${esc(modelLabel)}${data.target?.label ? ` · 目标 ${esc(data.target.label)}` : ''} · 服务端重跑 ${data.steps} 步` : `服务端重跑 ${data.steps} 步 · ${(data.modelType || data.model) === 'lengyelEpstein' ? 'LE 固定噪声种子' : data.usedFixedSeed ? '目标固定校准种子' : data.usedMask ? '使用你提交的种子' : '使用确定性默认种子'}`}
       ${data.rank ? ` · 本轮排名 #${data.rank}` : ''}
       ${data.persisted === false && !isReplicate ? ' · 榜单暂不可写' : ''}
     </div>
@@ -3035,6 +3035,12 @@ async function loadModelLives() {
 
 async function replicateModel(modelId, btn) {
   const status = $('#researchLabStatus');
+  const model = researchLab.models?.find((m) => m.id === modelId);
+  const sel = $('#researchTarget');
+  if (model?.target?.id && sel && sel.value !== model.target.id) {
+    sel.value = model.target.id;
+    renderResearchTarget();
+  }
   if (btn) {
     btn.disabled = true;
     btn.textContent = '复现中…';
