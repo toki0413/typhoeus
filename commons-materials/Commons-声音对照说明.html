@@ -1,0 +1,72 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
+  @page{size:A4;margin:0}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#f4efe5;color:#171512}
+  body{font-family:"Noto Sans CJK SC","Noto Sans CJK",sans-serif;font-size:8.6pt;line-height:1.6}
+  .page{width:210mm;height:297mm;padding:13mm 15mm 10mm;display:flex;flex-direction:column;gap:4mm;position:relative;overflow:hidden}
+  .page:before{content:"";position:absolute;left:0;top:0;width:100%;height:2.4mm;background:#b7362a}
+  .kicker{font-family:"Noto Sans Mono",monospace;font-size:6.8pt;letter-spacing:.18em;color:#6b6a4f;text-transform:uppercase;margin-bottom:2mm}
+  h1{font-family:"Noto Serif CJK SC",serif;font-size:26pt;line-height:1.1;margin:0 0 2mm;font-weight:600}
+  h1 em{font-style:normal;color:#b7362a}
+  .lede{max-width:150mm;margin:0 0 3mm;color:#3d3a33}
+  .clip{border-top:1pt solid #171512;padding:2.5mm 0 2mm;display:flex;flex-direction:column;gap:1.2mm}
+  .clip-head{display:flex;gap:3mm;align-items:flex-start}
+  .n{font-family:"Noto Sans Mono",monospace;font-size:15pt;color:#b7362a;line-height:1;min-width:10mm}
+  .clip-head b{font-family:"Noto Serif CJK SC",serif;font-size:11pt;font-weight:600}
+  .clip-head p{margin:.5mm 0 0;font-size:7.8pt;color:#3d3a33}
+  .dur{margin-left:auto;font-family:"Noto Sans Mono",monospace;font-size:6.4pt;color:#6b6a4f;white-space:nowrap}
+  .clip img{width:100%;height:16mm;object-fit:cover;background:#171512;border:.5pt solid #171512}
+  .file{font-family:"Noto Sans Mono",monospace;font-size:5.8pt;color:#6b6a4f}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:7mm;border-top:1pt solid #171512;padding-top:3mm}
+  h2{font-family:"Noto Sans Mono",monospace;font-size:6.4pt;letter-spacing:.14em;color:#6b6a4f;text-transform:uppercase;margin:0 0 1.5mm;font-weight:500}
+  .map{display:grid;grid-template-columns:1fr 1fr;gap:1mm 3mm;font-size:7.4pt}
+  .map div{border-bottom:.4pt solid rgba(23,21,18,.14);padding:.8mm 0}
+  .map b{color:#b7362a}
+  .note{font-size:7.2pt;color:#3d3a33;margin:0 0 1.5mm}
+  .note b{color:#171512}
+  .render{border-top:1pt solid #171512;padding-top:3mm}
+  .render .cmd{font-family:"Noto Sans Mono",monospace;font-size:6.4pt;color:#3d3a33;background:rgba(23,21,18,.05);border-left:1.2mm solid #b7362a;padding:1.2mm 2mm;margin:0 0 1.2mm}
+  footer{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;border-top:.8pt solid #171512;padding-top:2mm;font-family:"Noto Sans Mono",monospace;font-size:5.8pt;color:#6b6a4f}
+  .qr{width:19mm;height:19mm;border:.4pt solid #171512;background:#f4efe5}
+  </style></head><body><main class="page">
+  <div class="kicker">COMMONS 公地 · 声音对照包 · 评审材料</div>
+  <h1>先听，再看：<em>结构如何变成声音</em></h1>
+  <p class="lede">三段 30 秒左右的音频，全部由页面里的 AudioEngine 离线渲染，不是另外合成的配乐。建议戴耳机；先听左右差异，再对照波形与页面里的行为指纹。</p>
+  
+    <div class="clip">
+      <div class="clip-head"><span class="n">01</span><div><b>同一颗种子，两个环境</b><p>左耳 · 随机汤 / 右耳 · 滑翔群；同一 genome、同一 seed=42，只有环境不同。</p></div><span class="dur">30s</span></div>
+      <img src="assets/01-binaural-same-seed-wave.png" alt="同一颗种子，两个环境 波形">
+      <div class="file">sound/01-binaural-same-seed.wav · .mp3</div>
+    </div>
+    <div class="clip">
+      <div class="clip-head"><span class="n">02</span><div><b>突变前后</b><p>前 15 秒 Conway，后 15 秒 HighLife；同一环境、同一 seed，听密度、音色与节奏的变化。</p></div><span class="dur">29.5s</span></div>
+      <img src="assets/02-mutation-before-after-wave.png" alt="突变前后 波形">
+      <div class="file">sound/02-mutation-before-after.wav · .mp3</div>
+    </div>
+    <div class="clip">
+      <div class="clip-head"><span class="n">03</span><div><b>指标到声音</b><p>完整混音：密度→音量、熵→音色亮度、活跃度→节奏、周期性→节拍规律。</p></div><span class="dur">30s</span></div>
+      <img src="assets/03-mapping-and-events-wave.png" alt="指标到声音 波形">
+      <div class="file">sound/03-mapping-and-events.wav · .mp3</div>
+    </div>
+  <div class="cols">
+    <div>
+      <h2>How to listen · 听什么</h2>
+      <p class="note"><b>01 双耳：</b>左耳与右耳是同一颗种子、同一套基因，只有环境不同。不要找“哪边更好听”，听两边的事件密度、音色和节奏是否不同。</p>
+      <p class="note"><b>02 突变：</b>0–15 秒 Conway，15–29.5 秒 HighLife；同一环境、同一 seed，规则变了，声音跟着变。</p>
+      <p class="note"><b>03 映射：</b>密度推音量，熵推音色亮度，活跃度推节奏；结构事件触发短音，不是循环鼓点。</p>
+    </div>
+    <div>
+      <h2>Mapping · 映射</h2>
+      <div class="map"><div><b>密度</b> → 音量</div><div><b>熵</b> → 音色亮度</div><div><b>活跃度</b> → 节奏</div><div><b>周期性</b> → 节拍规律</div></div>
+      <p class="note" style="margin-top:2mm"><b>诚实边界：</b>声音是观测通道，不是科学声化标准；它把结构变化转成可听事件，便于比较，不宣称可听出真实生物参数。</p>
+      <p class="note"><b>文件：</b>每段含 WAV（保真）与 MP3（分享）；03 也用于演示视频的环境音轨。</p>
+    </div>
+  </div>
+  <div class="render">
+    <h2>Render · 怎么重渲染</h2>
+    <div class="cmd">node tools/audio-pack.cjs http://127.0.0.1:4200</div>
+    <p class="note">页面里的 AudioEngine 通过 OfflineAudioContext 离线渲染，44100 Hz 双声道；每段先写 WAV，再用 <b>loudnorm=I=-16:TP=-1.5:LRA=11</b> 统一响度，最后编码 MP3 192 kbps。波形图只作视觉索引，判断以听感为准。</p>
+    <p class="note"><b>核对：</b>01 左/右声道相关系数约 0.20；02 在 15 秒处规则切换；03 与演示视频环境音轨同源。时长与峰值见 <b>sound/render-meta.json</b>。</p>
+  </div>
+  <footer><span>COMMONS 公地 · 声音对照包 · 2026.11 · 37jalf2ykndtrfn6iou.traesite.cn</span><img class="qr" src="assets/commons-qr.png" alt="入口二维码"></footer>
+  </main></body></html>

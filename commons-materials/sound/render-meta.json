@@ -1,0 +1,33 @@
+{
+  "binaural": {
+    "dur": 30,
+    "envL": {
+      "pattern": "soup",
+      "boundary": "torus",
+      "noise": 0.03,
+      "constraint": 0.2,
+      "timeScale": 3
+    },
+    "envR": {
+      "pattern": "glider",
+      "boundary": "torus",
+      "noise": 0.03,
+      "constraint": 0.2,
+      "timeScale": 3
+    },
+    "seed": 42
+  },
+  "mutation": {
+    "dur": 30,
+    "before": "conway",
+    "after": "highlife",
+    "env": {
+      "pattern": "soup",
+      "boundary": "torus",
+      "noise": 0.03,
+      "constraint": 0.2,
+      "timeScale": 3
+    },
+    "seed": 42
+  }
+}

@@ -1,0 +1,87 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
+  @page{size:A5;margin:0}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#f4efe5;color:#171512}
+  body{font-family:"Noto Sans CJK SC","Noto Sans CJK",sans-serif;font-size:8.2pt;line-height:1.55}
+  .card{width:148mm;height:210mm;padding:10mm 10.5mm 8mm;display:flex;flex-direction:column;gap:3.2mm;background:#f4efe5;position:relative;overflow:hidden}
+  .card:before{content:"";position:absolute;left:0;top:0;width:3mm;height:100%;background:#b7362a}
+  header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1.2pt solid #171512;padding-bottom:2.5mm;padding-left:2mm}
+  .no{font-family:"Noto Sans Mono",monospace;font-size:6.2pt;letter-spacing:.14em;color:#6b6a4f}
+  .engine{font-family:"Noto Sans Mono",monospace;font-size:6.2pt;border:.5pt solid #171512;padding:.8mm 1.8mm;margin-top:1.5mm}
+  .score{font-family:"Noto Serif CJK SC",serif;font-size:27pt;line-height:1;font-weight:600;text-align:right}
+  .score small{font-family:"Noto Sans Mono",monospace;font-size:7pt;color:#6b6a4f;font-weight:400}
+  .score.high{color:#2f6b45}.score.mid{color:#9a6a1f}.score.low{color:#b7362a}
+  h2{font-family:"Noto Serif CJK SC",serif;font-size:19pt;line-height:1.15;margin:0;padding-left:2mm;font-weight:600}
+  .desc{margin:0;padding-left:2mm;font-size:7.8pt;color:#3d3a33;min-height:9mm}
+  .body{display:grid;grid-template-columns:62mm 1fr;gap:4mm;padding-left:2mm;flex:1}
+  figure{margin:0}
+  figure img{width:62mm;height:62mm;object-fit:cover;display:block;border:.7pt solid #171512;background:#171512}
+  figcaption{font-size:5.8pt;color:#6b6a4f;line-height:1.35;margin-top:1mm}
+  .read{font-size:6.1pt;line-height:1.45;color:#5a554a;margin:1.5mm 0 0}
+  .read b{color:#171512;font-family:"Noto Sans Mono",monospace;font-size:5.4pt;letter-spacing:.08em;text-transform:uppercase}
+  .params{display:grid;grid-template-columns:1fr 1fr;gap:.5mm 3mm;margin-bottom:2mm}
+  .kv{display:flex;justify-content:space-between;border-bottom:.4pt solid rgba(23,21,18,.16);padding:.7mm 0;font-family:"Noto Sans Mono",monospace;font-size:6.2pt}
+  .kv span{color:#6b6a4f}.kv b{font-weight:500}
+  .behavior{border:.6pt solid rgba(23,21,18,.28);padding:2mm;margin-top:1mm}
+  .behavior .bh{display:flex;justify-content:space-between;align-items:baseline;font-size:6.2pt;color:#6b6a4f;font-family:"Noto Sans Mono",monospace;margin-bottom:1mm}
+  .behavior .bh b{color:#171512;font-family:"Noto Sans CJK SC",sans-serif;font-size:7.6pt}
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:.6mm 3mm;font-size:6.2pt;margin-bottom:1mm}
+  .metrics div{display:flex;justify-content:space-between;border-bottom:.4pt solid rgba(23,21,18,.1);padding:.5mm 0}
+  .metrics span{color:#6b6a4f}.metrics b{font-family:"Noto Sans Mono",monospace;font-weight:500}
+  .spark{width:100%;height:13mm;display:block;margin-top:1mm}
+  .checks{display:flex;flex-wrap:wrap;gap:1mm;padding-left:2mm}
+  .signature{display:grid;grid-template-columns:repeat(5,1fr);gap:2mm;margin-left:2mm;border-top:.6pt solid rgba(23,21,18,.3);border-bottom:.6pt solid rgba(23,21,18,.3);padding:2mm 0}
+  .sig-title{grid-column:1/-1;font-family:"Noto Sans Mono",monospace;font-size:5.4pt;color:#6b6a4f;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.5mm}
+  .sig .k{display:block;font-family:"Noto Sans Mono",monospace;font-size:5.2pt;color:#6b6a4f;margin-bottom:.4mm}
+  .sig .v{font-family:"Noto Sans Mono",monospace;font-size:7pt;line-height:1.3}
+  .sig .v b{color:#b7362a;font-weight:500}.sig .v span{color:#3d3a33}
+  .check{font-family:"Noto Sans Mono",monospace;font-size:5.7pt;border:.45pt solid;padding:.6mm 1.3mm;white-space:nowrap}
+  .check.ok{border-color:#2f6b45;color:#245235;background:rgba(47,107,69,.06)}
+  .check.bad{border-color:#b7362a;color:#8e2a21;background:rgba(183,54,42,.06)}
+  .provenance{padding-left:2mm;font-size:5.9pt;color:#5a554a;line-height:1.45}
+  .provenance b{color:#171512;font-weight:600}
+  .repro{margin-left:2mm;font-family:"Noto Sans Mono",monospace;font-size:5.5pt;background:rgba(23,21,18,.055);border:.45pt solid rgba(23,21,18,.15);padding:1.6mm 2mm;word-break:break-all;line-height:1.45}
+  .repro b{color:#b7362a;font-weight:500}
+  footer{display:flex;justify-content:space-between;align-items:flex-end;border-top:.7pt solid #171512;padding-top:1.6mm;padding-left:2mm;font-family:"Noto Sans Mono",monospace;font-size:5.4pt;color:#6b6a4f}
+  .qr2{width:16mm;height:16mm;display:block;border:.4pt solid #171512;background:#f4efe5}
+  </style></head><body><main class="card">
+  <header><div><div class="no">MODEL LIFE · 01 / 04</div><div class="engine">GRAY–SCOTT</div></div><div class="score high">100.0<small>/100</small></div></header>
+  <h2>Gray–Scott 斑点</h2>
+  <p class="desc">最经典的 Gray–Scott 斑点。同一配方、同一校准种子，应该稳定长出分离斑点。</p>
+  <div class="body">
+    <figure><img src="assets/gs-spots-lit.png" alt="文献 · 斑点（校准）"><figcaption>目标 · 文献 · 斑点（校准）<br>480 步 · fixed:calibration-seed</figcaption>
+      <p class="read"><b>读法</b> 目标与复现的密度、各向异性、相关长度、斑块数与边界密度逐项对齐；分数来自这五项的距离。</p>
+    </figure>
+    <div>
+      <div class="params"><div class="kv"><span>f</span><b>0.035</b></div><div class="kv"><span>k</span><b>0.062</b></div><div class="kv"><span>D_u</span><b>0.16</b></div><div class="kv"><span>D_v</span><b>0.08</b></div><div class="kv"><span>dt</span><b>1</b></div><div class="kv"><span>steps</span><b>480</b></div></div>
+      <div class="behavior">
+        <div class="bh"><b>行为指纹 · 斑点</b><span>密度 <i style="color:#b7362a">红</i> / 各向异性 <i style="color:#6b6a4f">绿</i></span></div>
+        <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
+    <line x1="0" y1="26" x2="100" y2="26" stroke="rgba(23,21,18,.18)" stroke-width=".5"/>
+    <line x1="0" y1="15" x2="100" y2="15" stroke="rgba(23,21,18,.08)" stroke-width=".5"/>
+    <polyline points="0.00,15.32 9.09,13.08 18.18,13.97 27.27,13.51 36.36,13.33 45.45,11.52 54.55,10.10 63.64,7.76 72.73,5.95 81.82,5.63 90.91,4.46 100.00,4.00" fill="none" stroke="#b7362a" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
+    <polyline points="0.00,23.56 9.09,23.23 18.18,25.26 27.27,25.00 36.36,25.16 45.45,25.41 54.55,25.90 63.64,25.87 72.73,25.65 81.82,25.92 90.91,25.09 100.00,25.32" fill="none" stroke="#6b6a4f" stroke-width=".9" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>
+  </svg>
+        <div class="metrics">
+          <div><span>稳定步数</span><b>480</b></div>
+          <div><span>活跃度</span><b>0.0500</b></div>
+          <div><span>翻转率</span><b>0.0549</b></div>
+          <div><span>增长 / 1000 步</span><b>0.16</b></div>
+        </div>
+      </div>
+      <p class="read"><b>复现</b> 服务端按模型卡固定参数与种子重跑 480 步；行为指纹取自 12 个采样点。</p>
+    </div>
+  </div>
+  <div class="signature">
+    <div class="sig-title">结构签名 · 目标 / 复现</div>
+    <div class="sig"><span class="k">密度 ρ</span><div class="v"><b>15.1%</b> <span>/ 15.1%</span></div></div>
+    <div class="sig"><span class="k">各向异性 A</span><div class="v"><b>0.03</b> <span>/ 0.03</span></div></div>
+    <div class="sig"><span class="k">相关长度 L_c</span><div class="v"><b>10</b> <span>/ 10</span></div></div>
+    <div class="sig"><span class="k">斑块数 N</span><div class="v"><b>4</b> <span>/ 4</span></div></div>
+    <div class="sig"><span class="k">边界密度 P</span><div class="v"><b>0.07</b> <span>/ 0.07</span></div></div>
+  </div>
+  <div class="checks"><span class="check ok">✓ 模式 spots</span><span class="check ok">✓ 密度 15.1%</span><span class="check ok">✓ 各向异性上限 3.1%</span><span class="check ok">✓ 稳定步数 480</span><span class="check ok">✓ 分数 100.0</span></div>
+  <div class="provenance"><b>来源</b> Pearson 1993, Science 261:189–192 · Gray–Scott 参数区<br><b>许可</b> 公开文献参数 · 用于校准<br><b>不变量</b> constant-field-laplacian=0 · pure-diffusion-conservation · deterministic-seed</div>
+  <div class="repro"><b>curl</b> -sS -X POST https://37jalf2ykndtrfn6iou.traesite.cn/api/research/replicate -H 'content-type: application/json' -d '{"modelId":"model-gs-spots"}'</div>
+  <footer><div>COMMONS 公地 · 模型生命卡 · 2026.11<br>37jalf2ykndtrfn6iou.traesite.cn</div><img class="qr2" src="assets/commons-qr.png" alt="入口二维码"></footer>
+  </main></body></html>

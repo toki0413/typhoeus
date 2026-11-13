@@ -1,0 +1,133 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
+  @page{size:A4;margin:0}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#f4efe5;color:#171512}
+  body{font-family:"Noto Sans CJK SC","Noto Sans CJK",sans-serif;font-size:8.2pt;line-height:1.55}
+  .page{width:210mm;height:297mm;padding:12mm 14mm 9mm;display:flex;flex-direction:column;gap:5mm;overflow:hidden;position:relative}
+  .page:before{content:"";position:absolute;left:0;top:0;width:100%;height:2.4mm;background:#b7362a}
+  .hero{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1.4pt solid #171512;padding-bottom:4mm}
+  .kicker{font-family:"Noto Sans Mono","DejaVu Sans Mono",monospace;font-size:6.8pt;letter-spacing:.18em;text-transform:uppercase;color:#6b6a4f;margin-bottom:3mm}
+  h1{font-family:"Noto Serif CJK SC","Noto Serif CJK",serif;font-size:31pt;line-height:1.06;margin:0 0 3mm;letter-spacing:-.6pt;font-weight:600}
+  h1 em{font-style:normal;color:#b7362a}
+  .lede{margin:0;max-width:122mm;font-size:8.4pt;line-height:1.65;color:#3d3a33}
+  .hero-meta{display:flex;gap:2mm;margin-top:3.5mm;flex-wrap:wrap}
+  .hero-meta span{border:.6pt solid #171512;padding:1mm 2.2mm;font-family:"Noto Sans Mono",monospace;font-size:6.4pt;letter-spacing:.06em}
+  .qr{text-align:center;flex:0 0 31mm}
+  .qr img{width:29mm;height:29mm;display:block;margin:0 auto 1.5mm;border:.6pt solid #171512;background:#f4efe5}
+  .qr div{font-size:6.2pt;line-height:1.4;color:#4a463d}
+  .qr b{display:block;font-family:"Noto Sans Mono",monospace;font-size:5.5pt;font-weight:500;word-break:break-all}
+  .patterns{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm}
+  .pat{margin:0;border:.7pt solid #171512;background:#171512;overflow:hidden}
+  .pat img{width:100%;aspect-ratio:1;object-fit:cover;display:block;filter:contrast(1.02)}
+  .pat figcaption{background:#f4efe5;padding:1.8mm 2mm;display:flex;justify-content:space-between;gap:2mm;align-items:baseline}
+  .pat figcaption b{font-size:7pt;font-weight:600}
+  .pat figcaption span{font-family:"Noto Sans Mono",monospace;font-size:5.8pt;color:#6b6a4f;white-space:nowrap}
+  .cols{display:grid;grid-template-columns:1.06fr .98fr 1.08fr;border-top:1pt solid #171512;border-bottom:1pt solid #171512}
+  .col{padding:4mm 4.5mm;border-right:.6pt solid rgba(23,21,18,.22)}
+  .col:last-child{border-right:0}
+  .col h2{font-family:"Noto Serif CJK SC",serif;font-size:12.2pt;line-height:1.25;margin:0 0 1.5mm;font-weight:600}
+  .col h2 span{font-family:"Noto Sans Mono",monospace;font-size:6.2pt;color:#b7362a;letter-spacing:.12em;margin-right:1.5mm}
+  .col p{margin:0 0 2.2mm;color:#3d3a33;font-size:7.6pt}
+  .row{display:flex;gap:2mm;margin:0 0 1.5mm;font-size:7.5pt}
+  .row i{font-style:normal;font-family:"Noto Sans Mono",monospace;font-size:5.9pt;color:#b7362a;padding-top:.5mm;min-width:5mm}
+  .chips{display:flex;flex-wrap:wrap;gap:1.2mm;margin-top:2mm}
+  .chips span{border:.5pt solid #171512;padding:.8mm 1.8mm;font-size:6.6pt;background:rgba(255,255,255,.25)}
+  .map{display:grid;grid-template-columns:1fr 1fr;gap:1.2mm 2mm;margin:1mm 0 2mm}
+  .map div{border-bottom:.5pt solid rgba(23,21,18,.16);padding-bottom:1mm;font-size:7.2pt}
+  .map b{color:#b7362a;font-weight:600}
+  .quote{margin:2mm 0 0;padding:2mm 2.5mm;border-left:2pt solid #b7362a;background:rgba(183,54,42,.06);font-size:7.2pt;line-height:1.55;color:#3d3a33}
+  table{width:100%;border-collapse:collapse;margin:1mm 0 2mm;font-size:7pt}
+  th,td{text-align:left;border-bottom:.5pt solid rgba(23,21,18,.16);padding:1.25mm 0}
+  th{font-family:"Noto Sans Mono",monospace;font-size:5.8pt;color:#6b6a4f;font-weight:500;text-transform:uppercase}
+  td.mono,th.mono{font-family:"Noto Sans Mono",monospace}
+  .code{font-family:"Noto Sans Mono",monospace;font-size:6.2pt;line-height:1.55;background:rgba(23,21,18,.055);border:.5pt solid rgba(23,21,18,.14);padding:2mm;word-break:break-all}
+  .code b{color:#b7362a;font-weight:500}
+  .bottom{display:grid;grid-template-columns:1.18fr 1fr;gap:7mm;margin-top:auto}
+  .route{display:flex;align-items:center;gap:2.2mm;flex-wrap:wrap;border-top:.6pt solid rgba(23,21,18,.25);border-bottom:.6pt solid rgba(23,21,18,.25);padding:1.6mm 0;font-size:6.7pt;color:#3d3a33}
+  .route b{font-family:"Noto Sans Mono",monospace;font-size:5.8pt;letter-spacing:.12em;color:#b7362a;text-transform:uppercase;margin-right:1mm}
+  .route span{white-space:nowrap}
+  .route span:not(:last-child):after{content:"→";color:#b7362a;margin-left:2.2mm}
+  .bottom h3{font-family:"Noto Sans Mono",monospace;font-size:6.2pt;letter-spacing:.14em;color:#6b6a4f;text-transform:uppercase;margin:0 0 1.5mm;font-weight:500}
+  .bottom p{margin:0 0 1.2mm;font-size:7.2pt;color:#3d3a33}
+  .bottom b{color:#171512}
+  footer{display:flex;justify-content:space-between;align-items:baseline;border-top:.8pt solid #171512;padding-top:2mm;font-family:"Noto Sans Mono",monospace;font-size:5.8pt;color:#6b6a4f}
+  .accent{color:#b7362a}
+  </style></head><body><main class="page">
+  <header class="hero">
+    <div class="hero-copy">
+      <div class="kicker">COMMONS 公地 · 人工生命生成系统 · 评审材料 · 2026.11</div>
+      <h1>让涌现<br><em>可见、可听、可复现</em></h1>
+      <p class="lede">康威生命游戏、Lenia 与反应扩散，三种规则系统在同一个培育台里生长。系统持续识别滑翔、振荡、合并、分裂、出生与死亡潮，把它们转译成声音事件；配方由基因、环境与种子固定，同一配方生成同一段演化。</p>
+      <div class="hero-meta"><span>WEB 应用</span><span>无需登录</span><span>HTTPS 公开</span><span>桌面 Chrome / Edge</span></div>
+    </div>
+    <div class="qr"><img src="assets/commons-qr.png" alt="体验入口二维码"><div>扫码进入<br><b>37jalf2ykndtrfn6iou.traesite.cn</b></div></div>
+  </header>
+
+  <section class="patterns">
+    <figure class="pat">
+      <img src="assets/gs-spots-lit.png" alt="Gray–Scott 斑点">
+      <figcaption><b>01 · Gray–Scott 斑点</b><span>100.0 / 100 · 斑点</span></figcaption>
+    </figure>
+    <figure class="pat">
+      <img src="assets/gs-maze-lit.png" alt="Gray–Scott 迷宫">
+      <figcaption><b>02 · Gray–Scott 迷宫</b><span>100.0 / 100 · 斑点</span></figcaption>
+    </figure>
+    <figure class="pat">
+      <img src="assets/cima-hexagons.png" alt="Gray–Scott 六边">
+      <figcaption><b>03 · Gray–Scott 六边</b><span>61.7 / 100 · 斑点</span></figcaption>
+    </figure>
+    <figure class="pat">
+      <img src="assets/cima-stripes.png" alt="Lengyel–Epstein 条纹">
+      <figcaption><b>04 · Lengyel–Epstein 条纹</b><span>38.7 / 100 · 条纹</span></figcaption>
+    </figure></section>
+
+  <section class="cols">
+    <div class="col">
+      <h2><span>01</span>三种规则，同一件事</h2>
+      <p>复杂结构不必被直接设计，它可以从局部规则里长出来。</p>
+      <div class="row"><i>CA</i><div>康威生命游戏：滑翔机、振荡器、稳定块。</div></div>
+      <div class="row"><i>CF</i><div>Lenia 连续场：边界更柔和，群落会呼吸。</div></div>
+      <div class="row"><i>RD</i><div>反应扩散：斑点、条纹与螺旋自行生成。</div></div>
+      <div class="chips"><span>培育台</span><span>挑战</span><span>花园</span><span>家谱</span></div>
+      <p style="margin-top:2mm">一个生命，两种玩法：培育是主线，挑战给出目标形态，作为模式练习。</p>
+    </div>
+    <div class="col">
+      <h2><span>02</span>声音是观测通道</h2>
+      <div class="map">
+        <div><b>密度</b> → 音量</div><div><b>熵</b> → 音色亮度</div>
+        <div><b>活跃度</b> → 节奏</div><div><b>周期性</b> → 节拍规律</div>
+      </div>
+      <p>五声音阶量化，把连续状态收进可听音集；十一个声部可单独换音色、调声像、加混响。</p>
+      <p>双耳对比：同一颗种子放进两个环境，左右耳各听一个，其余条件固定，差异直接显现。</p>
+      <div class="quote">声音不是配乐，是把结构变化转成可听事件；参与者据此比较不同环境下的演化。</div>
+    </div>
+    <div class="col">
+      <h2><span>03</span>可复现，才可比较</h2>
+      <table><thead><tr><th>模型生命</th><th class="mono">分数</th><th>行为</th><th class="mono">稳定</th></tr></thead><tbody>
+    <tr><td>Gray–Scott 斑点</td><td class="mono">100.0</td><td>斑点</td><td class="mono">480</td></tr>
+    <tr><td>Gray–Scott 迷宫</td><td class="mono">100.0</td><td>斑点</td><td class="mono">480</td></tr>
+    <tr><td>Gray–Scott 六边</td><td class="mono">61.7</td><td>斑点</td><td class="mono">480</td></tr>
+    <tr><td>Lengyel–Epstein 条纹</td><td class="mono">38.7</td><td>条纹</td><td class="mono">12000</td></tr></tbody></table>
+      <div class="code"><b>GET</b> /api/research/model-lives<br><b>POST</b> /api/research/replicate<br>{"modelId":"model-gs-spots"}</div>
+      <p style="margin-top:2mm">服务端按模型卡固定参数与种子重跑；神经代理只排序，最终分数由重跑确认。</p>
+      <p>榜单写入外部存储，实例重启不丢；未配置时如实返回 <span class="mono">ephemeral</span>。</p>
+    </div>
+  </section>
+
+  <div class="route"><b>3 分钟路线</b><span>首页听声音</span><span>随机孵化</span><span>分裂</span><span>存入花园</span><span>挑战</span><span>模型复现</span><span>家谱</span></div>
+
+  <section class="bottom">
+    <div>
+      <h3>Honest boundary · 诚实边界</h3>
+      <p><b>评分是结构统计相似，不是参数反演。</b>不宣称恢复真实生物参数，也不宣称复现实验的全部动力学。</p>
+      <p>模型卡只描述结构统计与行为指纹；代理不是裁判，隐藏测试集 Top-3 召回 95%（GS）/ 98.5%（LE）。</p>
+    </div>
+    <div>
+      <h3>Stack · 技术栈</h3>
+      <p>Canvas 2D · Web Audio API · Node.js 20 · 确定性种子 · 外部 JSON 存储 · 降阶 MLP 代理 · Node test runner</p>
+      <p><b>测试 43/43</b> · 构建 442.7 KB · 部署 <span class="mono">dep_6af73eb2f7d7881f2f484d05</span></p>
+    </div>
+  </section>
+
+  <footer><span>COMMONS 公地 · 让涌现成为可观察、可分类、可比较的具体现象</span><span>https://37jalf2ykndtrfn6iou.traesite.cn</span></footer>
+  </main></body></html>

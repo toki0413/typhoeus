@@ -1,0 +1,1064 @@
+[
+  {
+    "model": {
+      "id": "model-gs-spots",
+      "label": "模型生命 · GS 斑点",
+      "short": "Gray–Scott 斑点",
+      "engine": "grayScott",
+      "targetId": "gs-spots-lit",
+      "params": {
+        "f": 0.035,
+        "k": 0.062,
+        "D_u": 0.16,
+        "D_v": 0.08,
+        "dt": 1,
+        "recipeId": "calibration-seed"
+      },
+      "seedPolicy": "fixed:calibration-seed",
+      "steps": 480,
+      "expected": {
+        "pattern": "spots",
+        "densityRange": [
+          0.05,
+          0.4
+        ],
+        "anisotropyMax": 0.45,
+        "stabilizeStepsMax": 480,
+        "minScore": 70
+      },
+      "invariants": [
+        "constant-field-laplacian=0",
+        "pure-diffusion-conservation",
+        "deterministic-seed"
+      ],
+      "provenance": {
+        "source": "Pearson 1993, Science 261:189–192 · Gray–Scott 参数区",
+        "license": "公开文献参数 · 用于校准",
+        "note": "目标为文献参数生成的校准斑图，不是实验原图。"
+      },
+      "description": "最经典的 Gray–Scott 斑点。同一配方、同一校准种子，应该稳定长出分离斑点。",
+      "behaviorNote": "预期密度中等、各向异性低；稳定后翻转率明显下降。",
+      "engineVersion": "1.0.0",
+      "target": {
+        "id": "gs-spots-lit",
+        "label": "文献 · 斑点（校准）",
+        "pattern": "synthetic",
+        "source": {
+          "citation": "Pearson 1993, Science 261:189–192（Gray-Scott 参数区）",
+          "license": "参数来自公开文献；参考场由本地 Gray-Scott 模型生成",
+          "url": "https://doi.org/10.1126/science.261.5118.189",
+          "modifications": "由本地前向模型生成 64×64 参考场",
+          "note": "文献参数 · 合成参考，用于校准评分"
+        }
+      }
+    },
+    "result": {
+      "ok": true,
+      "model": {
+        "id": "model-gs-spots",
+        "label": "模型生命 · GS 斑点",
+        "short": "Gray–Scott 斑点",
+        "engine": "grayScott",
+        "engineVersion": "1.0.0",
+        "seedPolicy": "fixed:calibration-seed",
+        "steps": 480,
+        "params": {
+          "f": 0.035,
+          "k": 0.062,
+          "D_u": 0.16,
+          "D_v": 0.08,
+          "dt": 1,
+          "recipeId": "calibration-seed"
+        },
+        "expected": {
+          "pattern": "spots",
+          "densityRange": [
+            0.05,
+            0.4
+          ],
+          "anisotropyMax": 0.45,
+          "stabilizeStepsMax": 480,
+          "minScore": 70
+        },
+        "invariants": [
+          "constant-field-laplacian=0",
+          "pure-diffusion-conservation",
+          "deterministic-seed"
+        ],
+        "provenance": {
+          "source": "Pearson 1993, Science 261:189–192 · Gray–Scott 参数区",
+          "license": "公开文献参数 · 用于校准",
+          "note": "目标为文献参数生成的校准斑图，不是实验原图。"
+        },
+        "description": "最经典的 Gray–Scott 斑点。同一配方、同一校准种子，应该稳定长出分离斑点。",
+        "behaviorNote": "预期密度中等、各向异性低；稳定后翻转率明显下降。"
+      },
+      "target": {
+        "id": "gs-spots-lit",
+        "label": "文献 · 斑点（校准）",
+        "pattern": "synthetic",
+        "source": {
+          "citation": "Pearson 1993, Science 261:189–192（Gray-Scott 参数区）",
+          "license": "参数来自公开文献；参考场由本地 Gray-Scott 模型生成",
+          "url": "https://doi.org/10.1126/science.261.5118.189",
+          "modifications": "由本地前向模型生成 64×64 参考场",
+          "note": "文献参数 · 合成参考，用于校准评分"
+        }
+      },
+      "score": 100,
+      "distance": 0,
+      "features": {
+        "density": 0.1513671875,
+        "anisotropy": 0.030769444967295976,
+        "period": 10,
+        "components": 0.0009765625,
+        "perimeter": 0.06689453125
+      },
+      "targetFeatures": {
+        "density": 0.1513671875,
+        "anisotropy": 0.030769444967295976,
+        "period": 10,
+        "components": 0.0009765625,
+        "perimeter": 0.06689453125
+      },
+      "behavior": {
+        "stabilizeSteps": 480,
+        "activity": 0.05,
+        "flipRate": 0.0549,
+        "growthRate": 0.16,
+        "pattern": "spots",
+        "samples": [
+          {
+            "step": 40,
+            "density": 0.073486328125,
+            "anisotropy": 0.1111111111111111,
+            "period": 0,
+            "components": 0.00048828125,
+            "perimeter": 0.03173828125
+          },
+          {
+            "step": 80,
+            "density": 0.0888671875,
+            "anisotropy": 0.12582781456953643,
+            "period": 5,
+            "components": 0.00048828125,
+            "perimeter": 0.0380859375
+          },
+          {
+            "step": 120,
+            "density": 0.082763671875,
+            "anisotropy": 0.033707865168539325,
+            "period": 7,
+            "components": 0.000732421875,
+            "perimeter": 0.04345703125
+          },
+          {
+            "step": 160,
+            "density": 0.0859375,
+            "anisotropy": 0.045454545454545456,
+            "period": 8,
+            "components": 0.000732421875,
+            "perimeter": 0.04296875
+          },
+          {
+            "step": 200,
+            "density": 0.087158203125,
+            "anisotropy": 0.03836317135549872,
+            "period": 10,
+            "components": 0.000732421875,
+            "perimeter": 0.04833984375
+          },
+          {
+            "step": 240,
+            "density": 0.099609375,
+            "anisotropy": 0.026785714285714284,
+            "period": 10,
+            "components": 0.000732421875,
+            "perimeter": 0.055908203125
+          },
+          {
+            "step": 280,
+            "density": 0.109375,
+            "anisotropy": 0.004405286343612335,
+            "period": 11,
+            "components": 0.000732421875,
+            "perimeter": 0.056396484375
+          },
+          {
+            "step": 320,
+            "density": 0.12548828125,
+            "anisotropy": 0.006085192697768763,
+            "period": 9,
+            "components": 0.000732421875,
+            "perimeter": 0.061767578125
+          },
+          {
+            "step": 360,
+            "density": 0.137939453125,
+            "anisotropy": 0.015873015873015872,
+            "period": 10,
+            "components": 0.000732421875,
+            "perimeter": 0.064453125
+          },
+          {
+            "step": 400,
+            "density": 0.14013671875,
+            "anisotropy": 0.0038022813688212928,
+            "period": 12,
+            "components": 0.0009765625,
+            "perimeter": 0.0654296875
+          },
+          {
+            "step": 440,
+            "density": 0.148193359375,
+            "anisotropy": 0.04150943396226415,
+            "period": 10,
+            "components": 0.0009765625,
+            "perimeter": 0.06591796875
+          },
+          {
+            "step": 480,
+            "density": 0.1513671875,
+            "anisotropy": 0.030769444967295976,
+            "period": 10,
+            "components": 0.0009765625,
+            "perimeter": 0.06689453125
+          }
+        ]
+      },
+      "checks": [
+        {
+          "key": "pattern",
+          "ok": true,
+          "expected": "spots",
+          "actual": "spots"
+        },
+        {
+          "key": "density",
+          "ok": true,
+          "expected": "0.05–0.4",
+          "actual": 0.1513671875
+        },
+        {
+          "key": "anisotropyMax",
+          "ok": true,
+          "expected": "≤0.45",
+          "actual": 0.030769444967295976
+        },
+        {
+          "key": "stabilize",
+          "ok": true,
+          "expected": "≤480",
+          "actual": 480
+        },
+        {
+          "key": "score",
+          "ok": true,
+          "expected": "≥70",
+          "actual": 100
+        }
+      ],
+      "passed": true,
+      "modelType": "grayScott",
+      "steps": 480,
+      "persisted": false,
+      "type": "replicate"
+    }
+  },
+  {
+    "model": {
+      "id": "model-gs-maze",
+      "label": "模型生命 · GS 迷宫",
+      "short": "Gray–Scott 迷宫",
+      "engine": "grayScott",
+      "targetId": "gs-maze-lit",
+      "params": {
+        "f": 0.026,
+        "k": 0.058,
+        "D_u": 0.16,
+        "D_v": 0.08,
+        "dt": 1,
+        "recipeId": "calibration-seed"
+      },
+      "seedPolicy": "fixed:calibration-seed",
+      "steps": 480,
+      "expected": {
+        "pattern": "spots",
+        "densityRange": [
+          0.1,
+          0.45
+        ],
+        "anisotropyMax": 0.3,
+        "stabilizeStepsMax": 480,
+        "minScore": 80
+      },
+      "invariants": [
+        "constant-field-laplacian=0",
+        "pure-diffusion-conservation",
+        "deterministic-seed"
+      ],
+      "provenance": {
+        "source": "Pearson 1993, Science 261:189–192 · Gray–Scott 迷宫/斑点区",
+        "license": "公开文献参数 · 用于校准",
+        "note": "目标为文献参数生成的迷宫/斑点斑图；这里的 pattern 分类按全局各向异性给出。"
+      },
+      "description": "换到迷宫/斑点参数区，观察同一条规则如何长出更密的连通结构。",
+      "behaviorNote": "迷宫会弯曲，全局各向异性不一定高；因此这里按斑点/混合而非条纹预期。",
+      "engineVersion": "1.0.0",
+      "target": {
+        "id": "gs-maze-lit",
+        "label": "文献 · 条纹/迷宫（校准）",
+        "pattern": "synthetic",
+        "source": {
+          "citation": "Pearson 1993, Science 261:189–192（Gray-Scott 参数区）",
+          "license": "参数来自公开文献；参考场由本地 Gray-Scott 模型生成",
+          "url": "https://doi.org/10.1126/science.261.5118.189",
+          "modifications": "由本地前向模型生成 64×64 参考场",
+          "note": "文献参数 · 合成参考，用于校准评分"
+        }
+      }
+    },
+    "result": {
+      "ok": true,
+      "model": {
+        "id": "model-gs-maze",
+        "label": "模型生命 · GS 迷宫",
+        "short": "Gray–Scott 迷宫",
+        "engine": "grayScott",
+        "engineVersion": "1.0.0",
+        "seedPolicy": "fixed:calibration-seed",
+        "steps": 480,
+        "params": {
+          "f": 0.026,
+          "k": 0.058,
+          "D_u": 0.16,
+          "D_v": 0.08,
+          "dt": 1,
+          "recipeId": "calibration-seed"
+        },
+        "expected": {
+          "pattern": "spots",
+          "densityRange": [
+            0.1,
+            0.45
+          ],
+          "anisotropyMax": 0.3,
+          "stabilizeStepsMax": 480,
+          "minScore": 80
+        },
+        "invariants": [
+          "constant-field-laplacian=0",
+          "pure-diffusion-conservation",
+          "deterministic-seed"
+        ],
+        "provenance": {
+          "source": "Pearson 1993, Science 261:189–192 · Gray–Scott 迷宫/斑点区",
+          "license": "公开文献参数 · 用于校准",
+          "note": "目标为文献参数生成的迷宫/斑点斑图；这里的 pattern 分类按全局各向异性给出。"
+        },
+        "description": "换到迷宫/斑点参数区，观察同一条规则如何长出更密的连通结构。",
+        "behaviorNote": "迷宫会弯曲，全局各向异性不一定高；因此这里按斑点/混合而非条纹预期。"
+      },
+      "target": {
+        "id": "gs-maze-lit",
+        "label": "文献 · 条纹/迷宫（校准）",
+        "pattern": "synthetic",
+        "source": {
+          "citation": "Pearson 1993, Science 261:189–192（Gray-Scott 参数区）",
+          "license": "参数来自公开文献；参考场由本地 Gray-Scott 模型生成",
+          "url": "https://doi.org/10.1126/science.261.5118.189",
+          "modifications": "由本地前向模型生成 64×64 参考场",
+          "note": "文献参数 · 合成参考，用于校准评分"
+        }
+      },
+      "score": 100,
+      "distance": 0,
+      "features": {
+        "density": 0.274658203125,
+        "anisotropy": 0.07405654722504487,
+        "period": 18,
+        "components": 0.00146484375,
+        "perimeter": 0.10400390625
+      },
+      "targetFeatures": {
+        "density": 0.274658203125,
+        "anisotropy": 0.07405654722504487,
+        "period": 18,
+        "components": 0.00146484375,
+        "perimeter": 0.10400390625
+      },
+      "behavior": {
+        "stabilizeSteps": 480,
+        "activity": 0.1158,
+        "flipRate": 0.1297,
+        "growthRate": 0.38,
+        "pattern": "spots",
+        "samples": [
+          {
+            "step": 40,
+            "density": 0.090576171875,
+            "anisotropy": 0.12903225806451613,
+            "period": 0,
+            "components": 0.00048828125,
+            "perimeter": 0.03076171875
+          },
+          {
+            "step": 80,
+            "density": 0.119384765625,
+            "anisotropy": 0.14814814814814814,
+            "period": 10,
+            "components": 0.00048828125,
+            "perimeter": 0.054931640625
+          },
+          {
+            "step": 120,
+            "density": 0.12548828125,
+            "anisotropy": 0.04680851063829787,
+            "period": 17,
+            "components": 0.000732421875,
+            "perimeter": 0.0595703125
+          },
+          {
+            "step": 160,
+            "density": 0.141845703125,
+            "anisotropy": 0.016,
+            "period": 11,
+            "components": 0.000732421875,
+            "perimeter": 0.0625
+          },
+          {
+            "step": 200,
+            "density": 0.158447265625,
+            "anisotropy": 0.010174198290453922,
+            "period": 13,
+            "components": 0.0009765625,
+            "perimeter": 0.07177734375
+          },
+          {
+            "step": 240,
+            "density": 0.175537109375,
+            "anisotropy": 0.018541193843281838,
+            "period": 13,
+            "components": 0.001220703125,
+            "perimeter": 0.076904296875
+          },
+          {
+            "step": 280,
+            "density": 0.203125,
+            "anisotropy": 0.07050808020969061,
+            "period": 13,
+            "components": 0.001220703125,
+            "perimeter": 0.0859375
+          },
+          {
+            "step": 320,
+            "density": 0.232177734375,
+            "anisotropy": 0.11359542968113241,
+            "period": 18,
+            "components": 0.0009765625,
+            "perimeter": 0.088623046875
+          },
+          {
+            "step": 360,
+            "density": 0.23974609375,
+            "anisotropy": 0.11352876519163191,
+            "period": 22,
+            "components": 0.0009765625,
+            "perimeter": 0.09326171875
+          },
+          {
+            "step": 400,
+            "density": 0.253173828125,
+            "anisotropy": 0.12679784511766187,
+            "period": 16,
+            "components": 0.001220703125,
+            "perimeter": 0.096435546875
+          },
+          {
+            "step": 440,
+            "density": 0.255126953125,
+            "anisotropy": 0.0861593520226049,
+            "period": 17,
+            "components": 0.001220703125,
+            "perimeter": 0.1015625
+          },
+          {
+            "step": 480,
+            "density": 0.274658203125,
+            "anisotropy": 0.07405654722504487,
+            "period": 18,
+            "components": 0.00146484375,
+            "perimeter": 0.10400390625
+          }
+        ]
+      },
+      "checks": [
+        {
+          "key": "pattern",
+          "ok": true,
+          "expected": "spots",
+          "actual": "spots"
+        },
+        {
+          "key": "density",
+          "ok": true,
+          "expected": "0.1–0.45",
+          "actual": 0.274658203125
+        },
+        {
+          "key": "anisotropyMax",
+          "ok": true,
+          "expected": "≤0.3",
+          "actual": 0.07405654722504487
+        },
+        {
+          "key": "stabilize",
+          "ok": true,
+          "expected": "≤480",
+          "actual": 480
+        },
+        {
+          "key": "score",
+          "ok": true,
+          "expected": "≥80",
+          "actual": 100
+        }
+      ],
+      "passed": true,
+      "modelType": "grayScott",
+      "steps": 480,
+      "persisted": false,
+      "type": "replicate"
+    }
+  },
+  {
+    "model": {
+      "id": "model-gs-hex",
+      "label": "模型生命 · GS 六边",
+      "short": "Gray–Scott 六边",
+      "engine": "grayScott",
+      "targetId": "cima-hexagons",
+      "params": {
+        "f": 0.04,
+        "k": 0.06,
+        "D_u": 0.16,
+        "D_v": 0.08,
+        "dt": 1,
+        "recipeId": "calibration-seed"
+      },
+      "seedPolicy": "fixed:calibration-seed",
+      "steps": 480,
+      "expected": {
+        "pattern": "spots",
+        "densityRange": [
+          0.1,
+          0.45
+        ],
+        "anisotropyMax": 0.3,
+        "stabilizeStepsMax": 480,
+        "minScore": 55
+      },
+      "invariants": [
+        "constant-field-laplacian=0",
+        "pure-diffusion-conservation",
+        "deterministic-seed"
+      ],
+      "provenance": {
+        "source": "CIMA 实验六边斑图（Kazarnikov et al. 2025, Fig. 6 [I], CC BY 4.0）",
+        "license": "CC BY 4.0 · 目标图像",
+        "note": "用 Gray–Scott 校准参数逼近实验六边目标；不宣称唯一参数。"
+      },
+      "description": "把实验六边斑图作为目标，检查同一模型生命能否在结构统计上靠近它。",
+      "behaviorNote": "预期形成多个分离斑块，各向异性低于条纹。",
+      "engineVersion": "1.0.0",
+      "target": {
+        "id": "cima-hexagons",
+        "label": "CIMA · 六边斑点",
+        "pattern": "六边斑点",
+        "source": {
+          "citation": "Kazarnikov et al. 2025, arXiv:2504.02530, Fig. 6 [I]",
+          "license": "CC BY 4.0",
+          "url": "https://arxiv.org/abs/2504.02530",
+          "modifications": "cropped from the pre-processed 96x96 experimental panel; grayscale luminance; 2–98 percentile stretch; resized to 64x64",
+          "note": "真实 CIMA 实验斑图 · 无唯一参数解"
+        }
+      }
+    },
+    "result": {
+      "ok": true,
+      "model": {
+        "id": "model-gs-hex",
+        "label": "模型生命 · GS 六边",
+        "short": "Gray–Scott 六边",
+        "engine": "grayScott",
+        "engineVersion": "1.0.0",
+        "seedPolicy": "fixed:calibration-seed",
+        "steps": 480,
+        "params": {
+          "f": 0.04,
+          "k": 0.06,
+          "D_u": 0.16,
+          "D_v": 0.08,
+          "dt": 1,
+          "recipeId": "calibration-seed"
+        },
+        "expected": {
+          "pattern": "spots",
+          "densityRange": [
+            0.1,
+            0.45
+          ],
+          "anisotropyMax": 0.3,
+          "stabilizeStepsMax": 480,
+          "minScore": 55
+        },
+        "invariants": [
+          "constant-field-laplacian=0",
+          "pure-diffusion-conservation",
+          "deterministic-seed"
+        ],
+        "provenance": {
+          "source": "CIMA 实验六边斑图（Kazarnikov et al. 2025, Fig. 6 [I], CC BY 4.0）",
+          "license": "CC BY 4.0 · 目标图像",
+          "note": "用 Gray–Scott 校准参数逼近实验六边目标；不宣称唯一参数。"
+        },
+        "description": "把实验六边斑图作为目标，检查同一模型生命能否在结构统计上靠近它。",
+        "behaviorNote": "预期形成多个分离斑块，各向异性低于条纹。"
+      },
+      "target": {
+        "id": "cima-hexagons",
+        "label": "CIMA · 六边斑点",
+        "pattern": "六边斑点",
+        "source": {
+          "citation": "Kazarnikov et al. 2025, arXiv:2504.02530, Fig. 6 [I]",
+          "license": "CC BY 4.0",
+          "url": "https://arxiv.org/abs/2504.02530",
+          "modifications": "cropped from the pre-processed 96x96 experimental panel; grayscale luminance; 2–98 percentile stretch; resized to 64x64",
+          "note": "真实 CIMA 实验斑图 · 无唯一参数解"
+        }
+      },
+      "score": 61.7,
+      "distance": 0.62,
+      "features": {
+        "density": 0.30712890625,
+        "anisotropy": 0.059692841824413465,
+        "period": 13,
+        "components": 0.00146484375,
+        "perimeter": 0.105712890625
+      },
+      "targetFeatures": {
+        "density": 0.263427734375,
+        "anisotropy": 0.0654065349516765,
+        "period": 15,
+        "components": 0.0068359375,
+        "perimeter": 0.163818359375
+      },
+      "behavior": {
+        "stabilizeSteps": 480,
+        "activity": 0.107,
+        "flipRate": 0.1128,
+        "growthRate": 0.49,
+        "pattern": "spots",
+        "samples": [
+          {
+            "step": 40,
+            "density": 0.070068359375,
+            "anisotropy": 0.11864406779661017,
+            "period": 0,
+            "components": 0.00048828125,
+            "perimeter": 0.03173828125
+          },
+          {
+            "step": 80,
+            "density": 0.106201171875,
+            "anisotropy": 0.09859154929577464,
+            "period": 0,
+            "components": 0.00048828125,
+            "perimeter": 0.03466796875
+          },
+          {
+            "step": 120,
+            "density": 0.127685546875,
+            "anisotropy": 0.10160427807486631,
+            "period": 0,
+            "components": 0.00048828125,
+            "perimeter": 0.047119140625
+          },
+          {
+            "step": 160,
+            "density": 0.15087890625,
+            "anisotropy": 0.10688836104513064,
+            "period": 0,
+            "components": 0.00048828125,
+            "perimeter": 0.054443359375
+          },
+          {
+            "step": 200,
+            "density": 0.16943359375,
+            "anisotropy": 0.11894273127753303,
+            "period": 0,
+            "components": 0.00048828125,
+            "perimeter": 0.05810546875
+          },
+          {
+            "step": 240,
+            "density": 0.182373046875,
+            "anisotropy": 0.11332007952286283,
+            "period": 21,
+            "components": 0.000732421875,
+            "perimeter": 0.063720703125
+          },
+          {
+            "step": 280,
+            "density": 0.200927734375,
+            "anisotropy": 0.09880853074195342,
+            "period": 13,
+            "components": 0.000732421875,
+            "perimeter": 0.070556640625
+          },
+          {
+            "step": 320,
+            "density": 0.2275390625,
+            "anisotropy": 0.14983351872132467,
+            "period": 22,
+            "components": 0.0009765625,
+            "perimeter": 0.077392578125
+          },
+          {
+            "step": 360,
+            "density": 0.244384765625,
+            "anisotropy": 0.11240754082344605,
+            "period": 13,
+            "components": 0.0009765625,
+            "perimeter": 0.084716796875
+          },
+          {
+            "step": 400,
+            "density": 0.261962890625,
+            "anisotropy": 0.12534726232529522,
+            "period": 22,
+            "components": 0.0009765625,
+            "perimeter": 0.08740234375
+          },
+          {
+            "step": 440,
+            "density": 0.288330078125,
+            "anisotropy": 0.0838338066511906,
+            "period": 13,
+            "components": 0.001220703125,
+            "perimeter": 0.094970703125
+          },
+          {
+            "step": 480,
+            "density": 0.30712890625,
+            "anisotropy": 0.059692841824413465,
+            "period": 13,
+            "components": 0.00146484375,
+            "perimeter": 0.105712890625
+          }
+        ]
+      },
+      "checks": [
+        {
+          "key": "pattern",
+          "ok": true,
+          "expected": "spots",
+          "actual": "spots"
+        },
+        {
+          "key": "density",
+          "ok": true,
+          "expected": "0.1–0.45",
+          "actual": 0.30712890625
+        },
+        {
+          "key": "anisotropyMax",
+          "ok": true,
+          "expected": "≤0.3",
+          "actual": 0.059692841824413465
+        },
+        {
+          "key": "stabilize",
+          "ok": true,
+          "expected": "≤480",
+          "actual": 480
+        },
+        {
+          "key": "score",
+          "ok": true,
+          "expected": "≥55",
+          "actual": 61.7
+        }
+      ],
+      "passed": true,
+      "modelType": "grayScott",
+      "steps": 480,
+      "persisted": false,
+      "type": "replicate"
+    }
+  },
+  {
+    "model": {
+      "id": "model-le-stripes",
+      "label": "模型生命 · LE 条纹",
+      "short": "Lengyel–Epstein 条纹",
+      "engine": "lengyelEpstein",
+      "targetId": "cima-stripes",
+      "params": {
+        "a": 8,
+        "b": 6,
+        "sigma": 0.6,
+        "D_v": 80,
+        "dt": 0.001
+      },
+      "seedPolicy": "fixed:le-noise",
+      "steps": 12000,
+      "expected": {
+        "pattern": "stripes",
+        "densityRange": [
+          0.05,
+          0.7
+        ],
+        "anisotropyMin": 0.25,
+        "stabilizeStepsMax": 12000,
+        "minScore": 30
+      },
+      "invariants": [
+        "constant-field-laplacian=0",
+        "pure-diffusion-conservation",
+        "deterministic-noise-seed"
+      ],
+      "provenance": {
+        "source": "Kazarnikov et al. 2025, arXiv:2504.02530, Fig. 6 [I] · CC BY 4.0",
+        "license": "CC BY 4.0 · 目标图像",
+        "note": "复核模型为 Lengyel–Epstein；目标为真实 CIMA 实验条纹快照。"
+      },
+      "description": "CIMA 同族的 Lengyel–Epstein 模型，用固定噪声种子长条纹。",
+      "behaviorNote": "预期慢速稳定、各向异性高；参考上限来自 LE 参数校准搜索。",
+      "engineVersion": "1.0.0",
+      "target": {
+        "id": "cima-stripes",
+        "label": "CIMA · 条纹",
+        "pattern": "条纹",
+        "source": {
+          "citation": "Kazarnikov et al. 2025, arXiv:2504.02530, Fig. 6 [I]",
+          "license": "CC BY 4.0",
+          "url": "https://arxiv.org/abs/2504.02530",
+          "modifications": "cropped from the pre-processed 96x96 experimental panel; grayscale luminance; 2–98 percentile stretch; resized to 64x64",
+          "note": "真实 CIMA 实验斑图 · 无唯一参数解"
+        }
+      }
+    },
+    "result": {
+      "ok": true,
+      "model": {
+        "id": "model-le-stripes",
+        "label": "模型生命 · LE 条纹",
+        "short": "Lengyel–Epstein 条纹",
+        "engine": "lengyelEpstein",
+        "engineVersion": "1.0.0",
+        "seedPolicy": "fixed:le-noise",
+        "steps": 12000,
+        "params": {
+          "a": 8,
+          "b": 6,
+          "sigma": 0.6,
+          "D_v": 80,
+          "dt": 0.001
+        },
+        "expected": {
+          "pattern": "stripes",
+          "densityRange": [
+            0.05,
+            0.7
+          ],
+          "anisotropyMin": 0.25,
+          "stabilizeStepsMax": 12000,
+          "minScore": 30
+        },
+        "invariants": [
+          "constant-field-laplacian=0",
+          "pure-diffusion-conservation",
+          "deterministic-noise-seed"
+        ],
+        "provenance": {
+          "source": "Kazarnikov et al. 2025, arXiv:2504.02530, Fig. 6 [I] · CC BY 4.0",
+          "license": "CC BY 4.0 · 目标图像",
+          "note": "复核模型为 Lengyel–Epstein；目标为真实 CIMA 实验条纹快照。"
+        },
+        "description": "CIMA 同族的 Lengyel–Epstein 模型，用固定噪声种子长条纹。",
+        "behaviorNote": "预期慢速稳定、各向异性高；参考上限来自 LE 参数校准搜索。"
+      },
+      "target": {
+        "id": "cima-stripes",
+        "label": "CIMA · 条纹",
+        "pattern": "条纹",
+        "source": {
+          "citation": "Kazarnikov et al. 2025, arXiv:2504.02530, Fig. 6 [I]",
+          "license": "CC BY 4.0",
+          "url": "https://arxiv.org/abs/2504.02530",
+          "modifications": "cropped from the pre-processed 96x96 experimental panel; grayscale luminance; 2–98 percentile stretch; resized to 64x64",
+          "note": "真实 CIMA 实验斑图 · 无唯一参数解"
+        }
+      },
+      "score": 38.7,
+      "distance": 1.581,
+      "features": {
+        "density": 0.48193359375,
+        "anisotropy": 0.3053450086799943,
+        "period": 22,
+        "components": 0.001708984375,
+        "perimeter": 0.126953125
+      },
+      "targetFeatures": {
+        "density": 0.388427734375,
+        "anisotropy": 0.7025377638356706,
+        "period": 18,
+        "components": 0.001708984375,
+        "perimeter": 0.2158203125
+      },
+      "behavior": {
+        "stabilizeSteps": 12000,
+        "activity": 0.0038,
+        "flipRate": 0.0058,
+        "growthRate": -0.03,
+        "pattern": "stripes",
+        "samples": [
+          {
+            "step": 1000,
+            "density": 0.783447265625,
+            "anisotropy": 0.13767135637765723,
+            "period": 19,
+            "components": 0.000244140625,
+            "perimeter": 0.052490234375
+          },
+          {
+            "step": 2000,
+            "density": 0.779296875,
+            "anisotropy": 0.13854166600617754,
+            "period": 23,
+            "components": 0.000244140625,
+            "perimeter": 0.048828125
+          },
+          {
+            "step": 3000,
+            "density": 0.79248046875,
+            "anisotropy": 0.173225309946659,
+            "period": 22,
+            "components": 0.000244140625,
+            "perimeter": 0.055908203125
+          },
+          {
+            "step": 4000,
+            "density": 0.8330078125,
+            "anisotropy": 0.07259483824640069,
+            "period": 14,
+            "components": 0.00048828125,
+            "perimeter": 0.06494140625
+          },
+          {
+            "step": 5000,
+            "density": 0.886962890625,
+            "anisotropy": 0.052109181141439205,
+            "period": 14,
+            "components": 0.000244140625,
+            "perimeter": 0.051025390625
+          },
+          {
+            "step": 6000,
+            "density": 0.9013671875,
+            "anisotropy": 0.07276277542537328,
+            "period": 12,
+            "components": 0.000244140625,
+            "perimeter": 0.0439453125
+          },
+          {
+            "step": 7000,
+            "density": 0.867431640625,
+            "anisotropy": 0.06923346111917246,
+            "period": 10,
+            "components": 0.000244140625,
+            "perimeter": 0.061767578125
+          },
+          {
+            "step": 8000,
+            "density": 0.77490234375,
+            "anisotropy": 0.13887197989115246,
+            "period": 19,
+            "components": 0.000244140625,
+            "perimeter": 0.095947265625
+          },
+          {
+            "step": 9000,
+            "density": 0.614501953125,
+            "anisotropy": 0.24315051082757938,
+            "period": 12,
+            "components": 0.0009765625,
+            "perimeter": 0.127685546875
+          },
+          {
+            "step": 10000,
+            "density": 0.524658203125,
+            "anisotropy": 0.2604986497917814,
+            "period": 18,
+            "components": 0.00146484375,
+            "perimeter": 0.128173828125
+          },
+          {
+            "step": 11000,
+            "density": 0.503173828125,
+            "anisotropy": 0.2846236901572676,
+            "period": 18,
+            "components": 0.00146484375,
+            "perimeter": 0.128173828125
+          },
+          {
+            "step": 12000,
+            "density": 0.48193359375,
+            "anisotropy": 0.3053450086799943,
+            "period": 22,
+            "components": 0.001708984375,
+            "perimeter": 0.126953125
+          }
+        ]
+      },
+      "checks": [
+        {
+          "key": "pattern",
+          "ok": true,
+          "expected": "stripes",
+          "actual": "stripes"
+        },
+        {
+          "key": "density",
+          "ok": true,
+          "expected": "0.05–0.7",
+          "actual": 0.48193359375
+        },
+        {
+          "key": "anisotropyMin",
+          "ok": true,
+          "expected": "≥0.25",
+          "actual": 0.3053450086799943
+        },
+        {
+          "key": "stabilize",
+          "ok": true,
+          "expected": "≤12000",
+          "actual": 12000
+        },
+        {
+          "key": "score",
+          "ok": true,
+          "expected": "≥30",
+          "actual": 38.7
+        }
+      ],
+      "passed": true,
+      "modelType": "lengyelEpstein",
+      "steps": 12000,
+      "persisted": false,
+      "type": "replicate"
+    }
+  }
+]
