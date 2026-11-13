@@ -19,6 +19,7 @@ import { evaluateTarget } from './research/score.mjs';
 import { signatureDistance } from './research/signature.mjs';
 import { openStore } from './research/store.mjs';
 import { loadSurrogate, rankCandidates, surrogateSummary } from './research/surrogate.mjs';
+import { checkModel } from './research/model-life.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PARENT = path.resolve(HERE, '..');
@@ -33,6 +34,7 @@ const HOST = '0.0.0.0';
 const TARGETS = loadTargets();
 const SURFACE = loadSurface();
 const SURROGATE = loadSurrogate();
+const MODEL_LIVES = loadModelLives();
 const STORAGE = await openStore();
 const STORE = STORAGE.data;
 const RATE = new Map(); // ip -> [timestamps]
@@ -60,6 +62,16 @@ function loadSurface() {
     if (Array.isArray(raw.points) && raw.points.length) return raw;
   } catch (_) { /* 没有响应面时提议接口返回空 */ }
   return { version: 1, seed: 'calibration-seed', points: [] };
+}
+
+function loadModelLives() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(HERE, 'research', 'model-lives.json'), 'utf8'));
+    if (Array.isArray(raw.models) && raw.models.length) return raw;
+  } catch (err) {
+    console.error('[research] 模型生命载入失败：', err.message);
+  }
+  return { version: 1, models: [] };
 }
 
 async function saveStore() {
@@ -169,6 +181,30 @@ function publicTarget(t) {
   };
 }
 
+function publicModel(m) {
+  const target = TARGETS.targets.find((t) => t.id === m.targetId);
+  return {
+    ...m,
+    target: target ? {
+      id: target.id,
+      label: target.label,
+      pattern: target.pattern,
+      source: target.source || null,
+    } : null,
+  };
+}
+
+function behaviorSummary(behavior) {
+  if (!behavior) return null;
+  return {
+    stabilizeSteps: behavior.stabilizeSteps,
+    activity: behavior.activity,
+    flipRate: behavior.flipRate,
+    growthRate: behavior.growthRate,
+    pattern: behavior.pattern,
+  };
+}
+
 function leaderboard(targetId) {
   const items = STORE.items
     .filter((it) => !targetId || it.targetId === targetId)
@@ -180,6 +216,7 @@ function leaderboard(targetId) {
       score: it.score,
       distance: it.distance,
       targetId: it.targetId,
+      behavior: it.behavior || null,
       at: it.at,
     }));
   return items;
@@ -197,6 +234,7 @@ async function handleApi(req, res, url) {
       storageDetail: info,
       storageError: STORAGE.error || STORAGE.store.configError || null,
       surrogate: surrogateSummary(SURROGATE),
+      modelLives: MODEL_LIVES.models.length,
       version: 1,
     });
   }
@@ -207,6 +245,14 @@ async function handleApi(req, res, url) {
       storage: STORAGE.store.mode,
       source: TARGETS.source,
       targets: TARGETS.targets.map(publicTarget),
+    });
+  }
+
+  if (url.pathname === '/api/research/model-lives' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      version: MODEL_LIVES.version,
+      note: MODEL_LIVES.note || '',
+      models: MODEL_LIVES.models.map(publicModel),
     });
   }
 
@@ -266,6 +312,67 @@ async function handleApi(req, res, url) {
     });
   }
 
+  /* 一键复现：按模型卡固定参数与种子重跑，返回结构 + 行为指纹与检查项。
+   * 不写榜单，避免复现操作污染共享排行榜。 */
+  if (url.pathname === '/api/research/replicate' && req.method === 'POST') {
+    if (!allowRate(clientIp(req))) {
+      return sendJson(res, 429, { ok: false, error: '提交太频繁了，休息一会儿再试' });
+    }
+    let body;
+    try {
+      body = await readJson(req);
+    } catch (err) {
+      return sendJson(res, err.status || 400, { ok: false, error: err.message });
+    }
+    const model = MODEL_LIVES.models.find((m) => m.id === body.modelId);
+    if (!model) return sendJson(res, 404, { ok: false, error: '模型生命不存在' });
+    const target = TARGETS.targets.find((t) => t.id === model.targetId);
+    if (!target) return sendJson(res, 404, { ok: false, error: '模型生命的目标不存在' });
+    let result;
+    try {
+      result = evaluateTarget(target, model.params, { includeBehavior: true });
+    } catch (err) {
+      console.error('[research] 模型复现失败：', err);
+      return sendJson(res, 500, { ok: false, error: '模型复现失败' });
+    }
+    const checks = checkModel(model, result);
+    return sendJson(res, 200, {
+      ok: true,
+      model: {
+        id: model.id,
+        label: model.label,
+        short: model.short,
+        engine: model.engine,
+        engineVersion: model.engineVersion,
+        seedPolicy: model.seedPolicy,
+        steps: model.steps,
+        params: model.params,
+        expected: model.expected,
+        invariants: model.invariants,
+        provenance: model.provenance,
+        description: model.description,
+        behaviorNote: model.behaviorNote,
+      },
+      target: {
+        id: target.id,
+        label: target.label,
+        pattern: target.pattern,
+        source: target.source || null,
+      },
+      score: result.score,
+      distance: result.distance,
+      features: result.features,
+      targetFeatures: target.features,
+      behavior: result.behavior,
+      checks,
+      passed: checks.every((c) => c.ok),
+      modelType: result.model,
+      steps: result.steps,
+      persisted: false,
+      type: 'replicate',
+    });
+  }
+
   if (url.pathname === '/api/research/verify' && req.method === 'POST') {
     if (!allowRate(clientIp(req))) {
       return sendJson(res, 429, { ok: false, error: '提交太频繁了，休息一会儿再试' });
@@ -299,7 +406,7 @@ async function handleApi(req, res, url) {
     if (body.useCalibrationSeed) params.recipeId = 'calibration-seed';
     let result;
     try {
-      result = evaluateTarget(target, params);
+      result = evaluateTarget(target, params, { includeBehavior: true });
     } catch (err) {
       console.error('[research] 复核失败：', err);
       return sendJson(res, 500, { ok: false, error: '服务端复核失败' });
@@ -321,6 +428,7 @@ async function handleApi(req, res, url) {
         D_v: clamp(params.D_v, 0.02, 0.2, 0.08),
       },
       usedMask: result.usedMask,
+      behavior: behaviorSummary(result.behavior),
       at: new Date().toISOString(),
     };
     STORE.items.push(item);
@@ -341,6 +449,7 @@ async function handleApi(req, res, url) {
       distance: result.distance,
       features: result.features,
       targetFeatures: target.features,
+      behavior: result.behavior,
       steps: result.steps,
       usedMask: result.usedMask,
       usedFixedSeed: result.usedFixedSeed,

@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-13T00:00:00.000Z",
+  "note": "四个可复现的模型生命。模型卡只描述结构统计与行为指纹，不宣称恢复真实生物参数。",
+  "models": [
+    {
+      "id": "model-gs-spots",
+      "label": "模型生命 · GS 斑点",
+      "short": "Gray–Scott 斑点",
+      "engine": "grayScott",
+      "targetId": "gs-spots-lit",
+      "params": {
+        "f": 0.035,
+        "k": 0.062,
+        "D_u": 0.16,
+        "D_v": 0.08,
+        "dt": 1,
+        "recipeId": "calibration-seed"
+      },
+      "seedPolicy": "fixed:calibration-seed",
+      "steps": 480,
+      "expected": {
+        "pattern": "spots",
+        "densityRange": [0.05, 0.4],
+        "anisotropyMax": 0.45,
+        "stabilizeStepsMax": 480,
+        "minScore": 70
+      },
+      "invariants": [
+        "constant-field-laplacian=0",
+        "pure-diffusion-conservation",
+        "deterministic-seed"
+      ],
+      "provenance": {
+        "source": "Pearson 1993, Science 261:189–192 · Gray–Scott 参数区",
+        "license": "公开文献参数 · 用于校准",
+        "note": "目标为文献参数生成的校准斑图，不是实验原图。"
+      },
+      "description": "最经典的 Gray–Scott 斑点。同一配方、同一校准种子，应该稳定长出分离斑点。",
+      "behaviorNote": "预期密度中等、各向异性低；稳定后翻转率明显下降。",
+      "engineVersion": "1.0.0"
+    },
+    {
+      "id": "model-gs-maze",
+      "label": "模型生命 · GS 迷宫",
+      "short": "Gray–Scott 迷宫",
+      "engine": "grayScott",
+      "targetId": "gs-maze-lit",
+      "params": {
+        "f": 0.026,
+        "k": 0.058,
+        "D_u": 0.16,
+        "D_v": 0.08,
+        "dt": 1,
+        "recipeId": "calibration-seed"
+      },
+      "seedPolicy": "fixed:calibration-seed",
+      "steps": 480,
+      "expected": {
+        "pattern": "spots",
+        "densityRange": [0.1, 0.45],
+        "anisotropyMax": 0.3,
+        "stabilizeStepsMax": 480,
+        "minScore": 80
+      },
+      "invariants": [
+        "constant-field-laplacian=0",
+        "pure-diffusion-conservation",
+        "deterministic-seed"
+      ],
+      "provenance": {
+        "source": "Pearson 1993, Science 261:189–192 · Gray–Scott 迷宫/斑点区",
+        "license": "公开文献参数 · 用于校准",
+        "note": "目标为文献参数生成的迷宫/斑点斑图；这里的 pattern 分类按全局各向异性给出。"
+      },
+      "description": "换到迷宫/斑点参数区，观察同一条规则如何长出更密的连通结构。",
+      "behaviorNote": "迷宫会弯曲，全局各向异性不一定高；因此这里按斑点/混合而非条纹预期。",
+      "engineVersion": "1.0.0"
+    },
+    {
+      "id": "model-gs-hex",
+      "label": "模型生命 · GS 六边",
+      "short": "Gray–Scott 六边",
+      "engine": "grayScott",
+      "targetId": "cima-hexagons",
+      "params": {
+        "f": 0.04,
+        "k": 0.06,
+        "D_u": 0.16,
+        "D_v": 0.08,
+        "dt": 1,
+        "recipeId": "calibration-seed"
+      },
+      "seedPolicy": "fixed:calibration-seed",
+      "steps": 480,
+      "expected": {
+        "pattern": "spots",
+        "densityRange": [0.1, 0.45],
+        "anisotropyMax": 0.3,
+        "stabilizeStepsMax": 480,
+        "minScore": 55
+      },
+      "invariants": [
+        "constant-field-laplacian=0",
+        "pure-diffusion-conservation",
+        "deterministic-seed"
+      ],
+      "provenance": {
+        "source": "CIMA 实验六边斑图（Kazarnikov et al. 2025, Fig. 6 [I], CC BY 4.0）",
+        "license": "CC BY 4.0 · 目标图像",
+        "note": "用 Gray–Scott 校准参数逼近实验六边目标；不宣称唯一参数。"
+      },
+      "description": "把实验六边斑图作为目标，检查同一模型生命能否在结构统计上靠近它。",
+      "behaviorNote": "预期形成多个分离斑块，各向异性低于条纹。",
+      "engineVersion": "1.0.0"
+    },
+    {
+      "id": "model-le-stripes",
+      "label": "模型生命 · LE 条纹",
+      "short": "Lengyel–Epstein 条纹",
+      "engine": "lengyelEpstein",
+      "targetId": "cima-stripes",
+      "params": {
+        "a": 8,
+        "b": 6,
+        "sigma": 0.6,
+        "D_v": 80,
+        "dt": 0.001
+      },
+      "seedPolicy": "fixed:le-noise",
+      "steps": 12000,
+      "expected": {
+        "pattern": "stripes",
+        "densityRange": [0.05, 0.7],
+        "anisotropyMin": 0.25,
+        "stabilizeStepsMax": 12000,
+        "minScore": 30
+      },
+      "invariants": [
+        "constant-field-laplacian=0",
+        "pure-diffusion-conservation",
+        "deterministic-noise-seed"
+      ],
+      "provenance": {
+        "source": "Kazarnikov et al. 2025, arXiv:2504.02530, Fig. 6 [I] · CC BY 4.0",
+        "license": "CC BY 4.0 · 目标图像",
+        "note": "复核模型为 Lengyel–Epstein；目标为真实 CIMA 实验条纹快照。"
+      },
+      "description": "CIMA 同族的 Lengyel–Epstein 模型，用固定噪声种子长条纹。",
+      "behaviorNote": "预期慢速稳定、各向异性高；参考上限来自 LE 参数校准搜索。",
+      "engineVersion": "1.0.0"
+    }
+  ]
+}

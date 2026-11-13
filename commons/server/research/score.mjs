@@ -51,7 +51,54 @@ export function normalizeMask(input, maskW, maskH) {
   return { mask: out, maskW: mw, maskH: mh };
 }
 
-export function evaluateTarget(target, params, { w = 64, h = 64, includeField = false } = {}) {
+function round(value, digits = 4) {
+  const p = 10 ** digits;
+  return Math.round(value * p) / p;
+}
+
+/* 行为指纹：结构签名回答“长什么样”，行为回答“怎么动”。
+ * 采样点固定，保证同一配方可复现。 */
+function summarizeBehavior(samples, steps, sampleEvery) {
+  if (!samples.length) return null;
+  let activitySum = 0;
+  let flipSum = 0;
+  let pairs = 0;
+  for (let i = 1; i < samples.length; i++) {
+    const a = samples[i - 1].field;
+    const b = samples[i].field;
+    let abs = 0;
+    let flips = 0;
+    for (let k = 0; k < a.length; k++) {
+      abs += Math.abs(b[k] - a[k]);
+      if ((a[k] > 0.5) !== (b[k] > 0.5)) flips++;
+    }
+    activitySum += abs / a.length;
+    flipSum += flips / a.length;
+    pairs++;
+  }
+  const first = samples[0].features;
+  const last = samples[samples.length - 1].features;
+  let stabilizeSteps = steps;
+  for (let i = 1; i < samples.length; i++) {
+    const stable = samples[i].features.density > 0.01
+      && signatureDistance(samples[i - 1].features, samples[i].features) < 0.03;
+    if (stable) { stabilizeSteps = samples[i].step; break; }
+  }
+  const pattern = last.density < 0.01
+    ? 'blank'
+    : last.anisotropy > 0.28 ? 'stripes' : last.anisotropy < 0.12 ? 'spots' : 'mixed';
+  const per100 = sampleEvery > 0 ? 100 / sampleEvery : 1;
+  return {
+    stabilizeSteps,
+    activity: round(pairs ? (activitySum / pairs) * per100 : 0),
+    flipRate: round(pairs ? (flipSum / pairs) * per100 : 0),
+    growthRate: round(((last.density - first.density) / Math.max(1, steps)) * 1000, 2),
+    pattern,
+    samples: samples.map((s) => ({ step: s.step, ...s.features })),
+  };
+}
+
+export function evaluateTarget(target, params, { w = 64, h = 64, includeField = false, includeBehavior = false } = {}) {
   const isLE = target.verify?.model === 'lengyelEpstein';
   const fixed = target.verify?.fixedMask;
   let maskInfo = null;
@@ -76,6 +123,8 @@ export function evaluateTarget(target, params, { w = 64, h = 64, includeField = 
     maskInfo = normalizeMask(params.mask, params.maskW, params.maskH);
   }
   const seed = maskInfo ? maskInfo.mask : deterministicMask(params.recipeId || params.name, w, h);
+  const maskW = maskInfo ? maskInfo.maskW : w;
+  const maskH = maskInfo ? maskInfo.maskH : h;
   const rd = new ReactionDiffusionEngine(w, h, isLE
     ? {
         preset: 'le_stripes',
@@ -89,8 +138,8 @@ export function evaluateTarget(target, params, { w = 64, h = 64, includeField = 
         boundary: 'torus',
         pattern: 'soup',
         mask: seed,
-        maskW: maskInfo.maskW,
-        maskH: maskInfo.maskH,
+        maskW,
+        maskH,
       }
     : {
         preset: 'gs_spots',
@@ -103,16 +152,29 @@ export function evaluateTarget(target, params, { w = 64, h = 64, includeField = 
         boundary: 'torus',
         pattern: 'ring',
         mask: seed,
-        maskW: maskInfo.maskW,
-        maskH: maskInfo.maskH,
+        maskW,
+        maskH,
       });
   const maxSteps = isLE ? 30000 : 1200;
   const steps = Math.round(clamp(target.verify?.steps, 120, maxSteps, isLE ? 12000 : 480));
-  for (let i = 0; i < steps; i++) rd.step();
+  const sampleEvery = includeBehavior ? Math.max(1, Math.floor(steps / 12)) : 0;
+  const behaviorSamples = [];
+  for (let i = 0; i < steps; i++) {
+    rd.step();
+    if (includeBehavior && ((i + 1) % sampleEvery === 0 || i === steps - 1)) {
+      const sampleField = normalizeField(rd.vField);
+      behaviorSamples.push({
+        step: i + 1,
+        field: Float32Array.from(sampleField),
+        features: structuralSignature(sampleField, w, h),
+      });
+    }
+  }
   const field = normalizeField(rd.vField);
   const features = structuralSignature(field, w, h);
   const distance = signatureDistance(target.features, features);
   const score = Math.round((100 / (1 + distance)) * 10) / 10;
+  const behavior = includeBehavior ? summarizeBehavior(behaviorSamples, steps, sampleEvery) : null;
   return {
     score,
     distance: Math.round(distance * 1000) / 1000,
@@ -121,6 +183,7 @@ export function evaluateTarget(target, params, { w = 64, h = 64, includeField = 
     usedMask: !!maskInfo,
     usedFixedSeed: !!(fixed || isLE),
     model: isLE ? 'lengyelEpstein' : 'grayScott',
+    ...(behavior ? { behavior } : {}),
     ...(includeField ? { field, w, h } : {}),
   };
 }

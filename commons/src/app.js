@@ -2769,7 +2769,9 @@ function exportLocalDiscoveries() {
 
 /* ---- 研究关：真实实验目标 + 服务端复核 + 共享榜单 ---- */
 
-const researchLab = { targets: null, loading: null };
+const researchLab = { targets: null, loading: null, models: null, modelsLoading: null };
+
+const PATTERN_LABELS = { spots: '斑点', stripes: '条纹', mixed: '混合', blank: '空场' };
 
 function currentResearchTarget() {
   const sel = $('#researchTarget');
@@ -2941,26 +2943,127 @@ function renderResearchResult(data) {
   if (!host) return;
   const f = data.features || {};
   const tf = data.targetFeatures || {};
+  const num = (v, digits = 2) => (Number.isFinite(v) ? Number(v).toFixed(digits) : '—');
+  const pct = (v) => (Number.isFinite(v) ? `${(v * 100).toFixed(1)}%` : '—');
   const cells = [
-    ['密度 ρ', `${(f.density * 100).toFixed(1)}%`, `${(tf.density * 100).toFixed(1)}%`],
-    ['各向异性 A', (f.anisotropy ?? 0).toFixed(2), (tf.anisotropy ?? 0).toFixed(2)],
+    ['密度 ρ', pct(f.density), pct(tf.density)],
+    ['各向异性 A', num(f.anisotropy), num(tf.anisotropy)],
     ['相关长度 L_c', String(f.period || '—'), String(tf.period || '—')],
-    ['斑块数 N', String(Math.round((f.components ?? 0) * 4096)), String(Math.round((tf.components ?? 0) * 4096))],
-    ['边界密度 P', (f.perimeter ?? 0).toFixed(2), (tf.perimeter ?? 0).toFixed(2)],
+    ['斑块数 N', String(Math.round((f.components ?? 0) * 4096)), Number.isFinite(tf.components) ? String(Math.round(tf.components * 4096)) : '—'],
+    ['边界密度 P', num(f.perimeter), num(tf.perimeter)],
   ];
+  const isReplicate = data.type === 'replicate' || typeof data.model === 'object';
+  const modelLabel = typeof data.model === 'object' ? (data.model.short || data.model.label) : '';
+  const b = data.behavior;
+  const behaviorHTML = b ? `<div class="rr-behavior">
+      <div class="rrb-head">行为指纹 · ${PATTERN_LABELS[b.pattern] || b.pattern || '—'}</div>
+      <div class="rrb-grid">
+        <span>稳定 ${b.stabilizeSteps} 步</span>
+        <span>活跃度 ${num(b.activity, 3)}</span>
+        <span>翻转率 ${num(b.flipRate, 3)}</span>
+        <span>增长 ${num(b.growthRate, 1)} / 1000 步</span>
+      </div>
+    </div>` : '';
+  const checksHTML = data.checks?.length ? `<div class="rr-checks">
+      <div class="rrc-head">模型检查 · ${data.passed ? '全部通过' : '有未通过项'}</div>
+      <div class="rrc-grid">
+        ${data.checks.map((c) => {
+          const actual = typeof c.actual === 'number'
+            ? (Number.isInteger(c.actual) ? String(c.actual) : c.actual.toFixed(3))
+            : String(c.actual);
+          return `<span class="${c.ok ? 'ok' : 'warn'}">${esc(c.key)} ${c.ok ? '✓' : '✗'} <i>${esc(actual)}</i></span>`;
+        }).join('')}
+      </div>
+    </div>` : '';
   host.hidden = false;
   host.innerHTML = `<div class="rr-top">
       <span class="rr-score">${Number(data.score).toFixed(1)}</span>
       <span class="rr-unit">/ 100 · 结构距离 ${Number(data.distance).toFixed(3)}</span>
     </div>
     <div class="rr-meta">
-      服务端重跑 ${data.steps} 步 · ${data.model === 'lengyelEpstein' ? 'LE 固定噪声种子' : data.usedFixedSeed ? '目标固定校准种子' : data.usedMask ? '使用你提交的种子' : '使用确定性默认种子'}
+      ${isReplicate ? `模型复现 · ${esc(modelLabel)} · 服务端重跑 ${data.steps} 步` : `服务端重跑 ${data.steps} 步 · ${(data.modelType || data.model) === 'lengyelEpstein' ? 'LE 固定噪声种子' : data.usedFixedSeed ? '目标固定校准种子' : data.usedMask ? '使用你提交的种子' : '使用确定性默认种子'}`}
       ${data.rank ? ` · 本轮排名 #${data.rank}` : ''}
-      ${data.persisted === false ? ' · 榜单暂不可写' : ''}
+      ${data.persisted === false && !isReplicate ? ' · 榜单暂不可写' : ''}
     </div>
     <div class="rr-grid">
-      ${cells.map(([label, a, b]) => `<div class="rr-cell">${label}<b>${a}</b><i>目标 ${b}</i></div>`).join('')}
-    </div>`;
+      ${cells.map(([label, a, b2]) => `<div class="rr-cell">${label}<b>${a}</b><i>目标 ${b2}</i></div>`).join('')}
+    </div>
+    ${behaviorHTML}
+    ${checksHTML}`;
+}
+
+function renderModelLives(models) {
+  const host = $('#researchModelLives');
+  if (!host) return;
+  if (!models?.length) {
+    host.innerHTML = '<div class="hint">模型生命暂不可用。</div>';
+    return;
+  }
+  host.innerHTML = models.map((m) => `<article class="model-card" data-model-id="${esc(m.id)}">
+      <div class="mc-top">
+        <span class="mc-engine">${esc(m.engine)}</span>
+        <span class="mc-steps">${esc(String(m.steps))} 步</span>
+      </div>
+      <h4>${esc(m.short || m.label)}</h4>
+      <p>${esc(m.description || '')}</p>
+      <div class="mc-meta">
+        <span>目标 · ${esc(m.target?.label || m.targetId)}</span>
+        <span>种子 · ${esc(m.seedPolicy || '—')}</span>
+        <span>预期 · ${esc(PATTERN_LABELS[m.expected?.pattern] || m.expected?.pattern || '—')}</span>
+      </div>
+      <div class="mc-invariants">${(m.invariants || []).slice(0, 2).map((x) => `<code>${esc(x)}</code>`).join('')}</div>
+      <div class="mc-foot">
+        <span class="mc-source">${esc(m.provenance?.license || '')}</span>
+        <button class="mc-replicate" data-replicate="${esc(m.id)}">复现</button>
+      </div>
+    </article>`).join('');
+}
+
+async function loadModelLives() {
+  const host = $('#researchModelLives');
+  try {
+    const res = await fetch('/api/research/model-lives', { headers: { accept: 'application/json' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    researchLab.models = data.models || [];
+    renderModelLives(researchLab.models);
+  } catch (_) {
+    researchLab.models = null;
+    if (host) host.innerHTML = '<div class="hint">模型生命暂不可用（研究服务未连接）。</div>';
+  }
+}
+
+async function replicateModel(modelId, btn) {
+  const status = $('#researchLabStatus');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '复现中…';
+  }
+  if (status) status.textContent = '服务端按模型卡固定参数与种子重跑…';
+  try {
+    const res = await fetch('/api/research/replicate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ modelId }),
+    });
+    const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    renderResearchResult(data);
+    if (status) {
+      status.textContent = data.passed
+        ? `复现完成：${data.model.label} 的结构与行为检查全部通过。`
+        : `复现完成：${data.model.label} 有检查项未通过，请看结果区。`;
+    }
+    toast(`复现 ${data.model.label} · ${data.score} 分`, data.passed ? 'ok' : 'warn');
+  } catch (err) {
+    if (status) status.textContent = `复现失败：${err.message}`;
+    toast(`复现失败：${err.message}`, 'warn');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '复现';
+    }
+  }
 }
 
 function researchPayloadBase() {
@@ -3109,7 +3212,13 @@ async function initResearchView() {
       researchLab.loading = null;
     });
   }
+  if (!researchLab.models && !researchLab.modelsLoading) {
+    researchLab.modelsLoading = loadModelLives().finally(() => {
+      researchLab.modelsLoading = null;
+    });
+  }
   if (researchLab.loading) await researchLab.loading;
+  if (researchLab.modelsLoading) await researchLab.modelsLoading;
   if (researchLab.targets) {
     renderResearchTarget();
     loadResearchBoard();
@@ -3338,6 +3447,11 @@ function bindUI() {
   $('#researchExport')?.addEventListener('click', exportLocalDiscoveries);
   $('#researchVerify')?.addEventListener('click', submitResearchVerification);
   $('#researchPropose')?.addEventListener('click', proposeResearchCandidates);
+  $('#researchModelLives')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-replicate]');
+    if (!btn) return;
+    replicateModel(btn.dataset.replicate, btn);
+  });
   $('#researchProposals')?.addEventListener('click', (e) => {
     const item = e.target.closest('.rp-item');
     if (!item) return;
