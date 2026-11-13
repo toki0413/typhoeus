@@ -8252,10 +8252,10 @@
         "note": "真实 CIMA 实验斑图 · 无唯一参数解"
       },
       "verify": {
-        "preset": "gs_spots",
-        "steps": 480,
-        "w": 64,
-        "h": 64
+        "model": "lengyelEpstein",
+        "steps": 12000,
+        "fixedMaskSeed": "le-noise",
+        "noiseDensity": 0.02
       },
       "features": {
         "density": 0.388427734375,
@@ -8265,8 +8265,8 @@
         "perimeter": 0.2158203125
       },
       "calibration": {
-        "bestScore": 33.7,
-        "note": "固定校准种子下 7×6 参考搜索的最高分，不公开参数"
+        "bestScore": 42.2,
+        "note": "LE 参考参数（a 8–8.5, b 6, σ 0.6, D_v 80）下的最高分"
       }
     },
     {

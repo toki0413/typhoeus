@@ -128,3 +128,15 @@ test('固定种子校准目标不受提交种子影响', () => {
   assert.equal(a.score, b.score);
   assert.ok(a.usedFixedSeed);
 });
+
+test('CIMA 条纹目标改用 Lengyel–Epstein 复核', () => {
+  const target = TARGETS.find((t) => t.id === 'cima-stripes');
+  assert.equal(target.verify.model, 'lengyelEpstein');
+  const params = { a: 8, b: 6, sigma: 0.6, D_v: 80, dt: 0.001 };
+  const first = evaluateTarget(target, params);
+  assert.equal(first.model, 'lengyelEpstein');
+  assert.ok(first.score > 30, `LE 条纹得分 ${first.score}`);
+  const short = evaluateTarget({ ...target, verify: { ...target.verify, steps: 600 } }, params);
+  const short2 = evaluateTarget({ ...target, verify: { ...target.verify, steps: 600 } }, params);
+  assert.equal(short.score, short2.score);
+});

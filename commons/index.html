@@ -310,6 +310,12 @@
             <button id="researchExportBoard" class="ghost" disabled>导出榜单</button>
           </div>
         </div>
+        <div id="researchLEParams" class="research-le" hidden>
+          <span class="research-le-label">LE 参数</span>
+          <label>a <input id="researchLEA" type="number" step="0.1" value="8"></label>
+          <label>b <input id="researchLEB" type="number" step="0.1" value="6"></label>
+          <label>σ <input id="researchLESigma" type="number" step="0.05" value="0.6"></label>
+        </div>
         <div class="research-lab-body">
           <div class="research-target-preview">
             <canvas id="researchTargetCanvas" width="160" height="160"></canvas>

@@ -2808,11 +2808,36 @@ function renderResearchTarget() {
     const src = t.source
       ? `${esc(t.source.citation)}<br>${esc(t.source.license)} · ${esc(t.source.note || '')}`
       : '';
+    const modelNote = t.model === 'lengyelEpstein'
+      ? '<br>复核模型：Lengyel–Epstein（CIMA 同族）'
+      : '';
     meta.innerHTML = `<b>${esc(t.label)}</b> · ${t.kind === 'real' ? '真实实验' : '文献校准'}<br>${src}<br>
       ρ ${(t.features.density * 100).toFixed(1)}% · A ${(t.features.anisotropy ?? 0).toFixed(2)} ·
       L_c ${t.features.period || '—'} · N ${Math.round((t.features.components ?? 0) * t.w * t.h)} ·
       P ${(t.features.perimeter ?? 0).toFixed(2)}
-      ${t.calibration ? `<br>参考上限 ~${Number(t.calibration.bestScore).toFixed(1)} · ${esc(t.calibration.note || '')}` : ''}`;
+      ${t.calibration ? `<br>参考上限 ~${Number(t.calibration.bestScore).toFixed(1)} · ${esc(t.calibration.note || '')}` : ''}
+      ${modelNote}`;
+  }
+  const le = $('#researchLEParams');
+  const isLE = t.model === 'lengyelEpstein';
+  if (le) {
+    le.hidden = !isLE;
+    if (isLE) {
+      const d = t.leDefaults || { a: 8, b: 6, sigma: 0.6 };
+      const ea = $('#researchLEA');
+      const eb = $('#researchLEB');
+      const es = $('#researchLESigma');
+      if (ea) ea.value = String(d.a);
+      if (eb) eb.value = String(d.b);
+      if (es) es.value = String(d.sigma);
+    }
+  }
+  const verify = $('#researchVerify');
+  if (verify) verify.textContent = isLE ? '用这些参数复核' : '提交当前生命';
+  const propose = $('#researchPropose');
+  if (propose) {
+    propose.disabled = isLE;
+    propose.title = isLE ? 'LE 目标暂用参数面板，不使用 GS 响应面' : '';
   }
 }
 
@@ -2930,7 +2955,7 @@ function renderResearchResult(data) {
       <span class="rr-unit">/ 100 · 结构距离 ${Number(data.distance).toFixed(3)}</span>
     </div>
     <div class="rr-meta">
-      服务端重跑 ${data.steps} 步 · ${data.usedFixedSeed ? '目标固定校准种子' : data.usedMask ? '使用你提交的种子' : '使用确定性默认种子'}
+      服务端重跑 ${data.steps} 步 · ${data.model === 'lengyelEpstein' ? 'LE 固定噪声种子' : data.usedFixedSeed ? '目标固定校准种子' : data.usedMask ? '使用你提交的种子' : '使用确定性默认种子'}
       ${data.rank ? ` · 本轮排名 #${data.rank}` : ''}
       ${data.persisted === false ? ' · 榜单暂不可写' : ''}
     </div>
@@ -2951,6 +2976,9 @@ function researchPayloadBase() {
     D_u: Number.isFinite(sci.D_u) ? sci.D_u : PUZZLE_DU,
     D_v: Number.isFinite(sci.D_v) ? sci.D_v : PUZZLE_DV,
     dt: Number.isFinite(sci.dt) ? sci.dt : 1.0,
+    a: parseFloat($('#researchLEA')?.value),
+    b: parseFloat($('#researchLEB')?.value),
+    sigma: parseFloat($('#researchLESigma')?.value),
     mask: Array.isArray(sci.mask) ? sci.mask : null,
     maskW: sci.maskW || 64,
     maskH: sci.maskH || 64,

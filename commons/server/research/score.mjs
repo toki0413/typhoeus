@@ -30,6 +30,14 @@ export function deterministicMask(seedStr, w = 64, h = 64) {
   return mask;
 }
 
+/* LE 需要随机扰动而不是几个核；用确定性噪声掩膜保证可复现 */
+export function deterministicNoiseMask(seedStr, density = 0.02, w = 64, h = 64) {
+  const mask = new Uint8Array(w * h);
+  const rand = mulberry32(hashString(seedStr || 'le-noise'));
+  for (let i = 0; i < w * h; i++) if (rand() < density) mask[i] = 255;
+  return mask;
+}
+
 export function normalizeMask(input, maskW, maskH) {
   if ((!Array.isArray(input) && !ArrayBuffer.isView(input)) || !input.length) return null;
   const mw = Math.round(clamp(maskW, 8, 96, 64));
@@ -44,34 +52,74 @@ export function normalizeMask(input, maskW, maskH) {
 }
 
 export function evaluateTarget(target, params, { w = 64, h = 64 } = {}) {
+  const isLE = target.verify?.model === 'lengyelEpstein';
   const fixed = target.verify?.fixedMask;
-  const maskInfo = fixed
-    ? {
-        mask: deterministicMask(target.verify?.fixedMaskSeed || 'calibration-seed', w, h),
-        maskW: w,
-        maskH: h,
-      }
-    : normalizeMask(params.mask, params.maskW, params.maskH);
+  let maskInfo = null;
+  if (isLE) {
+    maskInfo = {
+      mask: deterministicNoiseMask(
+        target.verify?.fixedMaskSeed || 'le-noise',
+        target.verify?.noiseDensity ?? 0.02,
+        w,
+        h,
+      ),
+      maskW: w,
+      maskH: h,
+    };
+  } else if (fixed) {
+    maskInfo = {
+      mask: deterministicMask(target.verify?.fixedMaskSeed || 'calibration-seed', w, h),
+      maskW: w,
+      maskH: h,
+    };
+  } else {
+    maskInfo = normalizeMask(params.mask, params.maskW, params.maskH);
+  }
   const seed = maskInfo ? maskInfo.mask : deterministicMask(params.recipeId || params.name, w, h);
-  const rd = new ReactionDiffusionEngine(w, h, {
-    preset: 'gs_spots',
-    engine: 'grayScott',
-    f: clamp(params.f, 0.005, 0.09, 0.035),
-    k: clamp(params.k, 0.005, 0.09, 0.062),
-    D_u: clamp(params.D_u, 0.02, 0.3, 0.16),
-    D_v: clamp(params.D_v, 0.02, 0.2, 0.08),
-    dt: clamp(params.dt, 0.2, 1.0, 1.0),
-    boundary: 'torus',
-    pattern: 'ring',
-    mask: seed,
-    maskW: maskInfo ? maskInfo.maskW : w,
-    maskH: maskInfo ? maskInfo.maskH : h,
-  });
-  const steps = Math.round(clamp(target.verify?.steps, 120, 1200, 480));
+  const rd = new ReactionDiffusionEngine(w, h, isLE
+    ? {
+        preset: 'le_stripes',
+        engine: 'lengyelEpstein',
+        a: clamp(params.a, 5, 14, 8),
+        b: clamp(params.b, 1, 8, 6),
+        sigma: clamp(params.sigma, 0.2, 3, 0.6),
+        D_u: clamp(params.D_u, 0.2, 3, 1),
+        D_v: clamp(params.D_v, 2, 200, 80),
+        dt: clamp(params.dt, 0.001, 0.05, 0.001),
+        boundary: 'torus',
+        pattern: 'soup',
+        mask: seed,
+        maskW: maskInfo.maskW,
+        maskH: maskInfo.maskH,
+      }
+    : {
+        preset: 'gs_spots',
+        engine: 'grayScott',
+        f: clamp(params.f, 0.005, 0.09, 0.035),
+        k: clamp(params.k, 0.005, 0.09, 0.062),
+        D_u: clamp(params.D_u, 0.02, 0.3, 0.16),
+        D_v: clamp(params.D_v, 0.02, 0.2, 0.08),
+        dt: clamp(params.dt, 0.2, 1.0, 1.0),
+        boundary: 'torus',
+        pattern: 'ring',
+        mask: seed,
+        maskW: maskInfo.maskW,
+        maskH: maskInfo.maskH,
+      });
+  const maxSteps = isLE ? 30000 : 1200;
+  const steps = Math.round(clamp(target.verify?.steps, 120, maxSteps, isLE ? 12000 : 480));
   for (let i = 0; i < steps; i++) rd.step();
   const field = normalizeField(rd.vField);
   const features = structuralSignature(field, w, h);
   const distance = signatureDistance(target.features, features);
   const score = Math.round((100 / (1 + distance)) * 10) / 10;
-  return { score, distance: Math.round(distance * 1000) / 1000, features, steps, usedMask: !!maskInfo, usedFixedSeed: !!fixed };
+  return {
+    score,
+    distance: Math.round(distance * 1000) / 1000,
+    features,
+    steps,
+    usedMask: !!maskInfo,
+    usedFixedSeed: !!(fixed || isLE),
+    model: isLE ? 'lengyelEpstein' : 'grayScott',
+  };
 }

@@ -193,6 +193,10 @@ function publicTarget(t) {
     field: t.field,
     features: t.features,
     calibration: t.calibration || null,
+    model: t.verify?.model || 'grayScott',
+    leDefaults: t.verify?.model === 'lengyelEpstein'
+      ? { a: 8, b: 6, sigma: 0.6, D_v: 80, dt: 0.001 }
+      : null,
     source: t.source || TARGETS.source || null,
   };
 }
@@ -279,6 +283,9 @@ async function handleApi(req, res, url) {
     const params = {
       f: body.f,
       k: body.k,
+      a: body.a,
+      b: body.b,
+      sigma: body.sigma,
       D_u: body.D_u,
       D_v: body.D_v,
       dt: body.dt,
@@ -337,6 +344,7 @@ async function handleApi(req, res, url) {
       steps: result.steps,
       usedMask: result.usedMask,
       usedFixedSeed: result.usedFixedSeed,
+      model: result.model,
       persisted,
       rank: rank || null,
       leaderboard: board,
