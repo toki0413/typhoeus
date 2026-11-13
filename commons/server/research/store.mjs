@@ -64,6 +64,7 @@ function parsePayload(raw) {
     }
   }
   if (data && Array.isArray(data.items)) return data;
+  if (data && data.content !== undefined) return parsePayload(data.content);
   if (data && data.value !== undefined) return parsePayload(data.value);
   return null;
 }
@@ -73,11 +74,13 @@ function createHttpStore(env) {
   const token = env.COMMONS_STORE_TOKEN || '';
   const key = env.COMMONS_STORE_KEY || DEFAULT_KEY;
   const protocol = env.COMMONS_STORE_PROTOCOL
-    || (/\.upstash\.io$/i.test(new URL(base).hostname) ? 'upstash' : 'generic');
+    || (/\.upstash\.io$/i.test(new URL(base).hostname)
+      ? 'upstash'
+      : /(^|\.)jsonhosting\.com$/i.test(new URL(base).hostname) ? 'jsonhosting' : 'generic');
   const timeout = Number(env.COMMONS_STORE_TIMEOUT) || 8000;
 
   const headers = { accept: 'application/json' };
-  if (token) headers.authorization = `Bearer ${token}`;
+  if (token && protocol !== 'jsonhosting') headers.authorization = `Bearer ${token}`;
 
   async function request(url, options = {}, { allowNotFound = false } = {}) {
     const res = await fetch(url, {
@@ -102,6 +105,10 @@ function createHttpStore(env) {
         const body = JSON.parse(text || '{}');
         return parsePayload(body?.result ?? body);
       }
+      if (protocol === 'jsonhosting') {
+        const text = await request(base, {}, { allowNotFound: true });
+        return parsePayload(text);
+      }
       const text = await request(`${base}?key=${encodeURIComponent(key)}`, {}, { allowNotFound: true });
       return parsePayload(text);
     },
@@ -111,6 +118,14 @@ function createHttpStore(env) {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(['SET', key, JSON.stringify(payload)]),
+        });
+        return;
+      }
+      if (protocol === 'jsonhosting') {
+        await request(base, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json', 'x-edit-key': token },
+          body: JSON.stringify(payload),
         });
         return;
       }
@@ -167,7 +182,22 @@ function createFileStore(env) {
   };
 }
 
+function readDeploymentConfig() {
+  /* 部署配置放在 server/research/store-config.json，避免把密钥写进执行配置。
+   * 本地项目没有这个文件，测试与开发仍然走环境变量或本地文件。 */
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(HERE, 'store-config.json'), 'utf8'));
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch (_) {
+    return {};
+  }
+}
+
 export function createStore(env = process.env) {
+  if (!env.COMMONS_STORE_URL) {
+    const file = readDeploymentConfig();
+    if (file.COMMONS_STORE_URL) env = { ...env, ...file };
+  }
   if (env.COMMONS_STORE_URL) {
     try {
       return createHttpStore(env);

@@ -66,6 +66,49 @@ test('HTTP 存储：generic 协议读写往返', async () => {
   server.close();
 });
 
+test('HTTP 存储：jsonhosting 协议 GET/PATCH 往返', async () => {
+  let stored = { version: 1, items: [] };
+  let seenKey = '';
+  const server = http.createServer((req, res) => {
+    if (req.method === 'PATCH') {
+      seenKey = req.headers['x-edit-key'] || '';
+      const chunks = [];
+      req.on('data', (c) => chunks.push(c));
+      req.on('end', () => {
+        stored = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end('{"message":"updated"}');
+      });
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ id: 'doc-1', content: stored }));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  const opened = await openStore({
+    COMMONS_STORE_URL: `http://127.0.0.1:${port}/api/json/doc-1`,
+    COMMONS_STORE_TOKEN: 'edit-key-1',
+    COMMONS_STORE_PROTOCOL: 'jsonhosting',
+  });
+  assert.equal(opened.store.mode, 'persistent');
+  assert.equal(opened.store.protocol, 'jsonhosting');
+  assert.equal(opened.data.items.length, 0);
+
+  opened.data.items.push({ id: 'jh-1', score: 77 });
+  await opened.save(opened.data);
+  assert.equal(seenKey, 'edit-key-1');
+
+  const reopened = await openStore({
+    COMMONS_STORE_URL: `http://127.0.0.1:${port}/api/json/doc-1`,
+    COMMONS_STORE_TOKEN: 'edit-key-1',
+    COMMONS_STORE_PROTOCOL: 'jsonhosting',
+  });
+  assert.equal(reopened.data.items[0].id, 'jh-1');
+  server.close();
+});
+
 test('HTTP 存储：服务不可达时返回错误且不静默成功', async () => {
   const dir = tmpDir();
   const store = createStore({

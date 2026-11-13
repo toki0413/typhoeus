@@ -363,6 +363,13 @@ function serveStatic(req, res, url) {
     return res.end('Bad Request');
   }
   if (pathname === '/') pathname = '/index.html';
+  /* 运行产物里包含服务端源码和部署脚本；它们不需要被浏览器访问，
+   * 其中 store-config.json 还可能含有外部存储的写权限，必须挡住。 */
+  if (pathname === '/server' || pathname.startsWith('/server/')
+    || ['/run.sh', '/build.sh', '/package.json', '/package-lock.json'].includes(pathname)) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    return res.end('Not Found');
+  }
   const filePath = path.resolve(STATIC_ROOT, `.${pathname}`);
   if (!filePath.startsWith(`${STATIC_ROOT}${path.sep}`) && filePath !== STATIC_ROOT) {
     res.writeHead(403);
