@@ -33,7 +33,7 @@ export function buildDebrief(s: SimState): DebriefCard {
   const map = new Map<string, LearningRecord>();
 
   for (const e of s.events) {
-    if (!e.anchorId || e.anchorId.startsWith('O-')) continue;
+    if (!e.anchorId || e.anchorId.startsWith('O-') || e.anchorId === 'K-RESCUE') continue;
     const r = map.get(e.anchorId) ?? { anchorId: e.anchorId, attempts: 0, correct: 0 };
     r.attempts += 1;
     if (e.type === 'evidence' || e.type === 'rescue') r.correct += 1;
@@ -51,6 +51,7 @@ export function buildDebrief(s: SimState): DebriefCard {
       rescued,
       trapped,
       lost,
+      // MVS 尚未建模资源消耗，接资源系统后从 state.resources 派生。
       resourcesConsumed: {},
       elapsedSec: Math.round(s.t),
       exposurePeak: {

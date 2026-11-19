@@ -27,6 +27,28 @@ describe('buildDebrief', () => {
     expect(ids).toContain('K-BACKDRAFT-WAIT');
   });
 
+  it('学习账不包含结果锚点 K-RESCUE', () => {
+    const s = createWorld('GH-FIRE-MVS');
+    checkDoor(s);
+    s.door.waitUntil = s.t - 1;
+    stepSim(s, 1 / 20);
+    openDoor(s);
+    const card = buildDebrief(s);
+    expect(card.learning.map((l) => l.anchorId)).not.toContain('K-RESCUE');
+    expect(card.timeline.some((t) => t.type === 'rescue')).toBe(true);
+  });
+
+  it('死亡局失败锚点 correct 为 0', () => {
+    const s = createWorld('GH-FIRE-MVS');
+    checkDoor(s);
+    openDoor(s);
+    const card = buildDebrief(s);
+    const fail = card.learning.find((l) => l.anchorId === 'K-BACKDRAFT-FAIL');
+    expect(fail?.correct).toBe(0);
+    expect(card.tactical.trapped).toBe(0);
+    expect(card.tactical.lost).toBe(1);
+  });
+
   it('复盘卡带章节与标准版本信息', () => {
     const card = buildDebrief(createWorld('x'));
     expect(card.provenance.chapter).toBe(2);
