@@ -892,20 +892,19 @@ git commit -m "test(mvs): lock deterministic simulation"
 
 ```ts
 import { describe, it, expect } from 'vitest';
-import { buildStaticGeometry, STATIC_MESH_COUNT } from '../src/render/scene';
+import { buildStaticGeometry } from '../src/render/scene';
 
 describe('静态几何', () => {
   it('所有建筑构件被合并成一个几何体', () => {
     const g = buildStaticGeometry();
-    expect(STATIC_MESH_COUNT).toBe(1);
-    expect(g.attributes.position.count).toBeGreaterThan(0);
+    expect(g.attributes.position.count).toBeGreaterThan(400);
   });
 
   it('两层楼板都在几何体内', () => {
     const g = buildStaticGeometry();
     g.computeBoundingBox();
     const box = g.boundingBox!;
-    expect(box.min.y).toBeLessThanOrEqual(-0.2);
+    expect(box.min.y).toBeLessThanOrEqual(-0.1);
     expect(box.max.y).toBeGreaterThanOrEqual(6);
   });
 });
@@ -922,8 +921,7 @@ Expected: FAIL，找不到 `../src/render/scene`。
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-export const STATIC_MESH_COUNT = 1;
-const FLOOR_H = 3;
+export const FLOOR_H = 3;
 
 export function buildStaticGeometry(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
@@ -936,7 +934,8 @@ export function buildStaticGeometry(): THREE.BufferGeometry {
 
   for (let f = 0; f < 2; f++) {
     const base = f * FLOOR_H;
-    addBox(26, 0.3, 14, 0, base, 0);
+    // 楼板只保留后半段，前缘剖开，正交相机才能看到每层
+    addBox(26, 0.3, 8, 0, base, -3);
     addBox(26, FLOOR_H, 0.3, 0, base + FLOOR_H / 2, -7);
     addBox(0.3, FLOOR_H, 14, -13, base + FLOOR_H / 2, 0);
     addBox(0.3, FLOOR_H, 14, 13, base + FLOOR_H / 2, 0);
@@ -1038,7 +1037,7 @@ export function createAgents(scene: THREE.Scene): {
     mesh,
     update(s: SimState) {
       const y = s.crew.floor * 3 + 0.55 + s.crew.progress * 3;
-      dummy.position.set(-9.5, y, -4.2);
+      dummy.position.set(-9.5, y, 2.4);
       dummy.rotation.y = 0;
       dummy.updateMatrix();
       mesh.setMatrixAt(0, dummy.matrix);
