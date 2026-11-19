@@ -771,14 +771,18 @@ export function buildDebrief(s: SimState): DebriefCard {
     map.set(e.anchorId, r);
   }
 
+  const rescued = s.victim.rescued ? 1 : 0;
+  const lost = s.victim.alive ? 0 : 1;
+  const trapped = !s.victim.rescued && s.victim.alive ? 1 : 0;
+
   return {
     schemaVersion: 'mvs-1',
     seed: s.seed,
     tactical: {
-      rescued: s.victim.rescued ? 1 : 0,
-      trapped: s.victim.rescued ? 0 : 1,
-      lost: s.victim.alive ? 0 : 1,
-      resourcesConsumed: { extinguisher: 1 },
+      rescued,
+      trapped,
+      lost,
+      resourcesConsumed: {},
       elapsedSec: Math.round(s.t),
       exposurePeak: {
         smoke: round2(s.exposure.smoke),
