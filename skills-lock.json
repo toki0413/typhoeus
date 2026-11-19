@@ -1,6 +1,13 @@
 {
   "version": 2,
   "skills": {
+    "dr-midas": {
+      "source": "modelscope.cn",
+      "sourceUrl": "https://www.modelscope.cn/skills/@hhx465453939/dr-midas",
+      "sourceType": "well-known",
+      "computedHash": "def8a09230eefea6a1857236a47d70697ef748a97917c2867166c7aa6e7b54ee",
+      "wellKnownDigest": "sha256:3eb55d8efea9155a687c866b07adbfa9f0801d3ccf57bbea666eb90067fc2690"
+    },
     "nature-academic-search": {
       "source": "127.0.0.1",
       "sourceUrl": "http://127.0.0.1:8765",
