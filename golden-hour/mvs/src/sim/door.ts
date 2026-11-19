@@ -46,11 +46,18 @@ export function openDoor(s: SimState): void {
 
   s.victim.alive = false;
   s.victim.rescued = false;
+  s.crew.injured = true;
   s.exposure.heat = clamp01(s.exposure.heat + 0.5);
   s.events.push({
     at: s.t,
-    type: 'death',
+    type: 'injury',
     anchorId: 'K-BACKDRAFT-FAIL',
-    detail: '回燃，火球冲出',
+    detail: '回燃，班组受伤',
+  });
+  s.events.push({
+    at: s.t,
+    type: 'death',
+    anchorId: 'K-VICTIM-LOST',
+    detail: '被困者未能救出',
   });
 }

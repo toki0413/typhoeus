@@ -1,4 +1,5 @@
 import type { SimState } from '../sim/types';
+import { INITIAL_EXTINGUISHERS } from '../sim/world';
 
 export interface LearningRecord {
   anchorId: string;
@@ -16,6 +17,7 @@ export interface DebriefCard {
     resourcesConsumed: Record<string, number>;
     elapsedSec: number;
     exposurePeak: { smoke: number; heat: number; strain: number };
+    crewInjured: boolean;
   };
   learning: LearningRecord[];
   omissions: string[];
@@ -33,7 +35,14 @@ export function buildDebrief(s: SimState): DebriefCard {
   const map = new Map<string, LearningRecord>();
 
   for (const e of s.events) {
-    if (!e.anchorId || e.anchorId.startsWith('O-') || e.anchorId === 'K-RESCUE') continue;
+    if (
+      !e.anchorId ||
+      e.anchorId.startsWith('O-') ||
+      e.anchorId === 'K-RESCUE' ||
+      e.anchorId === 'K-VICTIM-LOST'
+    ) {
+      continue;
+    }
     const r = map.get(e.anchorId) ?? { anchorId: e.anchorId, attempts: 0, correct: 0 };
     r.attempts += 1;
     if (e.type === 'evidence' || e.type === 'rescue') r.correct += 1;
@@ -43,6 +52,7 @@ export function buildDebrief(s: SimState): DebriefCard {
   const rescued = s.victim.rescued ? 1 : 0;
   const lost = s.victim.alive ? 0 : 1;
   const trapped = !s.victim.rescued && s.victim.alive ? 1 : 0;
+  const usedExtinguishers = INITIAL_EXTINGUISHERS - s.resources.extinguisher;
 
   return {
     schemaVersion: 'mvs-1',
@@ -51,14 +61,14 @@ export function buildDebrief(s: SimState): DebriefCard {
       rescued,
       trapped,
       lost,
-      // MVS 尚未建模资源消耗，接资源系统后从 state.resources 派生。
-      resourcesConsumed: {},
+      resourcesConsumed: usedExtinguishers > 0 ? { extinguisher: usedExtinguishers } : {},
       elapsedSec: Math.round(s.t),
       exposurePeak: {
         smoke: round2(s.exposure.smoke),
         heat: round2(s.exposure.heat),
         strain: round2(s.exposure.strain),
       },
+      crewInjured: s.crew.injured,
     },
     learning: [...map.values()],
     omissions: s.events

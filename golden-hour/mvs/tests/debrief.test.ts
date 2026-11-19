@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createWorld } from '../src/sim/world';
 import { stepSim } from '../src/sim/step';
 import { checkDoor, openDoor } from '../src/sim/door';
+import { suppressFire } from '../src/sim/actions';
 import { buildDebrief } from '../src/eval/debrief';
 
 describe('buildDebrief', () => {
@@ -54,5 +55,15 @@ describe('buildDebrief', () => {
     expect(card.provenance.chapter).toBe(2);
     expect(card.provenance.standardEdition).toBe('IFRC-2025');
     expect(card.provenance.assistedMode).toBe(false);
+  });
+
+  it('灭火器消耗与班组受伤进入复盘', () => {
+    const s = createWorld('GH-FIRE-MVS');
+    s.phase = 'execute';
+    suppressFire(s);
+    openDoor(s);
+    const card = buildDebrief(s);
+    expect(card.tactical.resourcesConsumed.extinguisher).toBe(1);
+    expect(card.tactical.crewInjured).toBe(true);
   });
 });

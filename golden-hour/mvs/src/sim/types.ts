@@ -1,9 +1,9 @@
 export type Phase = 'plan' | 'execute' | 'debrief';
 
-export type Order =
-  | { kind: 'search'; floor: number }
-  | { kind: 'suppress'; floor: number }
-  | { kind: 'rescue'; floor: number };
+export interface Order {
+  kind: 'search';
+  floor: number;
+}
 
 export type EventType = 'evidence' | 'omission' | 'rescue' | 'death' | 'injury';
 
@@ -38,9 +38,15 @@ export interface SimState {
   smoke: number[];
   heat: number[];
   exposure: { smoke: number; heat: number; strain: number };
-  crew: { floor: number; progress: number; order: Order | null; atDoor: boolean };
+  crew: {
+    floor: number;
+    progress: number;
+    order: Order | null;
+    atDoor: boolean;
+    injured: boolean;
+  };
   door: DoorState;
   victim: { alive: boolean; rescued: boolean };
-  resources: { extinguisher: number; rope: number; kit: number };
+  resources: { extinguisher: number };
   events: SimEvent[];
 }

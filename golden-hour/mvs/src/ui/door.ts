@@ -74,6 +74,11 @@ export function createDoorUi(
 
   return {
     update(s: SimState) {
+      if (s.phase === 'plan') {
+        prevWaiting = false;
+        lastWaitFailed = false;
+      }
+
       const atDoor = s.crew.atDoor && !s.door.opened && s.phase === 'execute';
       root.style.display = atDoor ? 'block' : 'none';
 

@@ -81,4 +81,11 @@ describe('回燃门', () => {
     expect(s.door.safe).toBe(false);
     expect(s.events.some((e) => e.anchorId === 'K-BACKDRAFT-WAIT')).toBe(false);
   });
+
+  it('回燃会记录班组受伤', () => {
+    const s = createWorld('x');
+    openDoor(s);
+    expect(s.crew.injured).toBe(true);
+    expect(s.events.some((e) => e.type === 'injury')).toBe(true);
+  });
 });

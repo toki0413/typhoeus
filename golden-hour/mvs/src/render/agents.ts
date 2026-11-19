@@ -19,13 +19,16 @@ export function createAgents(scene: THREE.Scene): {
   return {
     mesh,
     update(s: SimState) {
+      dummy.scale.setScalar(1);
       const y = s.crew.floor * FLOOR_H + 0.6 + s.crew.progress * FLOOR_H;
       dummy.position.set(-9.5, y, 2.4);
       dummy.rotation.y = 0;
       dummy.updateMatrix();
       mesh.setMatrixAt(0, dummy.matrix);
 
-      // 实例 1 是门后的被困者，MVS 中不移动
+      // 实例 1 是门后的被困者；救出或死亡后隐藏
+      const victimVisible = s.victim.alive && !s.victim.rescued;
+      dummy.scale.setScalar(victimVisible ? 1 : 0.001);
       dummy.position.set(4.4, FLOOR_H + 0.6, 2.4);
       dummy.updateMatrix();
       mesh.setMatrixAt(1, dummy.matrix);

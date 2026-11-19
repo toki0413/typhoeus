@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createWorld } from '../src/sim/world';
 import { checkDoor, openDoor } from '../src/sim/door';
+import { suppressFire } from '../src/sim/actions';
 import { buildDebrief } from '../src/eval/debrief';
 import { renderDebrief } from '../src/ui/debrief';
 
@@ -54,5 +55,29 @@ describe('复盘界面', () => {
     expect(create).toHaveBeenCalledTimes(1);
     expect(click).toHaveBeenCalledTimes(1);
     expect(document.querySelector('a')).toBeNull();
+  });
+
+  it('显示班组受伤与灭火器消耗', () => {
+    const s = createWorld('x');
+    s.phase = 'execute';
+    suppressFire(s);
+    openDoor(s);
+    const root = document.createElement('div');
+    renderDebrief(root, buildDebrief(s));
+
+    expect(root.textContent).toContain('班组受伤');
+    expect(root.textContent).toContain('灭火器消耗 1');
+  });
+
+  it('同种子重打按钮调用回调', () => {
+    const s = createWorld('x');
+    openDoor(s);
+    const root = document.createElement('div');
+    const onRestart = vi.fn();
+
+    renderDebrief(root, buildDebrief(s), onRestart);
+    (root.querySelector('#replay') as HTMLButtonElement).click();
+
+    expect(onRestart).toHaveBeenCalledTimes(1);
   });
 });
