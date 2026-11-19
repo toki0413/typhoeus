@@ -7,18 +7,29 @@ export function createDoorUi(
 ): { update: (s: SimState) => void } {
   root.innerHTML = `
     <div>门</div>
+    <div data-status></div>
     <button data-act="check">按住：触碰门把</button>
     <button data-act="wait">等待</button>
     <button data-act="open">开门</button>
   `;
 
   let holdTimer: number | null = null;
+  let prevWaiting = false;
+  let lastWaitFailed = false;
 
   const clearHold = () => {
     if (holdTimer !== null) {
       clearTimeout(holdTimer);
       holdTimer = null;
     }
+  };
+
+  const startHold = () => {
+    clearHold();
+    holdTimer = window.setTimeout(() => {
+      holdTimer = null;
+      act('check');
+    }, 600);
   };
 
   const act = (name: string) => {
@@ -31,17 +42,28 @@ export function createDoorUi(
   root.addEventListener('pointerdown', (e) => {
     const btn = (e.target as HTMLElement).closest('button');
     if (!btn || btn.dataset.act !== 'check') return;
-    clearHold();
     btn.setPointerCapture(e.pointerId);
-    holdTimer = window.setTimeout(() => {
-      holdTimer = null;
-      act('check');
-    }, 600);
+    startHold();
   });
 
   root.addEventListener('pointerup', clearHold);
   root.addEventListener('pointercancel', clearHold);
   root.addEventListener('lostpointercapture', clearHold);
+
+  root.addEventListener('keydown', (e) => {
+    const btn = (e.target as HTMLElement).closest('button');
+    if (!btn || btn.dataset.act !== 'check') return;
+    if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) {
+      e.preventDefault();
+      startHold();
+    }
+  });
+
+  root.addEventListener('keyup', (e) => {
+    const btn = (e.target as HTMLElement).closest('button');
+    if (!btn || btn.dataset.act !== 'check') return;
+    if (e.code === 'Space' || e.code === 'Enter') clearHold();
+  });
 
   root.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('button');
@@ -54,9 +76,23 @@ export function createDoorUi(
     update(s: SimState) {
       const atDoor = s.crew.atDoor && !s.door.opened && s.phase === 'execute';
       root.style.display = atDoor ? 'block' : 'none';
+
       const checkBtn = root.querySelector<HTMLButtonElement>('[data-act="check"]')!;
       checkBtn.textContent = s.door.checked ? '门把很烫' : '按住：触碰门把';
       checkBtn.disabled = s.door.checked;
+
+      const waiting = s.door.waitUntil !== null;
+      if (prevWaiting && !waiting && !s.door.checked) lastWaitFailed = true;
+      if (waiting && s.door.checked) lastWaitFailed = false;
+
+      const waitBtn = root.querySelector<HTMLButtonElement>('[data-act="wait"]')!;
+      waitBtn.textContent = waiting ? `等待中 ${Math.ceil(s.door.waitUntil! - s.t)}s` : '等待';
+      waitBtn.disabled = waiting;
+
+      const status = root.querySelector<HTMLElement>('[data-status]')!;
+      status.textContent = lastWaitFailed ? '等待结束，门仍然烫手' : '';
+
+      prevWaiting = waiting;
     },
   };
 }

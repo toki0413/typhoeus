@@ -41,7 +41,7 @@ export function stepSim(s: SimState, dt: number): void {
         at: s.t,
         type: 'evidence',
         anchorId: 'K-BACKDRAFT-WAIT',
-        detail: '等待后烟色转灰白、呼吸减弱',
+        detail: '等待 30 秒后开门',
       });
     }
   }
