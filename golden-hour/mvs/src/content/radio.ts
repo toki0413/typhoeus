@@ -13,7 +13,7 @@ export const RADIO_SCRIPT: RadioLine[] = [
   {
     at: 4,
     speaker: '王姨',
-    text: '401 的两个孩子已经被邻居救出来了，你们先去别处吧。',
+    text: '201 的两个孩子已经被邻居救出来了，你们先去别处吧。',
   },
   {
     at: 8,
