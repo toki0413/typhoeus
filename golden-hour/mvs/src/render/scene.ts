@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-
-export const FLOOR_H = 3;
+import { FLOOR_H } from './constants';
+export { FLOOR_H };
 
 export function buildStaticGeometry(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];

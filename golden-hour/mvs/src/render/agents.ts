@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { SimState } from '../sim/types';
+import { FLOOR_H } from './constants';
 
 export function createAgents(scene: THREE.Scene): {
   mesh: THREE.InstancedMesh;
@@ -18,13 +19,14 @@ export function createAgents(scene: THREE.Scene): {
   return {
     mesh,
     update(s: SimState) {
-      const y = s.crew.floor * 3 + 0.55 + s.crew.progress * 3;
+      const y = s.crew.floor * FLOOR_H + 0.6 + s.crew.progress * FLOOR_H;
       dummy.position.set(-9.5, y, 2.4);
       dummy.rotation.y = 0;
       dummy.updateMatrix();
       mesh.setMatrixAt(0, dummy.matrix);
 
-      dummy.position.set(4.4, 3 + 0.55, 2.4);
+      // 实例 1 是门后的被困者，MVS 中不移动
+      dummy.position.set(4.4, FLOOR_H + 0.6, 2.4);
       dummy.updateMatrix();
       mesh.setMatrixAt(1, dummy.matrix);
 

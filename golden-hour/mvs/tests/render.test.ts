@@ -13,6 +13,9 @@ describe('渲染对象', () => {
     const m = new THREE.Matrix4();
     a.mesh.getMatrixAt(0, m);
     expect(m.elements.every(Number.isFinite)).toBe(true);
+    const m1 = new THREE.Matrix4();
+    a.mesh.getMatrixAt(1, m1);
+    expect(m1.elements.every(Number.isFinite)).toBe(true);
   });
 
   it('烟层有两条且随 smoke 改变高度', () => {
@@ -22,6 +25,6 @@ describe('渲染对象', () => {
     const s = createWorld('x');
     s.smoke[0] = 0.5;
     sm.update(s);
-    expect((sm.group.children[0] as THREE.Mesh).scale.y).toBeGreaterThan(0);
+    expect((sm.group.children[0] as THREE.Mesh).scale.y).toBeCloseTo(0.5 * 2.6, 5);
   });
 });

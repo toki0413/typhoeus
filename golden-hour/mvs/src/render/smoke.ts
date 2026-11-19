@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { SimState } from '../sim/types';
+import { FLOOR_H } from './constants';
 
 export function createSmoke(scene: THREE.Scene): {
   update: (s: SimState) => void;
@@ -19,7 +20,7 @@ export function createSmoke(scene: THREE.Scene): {
         depthWrite: false,
       })
     );
-    m.position.set(0, f * 3 + 0.5, 0);
+    m.position.set(0, f * FLOOR_H + 0.5, 0);
     group.add(m);
     boxes.push(m);
   }
@@ -31,7 +32,7 @@ export function createSmoke(scene: THREE.Scene): {
         const v = s.smoke[f];
         const h = Math.max(0.02, v * 2.6);
         boxes[f].scale.y = h;
-        boxes[f].position.y = f * 3 + h / 2 + 0.15;
+        boxes[f].position.y = f * FLOOR_H + h / 2 + 0.15;
         (boxes[f].material as THREE.MeshBasicMaterial).opacity = v * 0.34;
       }
     },
