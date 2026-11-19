@@ -19,27 +19,42 @@ describe('渲染对象', () => {
     expect(m1.elements.every(Number.isFinite)).toBe(true);
   });
 
-  it('烟层有两条且随 smoke 改变高度', () => {
+  it('烟层有两条且烟团随 smoke 出现', () => {
     const scene = new THREE.Scene();
     const sm = createSmoke(scene);
     expect(sm.group.children).toHaveLength(2);
+    expect(sm.floors[0].children.length).toBeGreaterThan(0);
+
     const s = createWorld('x');
     s.smoke[0] = 0.5;
     sm.update(s);
-    expect((sm.group.children[0] as THREE.Mesh).scale.y).toBeCloseTo(0.5 * 2.6, 5);
+
+    const sprite = sm.floors[0].children[0] as THREE.Sprite;
+    expect(sprite.visible).toBe(true);
+    expect((sprite.material as THREE.SpriteMaterial).opacity).toBeGreaterThan(0);
+    expect(sprite.position.y).toBeGreaterThanOrEqual(0.2);
+    expect(sprite.position.y).toBeLessThanOrEqual(3);
   });
 
-  it('开门后门扇旋转', () => {
+  it('无烟时烟团隐藏', () => {
+    const scene = new THREE.Scene();
+    const sm = createSmoke(scene);
+    const s = createWorld('x');
+    sm.update(s);
+    expect((sm.floors[0].children[0] as THREE.Sprite).visible).toBe(false);
+  });
+
+  it('开门后门扇绕铰链渐进旋转', () => {
     const scene = new THREE.Scene();
     const d = createDoor(scene);
     const s = createWorld('x');
 
     d.update(s);
-    expect(d.mesh.rotation.y).toBe(0);
+    expect(d.group.rotation.y).toBeCloseTo(0, 5);
 
     s.door.opened = true;
-    d.update(s);
-    expect(d.mesh.rotation.y).toBeLessThan(0);
+    for (let i = 0; i < 40; i++) d.update(s);
+    expect(d.group.rotation.y).toBeGreaterThan(1.2);
   });
 
   it('被困者救出后实例被缩到不可见', () => {
