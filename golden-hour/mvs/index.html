@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>黄金时间 · MVS</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0d0f12; overflow: hidden; }
+      #app { display: block; width: 100vw; height: 100vh; }
+      .panel {
+        position: fixed; background: rgba(15,18,22,.82); color: #e8e6e1;
+        border: 1px solid rgba(255,255,255,.14); padding: 10px 12px;
+        font: 12px/1.6 ui-monospace, "Noto Sans Mono CJK SC", monospace;
+      }
+      #hud { top: 16px; left: 16px; }
+      #door-ui { left: 50%; bottom: 32px; transform: translateX(-50%); display: none; }
+      #debrief { inset: 0; display: none; overflow: auto; padding: 40px; }
+      button { font: inherit; margin-right: 8px; padding: 6px 10px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="app"></canvas>
+    <div id="hud" class="panel"></div>
+    <div id="door-ui" class="panel"></div>
+    <div id="debrief" class="panel"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
