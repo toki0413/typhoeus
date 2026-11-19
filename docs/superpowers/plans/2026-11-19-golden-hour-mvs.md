@@ -337,6 +337,10 @@ import { stepSmoke } from '../src/sim/smoke';
 import { createWorld } from '../src/sim/world';
 import { stepSim } from '../src/sim/step';
 
+const advance = (s: ReturnType<typeof createWorld>, sec: number) => {
+  for (let i = 0; i < sec * 20; i++) stepSim(s, 1 / 20);
+};
+
 describe('stepSmoke', () => {
   it('有火时一层烟气上升且不超过 1', () => {
     const smoke = [0, 0];
@@ -351,15 +355,59 @@ describe('stepSmoke', () => {
     stepSmoke(smoke, 0, 1 / 20);
     expect(smoke[1]).toBeGreaterThan(0);
   });
+
+  it('无火时烟气会衰减', () => {
+    const smoke = [0.8, 0.8];
+    stepSmoke(smoke, 0, 1 / 20);
+    expect(smoke[0]).toBeLessThan(0.8);
+    expect(smoke[1]).toBeLessThan(0.8);
+  });
 });
 
 describe('stepSim', () => {
   it('暴露值随停留时间上升且不超过 1', () => {
     const s = createWorld('x');
-    for (let i = 0; i < 20 * 60; i++) stepSim(s, 1 / 20);
+    advance(s, 60);
     expect(s.exposure.smoke).toBeGreaterThan(0);
     expect(s.exposure.smoke).toBeLessThanOrEqual(1);
     expect(s.t).toBeCloseTo(60, 1);
+  });
+
+  it('40 秒前火势不会封顶，之后加速', () => {
+    const s = createWorld('x');
+    advance(s, 40);
+    expect(s.fire).toBeLessThan(0.95);
+    const at40 = s.fire;
+    advance(s, 5);
+    expect(s.fire - at40).toBeGreaterThan(0.05);
+  });
+
+  it('班组到达一层门时 atDoor 为真', () => {
+    const s = createWorld('x');
+    s.crew.order = { kind: 'search', floor: 1 };
+    advance(s, 10);
+    expect(s.crew.floor).toBe(1);
+    expect(s.crew.atDoor).toBe(true);
+  });
+
+  it('楼层越界不会产生 NaN 暴露值', () => {
+    const s = createWorld('x');
+    s.crew.order = { kind: 'search', floor: 5 };
+    advance(s, 30);
+    expect(s.crew.floor).toBeLessThanOrEqual(1);
+    expect(Number.isFinite(s.exposure.smoke)).toBe(true);
+  });
+
+  it('门等待到期只写入一次证据', () => {
+    const s = createWorld('x');
+    s.door.checked = true;
+    s.door.temp = 'hot';
+    s.door.waitUntil = s.t + 1;
+    advance(s, 2);
+    s.door.waitUntil = s.t + 1;
+    advance(s, 2);
+    const count = s.events.filter((e) => e.anchorId === 'K-BACKDRAFT-WAIT').length;
+    expect(count).toBe(1);
   });
 });
 ```
@@ -375,10 +423,10 @@ Expected: FAIL，找不到 `smoke.ts` / `step.ts`。
 export const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
 export function stepSmoke(smoke: number[], fire: number, dt: number): void {
-  smoke[0] = clamp01(smoke[0] + (fire * 0.62 - smoke[0] * 0.22) * dt);
+  smoke[0] = clamp01(smoke[0] + (fire * 0.3 - smoke[0] * 0.3) * dt);
   for (let i = 1; i < smoke.length; i++) {
-    const inflow = smoke[i - 1] * 0.34;
-    const outflow = smoke[i] * 0.12;
+    const inflow = smoke[i - 1] * 0.12;
+    const outflow = smoke[i] * 0.2;
     smoke[i] = clamp01(smoke[i] + (inflow - outflow) * dt);
   }
 }
@@ -393,7 +441,7 @@ import { clamp01, stepSmoke } from './smoke';
 export function stepSim(s: SimState, dt: number): void {
   s.t += dt;
 
-  const fireGrowth = s.t < 40 ? 0.045 : 0.085;
+  const fireGrowth = s.t < 40 ? 0.012 : 0.02;
   s.fire = clamp01(s.fire + fireGrowth * dt);
 
   stepSmoke(s.smoke, s.fire, dt);
@@ -404,7 +452,7 @@ export function stepSim(s: SimState, dt: number): void {
   }
 
   if (s.crew.order) {
-    const target = s.crew.order.floor;
+    const target = Math.min(s.crew.order.floor, s.smoke.length - 1);
     if (s.crew.floor < target) {
       s.crew.progress += dt * 0.2;
       if (s.crew.progress >= 1) {
@@ -412,17 +460,19 @@ export function stepSim(s: SimState, dt: number): void {
         s.crew.floor += 1;
       }
     }
-    s.crew.atDoor = s.crew.floor === 1 && s.crew.progress > 0.6;
+    s.crew.atDoor = s.crew.floor === 1 && target === 1;
+  } else {
+    s.crew.atDoor = false;
   }
 
-  const f = s.crew.floor;
+  const f = Math.min(s.crew.floor, s.smoke.length - 1);
   s.exposure.smoke = clamp01(s.exposure.smoke + s.smoke[f] * 0.55 * dt);
   s.exposure.heat = clamp01(s.exposure.heat + s.heat[f] * 0.22 * dt);
   s.exposure.strain = clamp01(s.exposure.strain + 0.06 * dt);
 
-  if (s.door.waitUntil !== null && s.t >= s.door.waitUntil) {
+  if (!s.door.safe && s.door.waitUntil !== null && s.t >= s.door.waitUntil) {
     s.door.waitUntil = null;
-    if (s.door.checked) {
+    if (s.door.checked && s.door.temp === 'hot') {
       s.door.safe = true;
       s.events.push({
         at: s.t,
@@ -528,7 +578,7 @@ export function checkDoor(s: SimState): void {
 }
 
 export function waitDoor(s: SimState): void {
-  if (s.door.opened || s.door.waitUntil !== null) return;
+  if (s.door.opened || s.door.safe || s.door.waitUntil !== null) return;
   s.door.waitUntil = s.t + 30;
 }
 
