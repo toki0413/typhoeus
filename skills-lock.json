@@ -1,0 +1,68 @@
+{
+  "version": 2,
+  "skills": {
+    "nature-academic-search": {
+      "source": "127.0.0.1",
+      "sourceUrl": "http://127.0.0.1:8765",
+      "sourceType": "well-known",
+      "computedHash": "34efdd7addb5fee9fe81c6c207f564feb0b0ef9d04c95b754b2c9b2f15c2b7de",
+      "wellKnownDigest": "sha256:e7ad6ac416e2825820c440a45afda3e91c106aa00781a1160f0c650411067e0a"
+    },
+    "nature-citation": {
+      "source": "127.0.0.1",
+      "sourceUrl": "http://127.0.0.1:8765",
+      "sourceType": "well-known",
+      "computedHash": "8c9835e78ae15d6e0ed369c0563f1d7783212a5a21de08221f3b9ad21615839a",
+      "wellKnownDigest": "sha256:098a4aca283ba02f7dd61a1e144393941712b4cec5cc3de1d8c3990ee0dd5e57"
+    },
+    "nature-data": {
+      "source": "127.0.0.1",
+      "sourceUrl": "http://127.0.0.1:8765",
+      "sourceType": "well-known",
+      "computedHash": "a75ad1dc05a3788c852c5814fc300e3465b3505b7a44d16e2f8f4c32ff98476f",
+      "wellKnownDigest": "sha256:3b1f211371c2349d387ad002091674480c6b362ac372a7d558e73d931152ae29"
+    },
+    "nature-figure": {
+      "source": "127.0.0.1",
+      "sourceUrl": "http://127.0.0.1:8765",
+      "sourceType": "well-known",
+      "computedHash": "4c2200351b4fc904714846c6f9b108ef6c15411a7b0b37f0ac01a5faec393425",
+      "wellKnownDigest": "sha256:d62b61b6114d8dda53181b50998917f1ac4de2ac182add5c21b3619698997cf1"
+    },
+    "nature-paper2ppt": {
+      "source": "127.0.0.1",
+      "sourceUrl": "http://127.0.0.1:8765",
+      "sourceType": "well-known",
+      "computedHash": "41fdcbf7c28db254428fee426c2239909236420275426cb59a8367a2e2e7e554",
+      "wellKnownDigest": "sha256:24800f7b453da30ba7ee8870eef6cf01652044bbaa065377f1736af87fea2131"
+    },
+    "nature-polishing": {
+      "source": "127.0.0.1",
+      "sourceUrl": "http://127.0.0.1:8765",
+      "sourceType": "well-known",
+      "computedHash": "afcdaa3194b62bace786bfbe92e6548aefd1b88091fac785cda6b0485442ddf7",
+      "wellKnownDigest": "sha256:9227c0a9865dba81ce8b8062dc546414d27ca8d78d3df727b81e6ea2a75c1b99"
+    },
+    "nature-reader": {
+      "source": "127.0.0.1",
+      "sourceUrl": "http://127.0.0.1:8765",
+      "sourceType": "well-known",
+      "computedHash": "7c03e481f4978d40894347184b631a41be4675664804ec18c5dbc867f4e44553",
+      "wellKnownDigest": "sha256:8141e482a1c594e45ec7d62d3f792a5f234e09356fa950bfec9a8f3db931e0d2"
+    },
+    "nature-response": {
+      "source": "127.0.0.1",
+      "sourceUrl": "http://127.0.0.1:8765",
+      "sourceType": "well-known",
+      "computedHash": "d724fcf623425f38e6c28b427571a4983cb1719ed7795dcdc767e38e6b85ced9",
+      "wellKnownDigest": "sha256:104fcb74fb19a9e33ac6fba4f53bc0445a965dd93d689963ced2446cf541af13"
+    },
+    "nature-writing": {
+      "source": "127.0.0.1",
+      "sourceUrl": "http://127.0.0.1:8765",
+      "sourceType": "well-known",
+      "computedHash": "bf3dbc72febcdb7064ef51146fac032f34ceb48d90f89385015b91ac2117459a",
+      "wellKnownDigest": "sha256:79ff86b08755429eafcd2582f09951644caed334a23d8266e92d3444707fd59e"
+    }
+  }
+}
