@@ -14,7 +14,6 @@ const doorRoot = document.getElementById('door-ui')!;
 const debriefRoot = document.getElementById('debrief')!;
 
 const sim = createWorld('GH-FIRE-MVS');
-(window as unknown as { __sim: typeof sim }).__sim = sim;
 
 const { scene, camera, renderer } = createScene();
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -24,7 +23,7 @@ renderer.domElement.id = 'app';
 const agents = createAgents(scene);
 const smoke = createSmoke(scene);
 const hud = createHud(hudRoot);
-const doorUi = createDoorUi(doorRoot);
+const doorUi = createDoorUi(doorRoot, sim);
 
 window.addEventListener('resize', () => {
   const aspect = window.innerWidth / window.innerHeight;
@@ -40,7 +39,7 @@ window.addEventListener('keydown', (e) => {
     sim.phase = 'execute';
     sim.crew.order = { kind: 'search', floor: 1 };
   }
-  if (e.code === 'KeyT' && sim.phase === 'execute') {
+  if (import.meta.env.DEV && e.code === 'KeyT' && sim.phase === 'execute') {
     for (let i = 0; i < 600; i++) stepSim(sim, 1 / 20);
   }
 });
@@ -48,6 +47,7 @@ window.addEventListener('keydown', (e) => {
 const DT = 1 / 20;
 let acc = 0;
 let last = performance.now();
+let hudTimer = 0;
 
 function frame(now: number) {
   requestAnimationFrame(frame);
@@ -61,15 +61,19 @@ function frame(now: number) {
       acc -= DT;
     }
     if (sim.door.opened) {
-      sim.phase = 'debrief';
       debriefRoot.style.display = 'block';
       renderDebrief(debriefRoot, buildDebrief(sim));
+      sim.phase = 'debrief';
     }
   }
 
   agents.update(sim);
   smoke.update(sim);
-  hud.update(sim);
+  hudTimer += raw;
+  if (hudTimer >= 0.1) {
+    hudTimer = 0;
+    hud.update(sim);
+  }
   doorUi.update(sim);
   renderer.render(scene, camera);
 }

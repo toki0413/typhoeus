@@ -20,10 +20,13 @@ export function renderDebrief(root: HTMLElement, card: DebriefCard): void {
 
   root.querySelector('#export')?.addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(card, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = `debrief-${card.seed}.json`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   });
 }
