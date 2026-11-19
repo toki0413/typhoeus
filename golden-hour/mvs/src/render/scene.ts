@@ -14,7 +14,8 @@ export function buildStaticGeometry(): THREE.BufferGeometry {
 
   for (let f = 0; f < 2; f++) {
     const base = f * FLOOR_H;
-    addBox(26, 0.3, 14, 0, base, 0);
+    // 楼板只保留后半段，前缘剖开，正交相机才能看到每层
+    addBox(26, 0.3, 8, 0, base, -3);
     addBox(26, FLOOR_H, 0.3, 0, base + FLOOR_H / 2, -7);
     addBox(0.3, FLOOR_H, 14, -13, base + FLOOR_H / 2, 0);
     addBox(0.3, FLOOR_H, 14, 13, base + FLOOR_H / 2, 0);
