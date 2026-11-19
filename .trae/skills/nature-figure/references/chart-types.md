@@ -275,6 +275,7 @@ ax.spines['left'].set_bounds(0, y_max)
 ## Related files
 
 - [SKILL.md](../SKILL.md) — When to use this skill
+- [chart-selection-40.md](chart-selection-40.md) — Claim-to-chart matrix for 40 chart types
 - [api.md](api.md) — PALETTE and core helper signatures
 - [common-patterns.md](common-patterns.md) — Bar, trend, and layout patterns
 - [design-theory.md](design-theory.md) — Rationale and color theory

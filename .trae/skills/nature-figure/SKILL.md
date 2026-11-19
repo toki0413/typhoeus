@@ -58,6 +58,9 @@ with the recommended backend.
    previewing, exporting, and visual QA. Do not cross-render with the other language.
 5. Journal/export contract: set final dimensions, editable text, source data, statistics,
    image-integrity notes, and export formats before styling.
+6. Chart selection: use `references/chart-selection-40.md` to match the claim to one of
+   40 chart types, record its required elements and misuse risks, and drop any chart that
+   does not carry a unique piece of evidence.
 
 The highest-priority rule is: **the chart serves the scientific logic**. Aesthetic polish,
 template matching, and complex layout are subordinate to making the core conclusion clear,
@@ -184,5 +187,6 @@ save_pub_r <- function(plot, filename, width_mm = 183, height_mm = 120, dpi = 60
 | [references/common-patterns.md](references/common-patterns.md) | Python layout patterns: hero panels, legend-only axes, dark image plates, asymmetric layouts |
 | [references/nature-2026-observations.md](references/nature-2026-observations.md) | Real `Nature` page archetypes: schematic-led composites, dark image plates, clinical triptychs, asymmetric hero layouts |
 | [references/tutorials.md](references/tutorials.md) | End-to-end walkthroughs: bars, trends, heatmaps |
+| [references/chart-selection-40.md](references/chart-selection-40.md) | Choosing among 40 chart types, matching chart to claim, or auditing chart misuse |
 | [references/chart-types.md](references/chart-types.md) | Radar, 3D sphere, fill_between, scatter patterns |
 | [references/demos.md](references/demos.md) | Bundled figures4papers Python scripts and output previews for concrete pattern adaptation |
