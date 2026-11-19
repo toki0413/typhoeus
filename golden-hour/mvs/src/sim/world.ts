@@ -1,8 +1,10 @@
 import type { SimState } from './types';
+import { deriveScenario } from './scenario';
 
 export function createWorld(seed: string): SimState {
   return {
     seed,
+    scenario: deriveScenario(seed),
     t: 0,
     phase: 'plan',
     fire: 0.12,

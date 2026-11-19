@@ -4,10 +4,10 @@ import { clamp01, stepSmoke } from './smoke';
 export function stepSim(s: SimState, dt: number): void {
   s.t += dt;
 
-  const fireGrowth = s.t < 40 ? 0.012 : 0.02;
+  const fireGrowth = s.t < 40 ? s.scenario.fireGrowthEarly : s.scenario.fireGrowthLate;
   s.fire = clamp01(s.fire + fireGrowth * dt);
 
-  stepSmoke(s.smoke, s.fire, dt);
+  stepSmoke(s.smoke, s.fire, dt, s.scenario.smokeSource, s.scenario.smokeTransfer);
 
   for (let i = 0; i < s.smoke.length; i++) {
     const target = Math.max(0, s.fire - i * 0.13) * 0.85;

@@ -22,8 +22,16 @@ export interface DoorState {
   opened: boolean;
 }
 
+export interface ScenarioParams {
+  fireGrowthEarly: number;
+  fireGrowthLate: number;
+  smokeSource: number;
+  smokeTransfer: number;
+}
+
 export interface SimState {
   seed: string;
+  scenario: ScenarioParams;
   t: number;
   phase: Phase;
   fire: number;
