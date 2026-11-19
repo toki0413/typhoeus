@@ -1012,8 +1012,41 @@ git commit -m "feat(mvs): merge static building geometry into one mesh"
 **Files:**
 - Create: `golden-hour/mvs/src/render/agents.ts`
 - Create: `golden-hour/mvs/src/render/smoke.ts`
+- Test: `golden-hour/mvs/tests/render.test.ts`
 
-- [ ] **Step 1: 实现 src/render/agents.ts**
+- [ ] **Step 1: 先写失败测试 tests/render.test.ts**
+
+```ts
+import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
+import { createAgents } from '../src/render/agents';
+import { createSmoke } from '../src/render/smoke';
+import { createWorld } from '../src/sim/world';
+
+describe('渲染对象', () => {
+  it('创建两个班组实例且更新不产生 NaN', () => {
+    const scene = new THREE.Scene();
+    const a = createAgents(scene);
+    expect(a.mesh.count).toBe(2);
+    a.update(createWorld('x'));
+    const m = new THREE.Matrix4();
+    a.mesh.getMatrixAt(0, m);
+    expect(m.elements.every(Number.isFinite)).toBe(true);
+  });
+
+  it('烟层有两条且随 smoke 改变高度', () => {
+    const scene = new THREE.Scene();
+    const sm = createSmoke(scene);
+    expect(sm.group.children).toHaveLength(2);
+    const s = createWorld('x');
+    s.smoke[0] = 0.5;
+    sm.update(s);
+    expect((sm.group.children[0] as THREE.Mesh).scale.y).toBeGreaterThan(0);
+  });
+});
+```
+
+- [ ] **Step 2: 实现 src/render/agents.ts**
 
 ```ts
 import * as THREE from 'three';
@@ -1052,7 +1085,7 @@ export function createAgents(scene: THREE.Scene): {
 }
 ```
 
-- [ ] **Step 2: 实现 src/render/smoke.ts**
+- [ ] **Step 3: 实现 src/render/smoke.ts**
 
 ```ts
 import * as THREE from 'three';
@@ -1096,12 +1129,12 @@ export function createSmoke(scene: THREE.Scene): {
 }
 ```
 
-- [ ] **Step 3: 类型检查**
+- [ ] **Step 4: 运行测试与类型检查**
 
-Run: `cd golden-hour/mvs && npx tsc --noEmit`
-Expected: 无错误。
+Run: `cd golden-hour/mvs && npx vitest run tests/render.test.ts && npx tsc --noEmit`
+Expected: 2 条测试通过，无类型错误。
 
-- [ ] **Step 4: 提交**
+- [ ] **Step 5: 提交**
 
 ```bash
 git add golden-hour/mvs/src/render
