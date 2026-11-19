@@ -8,6 +8,7 @@ import { createHud } from './ui/hud';
 import { createDoorUi } from './ui/door';
 import { createActions } from './ui/actions';
 import { createIncidentUi } from './ui/incidents';
+import { createRadio } from './ui/radio';
 import { renderDebrief } from './ui/debrief';
 import { beginRun, advance, restart } from './app/session';
 
@@ -16,6 +17,7 @@ const hudRoot = document.getElementById('hud')!;
 const doorRoot = document.getElementById('door-ui')!;
 const actionsRoot = document.getElementById('actions')!;
 const incidentRoot = document.getElementById('incidents')!;
+const radioRoot = document.getElementById('radio')!;
 const debriefRoot = document.getElementById('debrief')!;
 
 const sim = createWorld('GH-FIRE-MVS');
@@ -32,6 +34,7 @@ const hud = createHud(hudRoot);
 const doorUi = createDoorUi(doorRoot, sim);
 const actions = createActions(actionsRoot, sim);
 const incidents = createIncidentUi(incidentRoot, sim);
+const radio = createRadio(radioRoot);
 
 window.addEventListener('resize', () => {
   const aspect = window.innerWidth / window.innerHeight;
@@ -86,6 +89,7 @@ function frame(now: number) {
   doorUi.update(sim);
   actions.update(sim);
   incidents.update(sim);
+  radio.update(sim);
   hudTimer += raw;
   if (hudTimer >= 0.1) {
     hudTimer = 0;
