@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>黄金时间 · 3D Spike</title>
+    <style>
+      :root {
+        --ink: #e8e6e1;
+        --dim: #9a968e;
+        --line: rgba(255, 255, 255, 0.14);
+        --bg: #0d0f12;
+        --warn: #e0863a;
+        --danger: #d24b3f;
+        --safe: #5fa88a;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+      body {
+        font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, "Noto Sans Mono CJK SC", monospace;
+        color: var(--ink);
+      }
+      #app { display: block; width: 100vw; height: 100vh; }
+      .panel {
+        position: fixed;
+        background: rgba(15, 18, 22, 0.82);
+        border: 1px solid var(--line);
+        padding: 10px 12px;
+        font-size: 12px;
+        line-height: 1.55;
+        backdrop-filter: blur(6px);
+      }
+      #title { top: 16px; left: 16px; }
+      #title b { font-size: 14px; letter-spacing: 0.12em; }
+      #title span { color: var(--dim); }
+      #stats { top: 16px; right: 16px; text-align: right; min-width: 168px; }
+      #stats em { font-style: normal; color: var(--dim); }
+      #exposure { left: 16px; bottom: 16px; width: 220px; }
+      #floors { right: 16px; bottom: 16px; width: 220px; }
+      .row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+      .row label { width: 52px; color: var(--dim); }
+      .bar { flex: 1; height: 7px; background: rgba(255,255,255,0.08); position: relative; }
+      .bar i { position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--safe); transition: width 0.16s linear; }
+      .bar i.warn { background: var(--warn); }
+      .bar i.danger { background: var(--danger); }
+      #hint {
+        left: 50%; bottom: 18px; transform: translateX(-50%);
+        color: var(--dim); border: none; background: none; text-align: center; font-size: 11px;
+      }
+      kbd { border: 1px solid var(--line); padding: 1px 5px; border-radius: 3px; color: var(--ink); }
+    </style>
+  </head>
+  <body>
+    <canvas id="app"></canvas>
+
+    <div id="title" class="panel">
+      <b>黄金时间</b> <span>· 3D 架构 spike</span><br />
+      <span>城市火灾 / 老旧居民区 / 夜间</span><br />
+      <span id="seed">seed —</span>
+    </div>
+
+    <div id="stats" class="panel">
+      <div><em>fps</em> <span id="fps">—</span></div>
+      <div><em>draw calls</em> <span id="calls">—</span></div>
+      <div><em>triangles</em> <span id="tris">—</span></div>
+      <div><em>sim time</em> <span id="time">00:00</span></div>
+    </div>
+
+    <div id="exposure" class="panel">
+      <div><em>暴露</em></div>
+      <div class="row"><label>烟气</label><div class="bar"><i id="ex-smoke"></i></div></div>
+      <div class="row"><label>热负荷</label><div class="bar"><i id="ex-heat"></i></div></div>
+      <div class="row"><label>体力</label><div class="bar"><i id="ex-strain"></i></div></div>
+    </div>
+
+    <div id="floors" class="panel">
+      <div><em>各层烟气</em></div>
+      <div id="floor-rows"></div>
+    </div>
+
+    <div id="hint" class="panel">
+      <kbd>C</kbd> 剖面/完整视图 &nbsp; <kbd>S</kbd> 烟层 &nbsp; <kbd>空格</kbd> 暂停
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
