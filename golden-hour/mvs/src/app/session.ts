@@ -6,6 +6,7 @@ export function beginRun(s: SimState): void {
   if (s.phase !== 'plan') return;
   s.phase = 'execute';
   s.crew.order = { kind: 'search', floor: 1 };
+  s.decisions.push({ at: s.t, kind: 'order', label: '下达搜索二层' });
 }
 
 export function advance(s: SimState, dt: number): { enteredDebrief: boolean } {
@@ -13,7 +14,7 @@ export function advance(s: SimState, dt: number): { enteredDebrief: boolean } {
 
   stepSim(s, dt);
 
-  if (s.door.opened) {
+  if (s.ended || s.door.opened) {
     s.phase = 'debrief';
     return { enteredDebrief: true };
   }

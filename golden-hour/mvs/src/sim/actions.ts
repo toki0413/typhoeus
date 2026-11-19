@@ -6,6 +6,7 @@ export function suppressFire(s: SimState): boolean {
 
   s.resources.extinguisher -= 1;
   s.fire = clamp01(s.fire - 0.25);
+  s.decisions.push({ at: s.t, kind: 'suppress', label: '压制火势' });
   s.events.push({
     at: s.t,
     type: 'evidence',

@@ -22,6 +22,29 @@ export interface DoorState {
   opened: boolean;
 }
 
+export interface Decision {
+  at: number;
+  kind: 'order' | 'door' | 'suppress' | 'incident' | 'ignore';
+  label: string;
+}
+
+export interface IncidentOption {
+  id: string;
+  label: string;
+}
+
+export interface Incident {
+  id: 'neighbor' | 'stairs';
+  at: number;
+  deadline: number;
+  title: string;
+  detail: string;
+  options: IncidentOption[];
+  resolved: boolean;
+  choice: string | null;
+  activatedAt: number | null;
+}
+
 export interface ScenarioParams {
   fireGrowthEarly: number;
   fireGrowthLate: number;
@@ -44,9 +67,24 @@ export interface SimState {
     order: Order | null;
     atDoor: boolean;
     injured: boolean;
+    busyUntil: number;
   };
   door: DoorState;
   victim: { alive: boolean; rescued: boolean };
+  neighbor: {
+    alive: boolean;
+    saved: boolean;
+    saveAt: number | null;
+    doomAt: number | null;
+  };
+  stairs: {
+    safe: boolean;
+    collapsed: boolean;
+    collapseAt: number | null;
+  };
+  incidents: Incident[];
+  decisions: Decision[];
+  ended: boolean;
   resources: { extinguisher: number };
   events: SimEvent[];
 }

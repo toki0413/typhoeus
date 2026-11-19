@@ -7,6 +7,7 @@ import { createDoor } from './render/door';
 import { createHud } from './ui/hud';
 import { createDoorUi } from './ui/door';
 import { createActions } from './ui/actions';
+import { createIncidentUi } from './ui/incidents';
 import { renderDebrief } from './ui/debrief';
 import { beginRun, advance, restart } from './app/session';
 
@@ -14,6 +15,7 @@ const canvas = document.getElementById('app') as HTMLCanvasElement;
 const hudRoot = document.getElementById('hud')!;
 const doorRoot = document.getElementById('door-ui')!;
 const actionsRoot = document.getElementById('actions')!;
+const incidentRoot = document.getElementById('incidents')!;
 const debriefRoot = document.getElementById('debrief')!;
 
 const sim = createWorld('GH-FIRE-MVS');
@@ -29,6 +31,7 @@ const doorMesh = createDoor(scene);
 const hud = createHud(hudRoot);
 const doorUi = createDoorUi(doorRoot, sim);
 const actions = createActions(actionsRoot, sim);
+const incidents = createIncidentUi(incidentRoot, sim);
 
 window.addEventListener('resize', () => {
   const aspect = window.innerWidth / window.innerHeight;
@@ -82,6 +85,7 @@ function frame(now: number) {
   doorMesh.update(sim);
   doorUi.update(sim);
   actions.update(sim);
+  incidents.update(sim);
   hudTimer += raw;
   if (hudTimer >= 0.1) {
     hudTimer = 0;

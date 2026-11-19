@@ -5,6 +5,7 @@ export function checkDoor(s: SimState): void {
   if (s.door.checked || s.door.opened) return;
   s.door.checked = true;
   s.door.temp = 'hot';
+  s.decisions.push({ at: s.t, kind: 'door', label: '门温试探' });
   s.events.push({
     at: s.t,
     type: 'evidence',
@@ -16,12 +17,14 @@ export function checkDoor(s: SimState): void {
 export function waitDoor(s: SimState): void {
   if (s.door.opened || s.door.safe || s.door.waitUntil !== null) return;
   s.door.waitUntil = s.t + 30;
+  s.decisions.push({ at: s.t, kind: 'door', label: '等待 30 秒' });
 }
 
 export function openDoor(s: SimState): void {
   if (s.door.opened) return;
   s.door.opened = true;
   s.door.waitUntil = null;
+  s.decisions.push({ at: s.t, kind: 'door', label: '开门' });
 
   if (!s.door.checked) {
     s.events.push({
