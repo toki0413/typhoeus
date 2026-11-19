@@ -33,7 +33,7 @@ export function stepSim(s: SimState, dt: number): void {
   s.exposure.heat = clamp01(s.exposure.heat + s.heat[f] * 0.22 * dt);
   s.exposure.strain = clamp01(s.exposure.strain + 0.06 * dt);
 
-  if (!s.door.safe && s.door.waitUntil !== null && s.t >= s.door.waitUntil) {
+  if (!s.door.opened && !s.door.safe && s.door.waitUntil !== null && s.t >= s.door.waitUntil) {
     s.door.waitUntil = null;
     if (s.door.checked && s.door.temp === 'hot') {
       s.door.safe = true;

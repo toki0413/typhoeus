@@ -21,6 +21,7 @@ export function waitDoor(s: SimState): void {
 export function openDoor(s: SimState): void {
   if (s.door.opened) return;
   s.door.opened = true;
+  s.door.waitUntil = null;
 
   if (!s.door.checked) {
     s.events.push({
