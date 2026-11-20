@@ -1,13 +1,14 @@
 import type { SimState } from '../sim/types';
 import { deriveAudioCues, EMPTY_SNAPSHOT, type AudioSnapshot } from './cues';
-import { mixFromState } from './mix';
+import { DEFAULT_SPATIAL, mixFromState, type AudioSpatial } from './mix';
 
 export interface AudioEngine {
   unlock(muted: boolean): void;
   setVolume(volume: number): void;
   setMuted(muted: boolean): void;
   setActive(active: boolean): void;
-  update(s: SimState): void;
+  setDoorMotion(rate: number): void;
+  update(s: SimState, spatial?: AudioSpatial): void;
 }
 
 type AudioContextCtor = new () => AudioContext;
@@ -57,9 +58,11 @@ export function createAudio(): AudioEngine {
   let master: GainNode | null = null;
   let fireGain: GainNode | null = null;
   let fireFilter: BiquadFilterNode | null = null;
+  let firePanner: StereoPannerNode | null = null;
   let subGain: GainNode | null = null;
   let airGain: GainNode | null = null;
   let airFilter: BiquadFilterNode | null = null;
+  let spatial: AudioSpatial = { ...DEFAULT_SPATIAL };
 
   let whiteBuffer: AudioBuffer | null = null;
   let brownBuffer: AudioBuffer | null = null;
@@ -79,6 +82,7 @@ export function createAudio(): AudioEngine {
   let nextStepAt = 0;
   let nextSirenAt = 0;
   let nextAlarmAt = 0;
+  let nextHingeAt = 0;
   let stepParity = 0;
   let breathParity = 0;
 
@@ -137,6 +141,14 @@ export function createAudio(): AudioEngine {
     return buffer;
   }
 
+  function createPanner(value: number): StereoPannerNode | null {
+    const c = ctx;
+    if (!c || typeof c.createStereoPanner !== 'function') return null;
+    const panner = c.createStereoPanner();
+    panner.pan.value = clamp(value, -1, 1);
+    return panner;
+  }
+
   function route(node: AudioNode, pan = 0, toComms = false): void {
     const c = ctx;
     const target = toComms ? comms ?? bus : bus;
@@ -168,7 +180,13 @@ export function createAudio(): AudioEngine {
     fireGain = c.createGain();
     fireGain.gain.value = 0;
     fire.connect(fireFilter).connect(fireGain);
-    route(fireGain, -0.35);
+    firePanner = createPanner(spatial.firePan);
+    if (firePanner) {
+      fireGain.connect(firePanner);
+      firePanner.connect(bus!);
+    } else {
+      fireGain.connect(bus!);
+    }
     fire.start();
 
     const sub = c.createOscillator();
@@ -342,7 +360,14 @@ export function createAudio(): AudioEngine {
   }
 
   function playArrive(): void {
-    burst({ duration: 0.24, gain: 0.05, filter: 'lowpass', freq: 260, endFreq: 120, pan: 0.2 });
+    burst({
+      duration: 0.24,
+      gain: 0.05,
+      filter: 'lowpass',
+      freq: 260,
+      endFreq: 120,
+      pan: spatial.crewPan,
+    });
     burst({
       duration: 0.55,
       gain: 0.02,
@@ -350,7 +375,7 @@ export function createAudio(): AudioEngine {
       freq: 610,
       endFreq: 460,
       q: 0.6,
-      pan: 0.1,
+      pan: spatial.crewPan,
     });
   }
 
@@ -362,9 +387,50 @@ export function createAudio(): AudioEngine {
     duck.gain.setTargetAtTime(1, now + 1.5, 0.5);
   }
 
+  function playHinge(rate: number): void {
+    if (!ctx || muted || !active || volume <= 0.001) return;
+    const now = ctx.currentTime;
+    if (now < nextHingeAt) return;
+    nextHingeAt = now + rand(0.07, 0.13);
+
+    const level = Math.min(0.02, 0.005 + rate * 0.05);
+    tone({
+      type: 'sawtooth',
+      from: rand(150, 205),
+      to: rand(92, 124),
+      duration: rand(0.12, 0.2),
+      gain: level,
+      filterHz: 900,
+      pan: spatial.doorPan,
+    });
+    if (Math.random() < 0.32) {
+      burst({
+        duration: 0.03,
+        gain: Math.min(0.024, level * 1.2),
+        filter: 'bandpass',
+        freq: rand(1400, 2400),
+        q: 1.6,
+        pan: spatial.doorPan,
+      });
+    }
+  }
+
   function playDoorCheck(): void {
-    burst({ duration: 0.2, gain: 0.05, filter: 'highpass', freq: 2600, pan: 0.22 });
-    tone({ type: 'sine', from: 190, to: 92, duration: 0.18, gain: 0.09, pan: 0.22 });
+    burst({
+      duration: 0.2,
+      gain: 0.05,
+      filter: 'highpass',
+      freq: 2600,
+      pan: spatial.doorPan,
+    });
+    tone({
+      type: 'sine',
+      from: 190,
+      to: 92,
+      duration: 0.18,
+      gain: 0.09,
+      pan: spatial.doorPan,
+    });
   }
 
   function playDoorWaitSafe(): void {
@@ -375,14 +441,21 @@ export function createAudio(): AudioEngine {
       duration: 0.65,
       gain: 0.035,
       filterHz: 480,
-      pan: 0.22,
+      pan: spatial.doorPan,
     });
-    burst({ duration: 0.5, gain: 0.02, filter: 'lowpass', freq: 380, pan: 0.22 });
+    burst({ duration: 0.5, gain: 0.02, filter: 'lowpass', freq: 380, pan: spatial.doorPan });
   }
 
   function playDoorWaitFail(): void {
-    tone({ type: 'sine', from: 78, to: 40, duration: 0.5, gain: 0.2, pan: 0.22 });
-    burst({ duration: 0.35, gain: 0.11, filter: 'lowpass', freq: 240, pan: 0.22 });
+    tone({
+      type: 'sine',
+      from: 78,
+      to: 40,
+      duration: 0.5,
+      gain: 0.2,
+      pan: spatial.doorPan,
+    });
+    burst({ duration: 0.35, gain: 0.11, filter: 'lowpass', freq: 240, pan: spatial.doorPan });
   }
 
   function playDoorOpen(): void {
@@ -393,7 +466,7 @@ export function createAudio(): AudioEngine {
       duration: 0.85,
       gain: 0.028,
       filterHz: 700,
-      pan: 0.3,
+      pan: spatial.doorPan,
     });
     const c = ctx;
     if (!c || !whiteBuffer) return;
@@ -410,7 +483,7 @@ export function createAudio(): AudioEngine {
     envelope.gain.exponentialRampToValueAtTime(0.1, now + 0.12);
     envelope.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
     source.connect(filter).connect(envelope);
-    route(envelope, 0.3);
+    route(envelope, spatial.doorPan);
     source.start(now, 0.2);
     source.stop(now + 1.25);
   }
@@ -441,11 +514,17 @@ export function createAudio(): AudioEngine {
     flutter.stop(now + 1.3);
 
     source.connect(filter).connect(envelope);
-    route(envelope, 0.35);
+    route(envelope, spatial.crewPan + 0.15);
     source.start(now, 0.4);
     source.stop(now + 1.32);
 
-    burst({ duration: 0.9, gain: 0.03, filter: 'highpass', freq: 4200, pan: 0.3 });
+    burst({
+      duration: 0.9,
+      gain: 0.03,
+      filter: 'highpass',
+      freq: 4200,
+      pan: spatial.crewPan + 0.15,
+    });
   }
 
   function playIncident(): void {
@@ -480,14 +559,21 @@ export function createAudio(): AudioEngine {
   }
 
   function playInjury(): void {
-    tone({ type: 'sine', from: 72, to: 26, duration: 0.8, gain: 0.42, pan: 0.3 });
+    tone({
+      type: 'sine',
+      from: 72,
+      to: 26,
+      duration: 0.8,
+      gain: 0.42,
+      pan: spatial.doorPan,
+    });
     burst({
       duration: 0.55,
       gain: 0.26,
       filter: 'lowpass',
       freq: 420,
       endFreq: 110,
-      pan: 0.3,
+      pan: spatial.doorPan,
     });
     tone({ type: 'sine', from: 2860, to: 2740, duration: 2.4, gain: 0.028 });
     if (muffle && ctx) {
@@ -549,7 +635,7 @@ export function createAudio(): AudioEngine {
       gain: gain * rand(0.02, 0.085),
       filter: 'highpass',
       freq,
-      pan: -0.35 + rand(-0.45, 0.45),
+      pan: spatial.firePan + rand(-0.45, 0.45),
     });
   }
 
@@ -573,7 +659,7 @@ export function createAudio(): AudioEngine {
       filter: 'lowpass',
       freq: stepParity ? 380 : 310,
       endFreq: 140,
-      pan: stepParity ? 0.12 : -0.12,
+      pan: spatial.crewPan + (stepParity ? 0.12 : -0.12),
     });
   }
 
@@ -636,6 +722,7 @@ export function createAudio(): AudioEngine {
       nextStepAt = now + 0.4;
       nextSirenAt = now + 4;
       nextAlarmAt = now;
+      nextHingeAt = now;
     },
 
     setVolume(nextVolume: number) {
@@ -654,7 +741,12 @@ export function createAudio(): AudioEngine {
       bus.gain.setTargetAtTime(active ? 1 : 0, ctx.currentTime, 0.3);
     },
 
-    update(s: SimState) {
+    setDoorMotion(rate: number) {
+      playHinge(rate);
+    },
+
+    update(s: SimState, nextSpatial?: AudioSpatial) {
+      if (nextSpatial) spatial = nextSpatial;
       if (!ctx || !master) return;
       if (s.phase !== 'execute') {
         snapshot = { ...EMPTY_SNAPSHOT };
@@ -668,6 +760,7 @@ export function createAudio(): AudioEngine {
         lastMixAt = now;
         setParam(fireGain?.gain, 0.03 + mix.fire * 0.1, 0.3);
         setParam(fireFilter?.frequency, 180 + mix.fire * 520, 0.3);
+        setParam(firePanner?.pan ?? null, spatial.firePan, 0.6);
         setParam(subGain?.gain, 0.01 + mix.fire * 0.05, 0.35);
         setParam(airGain?.gain, 0.012 + mix.airGain * 0.03, 0.4);
         setParam(airFilter?.frequency, 380 + mix.airGain * 460, 0.4);

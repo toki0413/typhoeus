@@ -172,6 +172,22 @@ describe('音频引擎', () => {
     expect(s.t).toBeGreaterThan(5);
   });
 
+  it('接受 Three.js 传来的声像并播放门轴运动声', () => {
+    const audio = createAudio();
+    audio.unlock(false);
+    audio.setActive(true);
+
+    const s = createWorld('x');
+    s.phase = 'execute';
+    s.door.opened = true;
+
+    expect(() => {
+      audio.update(s, { firePan: 0.15, doorPan: -0.2, stairsPan: -0.6, crewPan: -0.3 });
+      audio.setDoorMotion(9);
+      audio.setDoorMotion(0);
+    }).not.toThrow();
+  });
+
   it('静音、调音量与暂停切换不影响后续推进', () => {
     const audio = createAudio();
     audio.unlock(true);

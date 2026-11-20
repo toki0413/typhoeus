@@ -2,6 +2,20 @@ import type { SimState } from '../sim/types';
 import { clamp01 } from '../sim/smoke';
 import { activeIncident } from '../sim/incidents';
 
+export interface AudioSpatial {
+  firePan: number;
+  doorPan: number;
+  stairsPan: number;
+  crewPan: number;
+}
+
+export const DEFAULT_SPATIAL: AudioSpatial = {
+  firePan: -0.35,
+  doorPan: 0.3,
+  stairsPan: -0.6,
+  crewPan: 0,
+};
+
 export interface MixParams {
   fire: number;
   severity: number;

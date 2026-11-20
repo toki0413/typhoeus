@@ -5,6 +5,7 @@ import { createAgents } from './render/agents';
 import { createSmoke } from './render/smoke';
 import { createDoor } from './render/door';
 import { createCorridorDetails } from './render/corridor';
+import { createSpatialAudio } from './render/spatial';
 import { createHud } from './ui/hud';
 import { createDoorUi } from './ui/door';
 import { createActions } from './ui/actions';
@@ -93,6 +94,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   const CAMERA_HOME = { x: 28, y: 24, z: 28 };
 
   const sim = createWorld('GH-FIRE-MVS');
+  const spatial = createSpatialAudio(camera);
   const agents = createAgents(scene);
   const smoke = createSmoke(scene);
   const doorMesh = createDoor(scene);
@@ -105,6 +107,9 @@ function createApp(kit: ReturnType<typeof createScene>): App {
 
   let paused = false;
   let debriefShown = false;
+  let debriefScheduled = false;
+  let debriefAt = 0;
+  let prevDoorAngle = 0;
   let acc = 0;
   let last = performance.now();
   let hudTimer = 0;
@@ -120,12 +125,18 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     beginRun(sim);
     acc = 0;
     last = performance.now();
+    prevDoorAngle = doorMesh.getAngle();
+    debriefScheduled = false;
+    debriefAt = 0;
   }
 
   function retry(): void {
     restart(sim);
     debriefRoot.style.display = 'none';
     debriefShown = false;
+    debriefScheduled = false;
+    debriefAt = 0;
+    prevDoorAngle = 0;
     startRun();
   }
 
@@ -133,6 +144,9 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     restart(sim);
     debriefRoot.style.display = 'none';
     debriefShown = false;
+    debriefScheduled = false;
+    debriefAt = 0;
+    prevDoorAngle = 0;
     paused = false;
     audio.setActive(false);
     document.body.dataset.run = 'title';
@@ -196,10 +210,16 @@ function createApp(kit: ReturnType<typeof createScene>): App {
         acc -= DT;
         if (result.enteredDebrief) break;
       }
-      audio.update(sim);
+      audio.update(sim, spatial.read());
     }
 
-    if (sim.phase === 'debrief' && !debriefShown) {
+    // 让门扇先转完、吱呀声落地，再盖复盘页。
+    if (sim.phase === 'debrief' && !debriefScheduled) {
+      debriefScheduled = true;
+      debriefAt = now + 750;
+    }
+
+    if (debriefScheduled && !debriefShown && now >= debriefAt) {
       debriefShown = true;
       const card = buildDebrief(sim);
       records = recordRun(records, card);
@@ -218,6 +238,12 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     agents.update(sim);
     smoke.update(sim);
     doorMesh.update(sim);
+    const doorAngle = doorMesh.getAngle();
+    const hingeRate = Math.abs(doorAngle - prevDoorAngle) * 60;
+    prevDoorAngle = doorAngle;
+    if (sim.door.opened && !debriefShown && hingeRate > 0.02) {
+      audio.setDoorMotion(hingeRate);
+    }
     doorUi.update(sim);
     actions.update(sim);
     incidents.update(sim);

@@ -55,6 +55,7 @@ describe('渲染对象', () => {
     s.door.opened = true;
     for (let i = 0; i < 40; i++) d.update(s);
     expect(d.group.rotation.y).toBeGreaterThan(1.2);
+    expect(d.getAngle()).toBeCloseTo(d.group.rotation.y, 5);
   });
 
   it('被困者救出后实例被缩到不可见', () => {

@@ -4,6 +4,7 @@ import type { SimState } from '../sim/types';
 export function createDoor(scene: THREE.Scene): {
   group: THREE.Group;
   mesh: THREE.Mesh;
+  getAngle: () => number;
   update: (s: SimState) => void;
 } {
   const group = new THREE.Group();
@@ -27,6 +28,7 @@ export function createDoor(scene: THREE.Scene): {
   return {
     group,
     mesh,
+    getAngle: () => angle,
     update(s: SimState) {
       const target = s.door.opened ? Math.PI / 2 : 0;
       angle += (target - angle) * 0.18;
