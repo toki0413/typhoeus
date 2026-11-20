@@ -75,9 +75,33 @@ describe('复盘界面', () => {
     const root = document.createElement('div');
     const onRestart = vi.fn();
 
-    renderDebrief(root, buildDebrief(s), onRestart);
+    renderDebrief(root, buildDebrief(s), { onRestart });
     (root.querySelector('#replay') as HTMLButtonElement).click();
 
     expect(onRestart).toHaveBeenCalledTimes(1);
+  });
+
+  it('显示训练次数与最佳密度，并提供返回标题', () => {
+    const s = createWorld('x');
+    openDoor(s);
+    const root = document.createElement('div');
+    const onTitle = vi.fn();
+
+    renderDebrief(root, buildDebrief(s), {
+      history: {
+        runs: 3,
+        bestDensity: 7.5,
+        rescued: 2,
+        lost: 1,
+        lastDensity: 4,
+        lastElapsedSec: 40,
+      },
+      onTitle,
+    });
+
+    expect(root.textContent).toContain('第 3 次训练');
+    expect(root.textContent).toContain('最佳决策密度 7.5');
+    (root.querySelector('#title') as HTMLButtonElement).click();
+    expect(onTitle).toHaveBeenCalledTimes(1);
   });
 });

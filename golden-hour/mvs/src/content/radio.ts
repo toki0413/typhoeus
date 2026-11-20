@@ -36,3 +36,9 @@ export const RADIO_SCRIPT: RadioLine[] = [
     text: '专业队还有五分钟。里面什么情况，简短说。',
   },
 ];
+
+export function radioLinesUpTo(t: number): number {
+  let count = 0;
+  while (count < RADIO_SCRIPT.length && t >= RADIO_SCRIPT[count].at) count += 1;
+  return count;
+}

@@ -3,34 +3,148 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0d0f12" />
     <title>黄金时间 · MVS</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #0d0f12; overflow: hidden; }
+      :root {
+        --ink: #e8e6e1;
+        --muted: #9a958d;
+        --accent: #e5b567;
+        --panel: rgba(15, 18, 22, 0.84);
+        --line: rgba(255, 255, 255, 0.14);
+      }
+      html, body { margin: 0; height: 100%; background: #0d0f12; overflow: hidden; color: var(--ink); }
       #app { display: block; width: 100vw; height: 100vh; }
+      #vignette {
+        position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 3;
+        transition: opacity 0.5s ease;
+        background: radial-gradient(ellipse at center, transparent 42%, rgba(78, 12, 0, 0.72) 100%);
+      }
       .panel {
-        position: fixed; background: rgba(15,18,22,.82); color: #e8e6e1;
-        border: 1px solid rgba(255,255,255,.14); padding: 10px 12px;
+        position: fixed; background: var(--panel); color: var(--ink);
+        border: 1px solid var(--line); padding: 10px 12px; z-index: 4;
         font: 12px/1.6 ui-monospace, "Noto Sans Mono CJK SC", monospace;
+        backdrop-filter: blur(2px);
       }
       #hud { top: 16px; left: 16px; }
-      #door-ui { left: 50%; bottom: 32px; transform: translateX(-50%); display: none; }
+      #door-ui { left: 50%; bottom: 32px; transform: translateX(-50%); display: none; text-align: center; }
       #actions { right: 16px; bottom: 16px; display: none; }
       #incidents { right: 16px; top: 120px; width: 250px; display: none; }
+      #incidents button { display: block; width: 100%; margin: 6px 0 0; text-align: left; }
       #radio { left: 16px; top: 168px; width: 310px; }
+      #pause-btn { top: 16px; right: 16px; display: none; z-index: 6; }
+      body[data-run="playing"] #pause-btn { display: block; }
       .radio-line { margin: 4px 0; }
       .radio-line.dim { opacity: 0.55; }
-      #debrief { inset: 0; display: none; overflow: auto; padding: 40px; }
-      button { font: inherit; margin-right: 8px; padding: 6px 10px; }
+      #debrief {
+        inset: 0; display: none; overflow: auto; padding: 40px; z-index: 25;
+        background: rgba(8, 10, 13, 0.97); border: 0;
+      }
+
+      #shell {
+        position: fixed; inset: 0; z-index: 30; display: none; overflow: auto;
+        padding: clamp(28px, 7vh, 72px) clamp(22px, 7vw, 96px);
+        background:
+          radial-gradient(120% 90% at 50% 0%, rgba(52, 40, 26, 0.6), rgba(8, 9, 11, 0.98) 70%),
+          #0a0b0d;
+      }
+      #shell.open { display: block; }
+      .screen { max-width: 720px; }
+      .kicker {
+        font: 600 11px/1 ui-monospace, "Noto Sans Mono CJK SC", monospace;
+        letter-spacing: 0.3em; color: var(--accent);
+      }
+      #shell h1 {
+        margin: 18px 0 8px; font-size: clamp(42px, 8vw, 82px);
+        letter-spacing: 0.06em; font-weight: 700; line-height: 1.1;
+      }
+      .sub { margin: 0 0 30px; color: #b8b2a7; font-size: clamp(15px, 2vw, 19px); }
+      .brief p { margin: 0 0 10px; max-width: 34em; color: #d9d4ca; font-size: 16px; line-height: 1.9; }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 34px 0 16px; }
+      .hint { color: #7f7a72; font-size: 12px; letter-spacing: 0.08em; }
+      .notice {
+        max-width: 40em; margin: 18px 0 0; padding: 12px 14px;
+        border: 1px solid #8a3b2a; background: rgba(120, 30, 10, 0.18);
+        color: #ffb59e; font-size: 13px; line-height: 1.7;
+      }
+      .stats {
+        margin-top: 26px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--muted); font: 12px/1.7 ui-monospace, "Noto Sans Mono CJK SC", monospace;
+      }
+      .settings {
+        position: sticky; bottom: 0; margin-top: 48px; padding: 18px 0 8px;
+        display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        background: linear-gradient(to top, rgba(8, 9, 11, 0.96) 60%, rgba(8, 9, 11, 0));
+      }
+      .settings-title { margin-right: 6px; color: #7f7a72; font: 600 11px/1 ui-monospace, monospace; letter-spacing: 0.2em; }
+
+      button {
+        font: inherit; font-size: 14px; padding: 10px 16px; min-height: 42px;
+        color: var(--ink); background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 3px;
+        cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      }
+      button:hover { background: rgba(255, 255, 255, 0.12); }
+      button.primary {
+        background: var(--accent); border-color: var(--accent); color: #17130a;
+        font-weight: 700; letter-spacing: 0.04em;
+      }
+      button.primary:hover { background: #f0c67e; }
+      button:disabled { opacity: 0.45; cursor: default; }
+      button:focus-visible { outline: 2px solid #ffd479; outline-offset: 2px; }
+      button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+      .settings button { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+
+      body:not([data-run="playing"]) #hud,
+      body:not([data-run="playing"]) #door-ui,
+      body:not([data-run="playing"]) #actions,
+      body:not([data-run="playing"]) #incidents,
+      body:not([data-run="playing"]) #radio,
+      body:not([data-run="playing"]) #vignette { display: none !important; }
+
+      html.large-text .panel { font-size: 15px; line-height: 1.75; }
+      html.large-text .brief p, html.large-text .sub, html.large-text button { font-size: 17px; }
+      html.large-text .stats, html.large-text .hint { font-size: 14px; }
+      html.large-text #incidents { width: 300px; }
+
+      html.high-contrast .panel {
+        background: #000; border-color: #fff; color: #fff;
+      }
+      html.high-contrast #shell { background: #000; }
+      html.high-contrast .kicker { color: #ffd479; }
+      html.high-contrast .sub, html.high-contrast .stats, html.high-contrast .hint { color: #fff; }
+      html.high-contrast button { background: #000; border-color: #fff; color: #fff; }
+      html.high-contrast button.primary { background: #ffd479; border-color: #ffd479; color: #000; }
+      html.high-contrast .radio-line.dim { opacity: 1; }
+
+      html.reduce-motion *,
+      html.reduce-motion *::before,
+      html.reduce-motion *::after {
+        animation: none !important; transition: none !important; scroll-behavior: auto !important;
+      }
+
+      @media (max-width: 640px) {
+        #incidents { top: 92px; left: 16px; right: 16px; width: auto; }
+        #radio { top: auto; bottom: 132px; left: 16px; right: 16px; width: auto; }
+        #actions { left: 16px; right: 16px; bottom: 16px; }
+        #door-ui { bottom: 72px; width: calc(100vw - 32px); }
+        #debrief { padding: 20px; }
+        .settings { position: static; }
+      }
     </style>
   </head>
-  <body>
-    <canvas id="app"></canvas>
+  <body data-run="title">
+    <canvas id="app" aria-label="居民楼火灾现场示意图"></canvas>
+    <div id="vignette"></div>
     <div id="hud" class="panel"></div>
     <div id="door-ui" class="panel"></div>
     <div id="actions" class="panel"></div>
     <div id="incidents" class="panel"></div>
-    <div id="radio" class="panel"></div>
-    <div id="debrief" class="panel"></div>
+    <div id="radio" class="panel" aria-live="polite"></div>
+    <button id="pause-btn" class="panel" aria-label="暂停训练">暂停</button>
+    <div id="debrief" class="panel" role="dialog" aria-modal="true" aria-label="行动后回顾"></div>
+    <div id="shell"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -1,18 +1,14 @@
 import type { SimState } from '../sim/types';
-import { RADIO_SCRIPT } from '../content/radio';
+import { RADIO_SCRIPT, radioLinesUpTo } from '../content/radio';
 
 export function createRadio(root: HTMLElement): { update: (s: SimState) => void } {
-  let shown = 0;
-  let lastT = 0;
+  let rendered = -1;
 
   return {
     update(s: SimState) {
-      if (s.t < lastT) shown = 0;
-      lastT = s.t;
-
-      while (shown < RADIO_SCRIPT.length && s.t >= RADIO_SCRIPT[shown].at) {
-        shown += 1;
-      }
+      const shown = radioLinesUpTo(s.t);
+      if (shown === rendered) return;
+      rendered = shown;
 
       if (shown === 0) {
         root.innerHTML = '';
