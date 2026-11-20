@@ -1,5 +1,6 @@
 import type { Settings } from '../app/prefs';
 import type { TrainingRecord } from '../app/records';
+import { scenarioFor } from '../content/scenarios';
 
 export interface ShellOptions {
   settings: Settings;
@@ -99,8 +100,11 @@ export function createShell(root: HTMLElement, options: ShellOptions): ShellApi 
       statsLine.textContent = '还没有训练记录。';
       return;
     }
+    const lastScenario = scenarioFor(stats.lastSeed)?.name;
     statsLine.textContent =
-      `第 ${stats.runs} 次训练 · 最佳决策密度 ${stats.bestDensity}/分钟` +
+      `第 ${stats.runs} 次训练 · ` +
+      (lastScenario ? `上次场景 ${lastScenario} · ` : '') +
+      `最佳决策密度 ${stats.bestDensity}/分钟` +
       ` · 累计救出 ${stats.rescued} 人 · 累计遇难 ${stats.lost} 人`;
   }
 

@@ -17,6 +17,7 @@ export function checkDoor(s: SimState): void {
 export function waitDoor(s: SimState): void {
   if (s.door.opened || s.door.safe || s.door.waitUntil !== null) return;
   s.door.waitUntil = s.t + 30;
+  s.door.waited = true;
   s.decisions.push({ at: s.t, kind: 'door', label: '等待 30 秒' });
 }
 

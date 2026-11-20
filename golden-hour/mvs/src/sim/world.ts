@@ -5,9 +5,11 @@ import { createIncidents } from './incidents';
 export const INITIAL_EXTINGUISHERS = 2;
 
 export function createWorld(seed: string): SimState {
+  const scenario = deriveScenario(seed);
+
   return {
     seed,
-    scenario: deriveScenario(seed),
+    scenario,
     t: 0,
     phase: 'plan',
     fire: 0.12,
@@ -22,11 +24,18 @@ export function createWorld(seed: string): SimState {
       injured: false,
       busyUntil: 0,
     },
-    door: { checked: false, temp: 'unknown', waitUntil: null, safe: false, opened: false },
+    door: {
+      checked: false,
+      temp: 'unknown',
+      waitUntil: null,
+      waited: false,
+      safe: false,
+      opened: false,
+    },
     victim: { alive: true, rescued: false },
     neighbor: { alive: true, saved: false, saveAt: null, doomAt: null },
     stairs: { safe: true, collapsed: false, collapseAt: null },
-    incidents: createIncidents(),
+    incidents: createIncidents(scenario.incidentShift),
     decisions: [],
     ended: false,
     resources: { extinguisher: INITIAL_EXTINGUISHERS },

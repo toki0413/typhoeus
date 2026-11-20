@@ -37,8 +37,17 @@ export const RADIO_SCRIPT: RadioLine[] = [
   },
 ];
 
-export function radioLinesUpTo(t: number): number {
+export function radioLineTime(line: RadioLine, shift = 0): number {
+  return line.at === 0 ? 0 : Math.max(0.5, line.at + shift);
+}
+
+export function radioLinesUpTo(t: number, shift = 0): number {
   let count = 0;
-  while (count < RADIO_SCRIPT.length && t >= RADIO_SCRIPT[count].at) count += 1;
+  while (
+    count < RADIO_SCRIPT.length &&
+    t >= radioLineTime(RADIO_SCRIPT[count], shift)
+  ) {
+    count += 1;
+  }
   return count;
 }

@@ -6,7 +6,7 @@ export function createRadio(root: HTMLElement): { update: (s: SimState) => void 
 
   return {
     update(s: SimState) {
-      const shown = radioLinesUpTo(s.t);
+      const shown = radioLinesUpTo(s.t, s.scenario.incidentShift);
       if (shown === rendered) return;
       rendered = shown;
 

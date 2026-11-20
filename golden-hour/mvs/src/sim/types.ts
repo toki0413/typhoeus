@@ -18,6 +18,7 @@ export interface DoorState {
   checked: boolean;
   temp: 'unknown' | 'hot';
   waitUntil: number | null;
+  waited: boolean;
   safe: boolean;
   opened: boolean;
 }
@@ -50,6 +51,7 @@ export interface ScenarioParams {
   fireGrowthLate: number;
   smokeSource: number;
   smokeTransfer: number;
+  incidentShift: number;
 }
 
 export interface SimState {

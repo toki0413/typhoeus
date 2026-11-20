@@ -26,16 +26,16 @@ describe('声音提示映射', () => {
   });
 
   it('同一条无线电消息不会重复触发', () => {
-    const s = createWorld('x');
+    const s = createWorld('GH-FIRE-MVS');
     const first = deriveAudioCues(EMPTY_SNAPSHOT, s);
     s.t = 2;
     expect(has(deriveAudioCues(first.snapshot, s).cues, 'radio')).toBe(false);
 
-    s.t = 4;
+    s.t = 6;
     const second = deriveAudioCues(first.snapshot, s);
     expect(has(second.cues, 'radio')).toBe(true);
 
-    s.t = 5;
+    s.t = 7;
     expect(has(deriveAudioCues(second.snapshot, s).cues, 'radio')).toBe(false);
   });
 

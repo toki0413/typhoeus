@@ -1,5 +1,6 @@
 import type { Decision, SimState } from '../sim/types';
 import { INITIAL_EXTINGUISHERS } from '../sim/world';
+import { buildObjectives, type ObjectiveEvidence } from './objectives';
 
 export interface LearningRecord {
   anchorId: string;
@@ -7,8 +8,15 @@ export interface LearningRecord {
   correct: number;
 }
 
+export interface DebriefPractice {
+  doorChecked: boolean;
+  waited: boolean;
+  incidentsResolved: number;
+  incidentsIgnored: number;
+}
+
 export interface DebriefCard {
-  schemaVersion: 'mvs-1';
+  schemaVersion: 'mvs-2';
   seed: string;
   tactical: {
     rescued: number;
@@ -21,6 +29,8 @@ export interface DebriefCard {
     neighborSaved: boolean;
     neighborLost: boolean;
   };
+  objectives: ObjectiveEvidence[];
+  practice: DebriefPractice;
   learning: LearningRecord[];
   omissions: string[];
   decisions: Decision[];
@@ -57,9 +67,10 @@ export function buildDebrief(s: SimState): DebriefCard {
   const lost = s.victim.alive ? 0 : 1;
   const trapped = !s.victim.rescued && s.victim.alive ? 1 : 0;
   const usedExtinguishers = INITIAL_EXTINGUISHERS - s.resources.extinguisher;
+  const resolvedIncidents = s.incidents.filter((incident) => incident.resolved);
 
   return {
-    schemaVersion: 'mvs-1',
+    schemaVersion: 'mvs-2',
     seed: s.seed,
     tactical: {
       rescued,
@@ -75,6 +86,14 @@ export function buildDebrief(s: SimState): DebriefCard {
       crewInjured: s.crew.injured,
       neighborSaved: s.neighbor.saved,
       neighborLost: !s.neighbor.alive,
+    },
+    objectives: buildObjectives(s),
+    practice: {
+      doorChecked: s.door.checked,
+      waited: s.door.waited,
+      incidentsResolved: resolvedIncidents.filter((incident) => incident.choice !== 'ignore')
+        .length,
+      incidentsIgnored: resolvedIncidents.filter((incident) => incident.choice === 'ignore').length,
     },
     learning: [...map.values()],
     omissions: s.events

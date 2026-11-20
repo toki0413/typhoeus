@@ -40,6 +40,20 @@
         inset: 0; display: none; overflow: auto; padding: 40px; z-index: 25;
         background: rgba(8, 10, 13, 0.97); border: 0;
       }
+      #debrief h2 { margin-top: 0; }
+      #debrief .history { color: #b8b2a7; }
+      .evidence {
+        list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; max-width: 760px;
+      }
+      .evidence li {
+        padding: 10px 14px; border-left: 2px solid rgba(229, 181, 103, 0.55);
+        background: rgba(255, 255, 255, 0.035);
+      }
+      .evidence b { display: block; color: var(--accent); letter-spacing: 0.06em; }
+      .evidence span { display: block; margin-top: 4px; color: #e8e6e1; }
+      .evidence em { display: block; margin-top: 2px; color: #9a958d; font-style: normal; }
+      html.high-contrast .evidence li { border-color: #ffd479; background: #000; }
+      html.high-contrast .evidence em { color: #fff; }
 
       #shell {
         position: fixed; inset: 0; z-index: 30; display: none; overflow: auto;

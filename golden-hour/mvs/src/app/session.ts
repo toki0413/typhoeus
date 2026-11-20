@@ -21,6 +21,6 @@ export function advance(s: SimState, dt: number): { enteredDebrief: boolean } {
   return { enteredDebrief: false };
 }
 
-export function restart(s: SimState): void {
-  Object.assign(s, createWorld(s.seed));
+export function restart(s: SimState, seed = s.seed): void {
+  Object.assign(s, createWorld(seed));
 }

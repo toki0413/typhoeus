@@ -1,11 +1,14 @@
 import type { Incident, SimState } from './types';
 
-export function createIncidents(): Incident[] {
+export function createIncidents(shift = 0): Incident[] {
+  const neighborAt = Math.max(3, 8 + shift);
+  const stairsAt = Math.max(neighborAt + 4, 18 + shift);
+
   return [
     {
       id: 'neighbor',
-      at: 8,
-      deadline: 20,
+      at: neighborAt,
+      deadline: neighborAt + 12,
       title: '102 有人呼救',
       detail: '陈桂英被反锁在家，烟已经从门缝进来。',
       options: [
@@ -19,8 +22,8 @@ export function createIncidents(): Incident[] {
     },
     {
       id: 'stairs',
-      at: 18,
-      deadline: 28,
+      at: stairsAt,
+      deadline: stairsAt + 10,
       title: '楼梯间异响',
       detail: '钢筋在响，粉尘往下落。',
       options: [

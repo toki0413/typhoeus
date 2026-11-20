@@ -25,6 +25,8 @@ describe('deriveScenario', () => {
       expect(p.smokeSource).toBeLessThanOrEqual(0.33);
       expect(p.smokeTransfer).toBeGreaterThanOrEqual(0.1);
       expect(p.smokeTransfer).toBeLessThanOrEqual(0.14);
+      expect(p.incidentShift).toBeGreaterThanOrEqual(-4);
+      expect(p.incidentShift).toBeLessThanOrEqual(6);
     }
   });
 });

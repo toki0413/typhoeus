@@ -61,7 +61,7 @@ export function deriveAudioCues(
   const prev = s.t + 0.001 < previous.time ? EMPTY_SNAPSHOT : previous;
   const cues: AudioCue[] = [];
 
-  const radioCount = radioLinesUpTo(s.t);
+  const radioCount = radioLinesUpTo(s.t, s.scenario.incidentShift);
   if (radioCount > prev.radioCount) {
     cues.push({
       kind: 'radio',

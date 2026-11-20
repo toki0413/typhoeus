@@ -8,7 +8,7 @@ const runTo = (s: ReturnType<typeof createWorld>, sec: number) => {
 };
 
 describe('并发事件', () => {
-  it('8 秒时激活邻居呼救', () => {
+  it('邻居呼救会按场景节奏激活', () => {
     const s = createWorld('x');
     s.phase = 'execute';
     runTo(s, 9);

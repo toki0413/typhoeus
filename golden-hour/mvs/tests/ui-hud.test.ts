@@ -15,6 +15,7 @@ describe('HUD', () => {
     s.t = 12.3;
     hud.update(s);
     expect(root.textContent).toContain('GH-FIRE-MVS');
+    expect(root.textContent).toContain('标准局');
     expect(root.textContent).toContain('12.3s');
     expect(root.textContent).toContain('烟');
     expect(root.textContent).toContain('体力');

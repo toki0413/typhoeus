@@ -1,9 +1,12 @@
 import type { DebriefCard } from '../eval/debrief';
 import type { TrainingRecord } from '../app/records';
+import { scenarioFor } from '../content/scenarios';
 
 export interface DebriefOptions {
   history?: TrainingRecord;
+  nextScenarioName?: string;
   onRestart?: () => void;
+  onNextScenario?: () => void;
   onTitle?: () => void;
 }
 
@@ -28,9 +31,26 @@ export function renderDebrief(
   const decisions = card.decisions
     .map((d) => `<li>${Math.round(d.at)}s · ${d.label}</li>`)
     .join('');
+  const scenarioName = scenarioFor(card.seed)?.name ?? card.seed;
+  const evidence = card.objectives
+    .map(
+      (objective) =>
+        `<li><b>${objective.title}</b><span>${objective.observed}</span><em>${objective.outcome}</em></li>`
+    )
+    .join('');
   const history = options.history
-    ? `<p class="history">第 ${options.history.runs} 次训练 · 最佳决策密度 ${options.history.bestDensity}/分钟` +
-      ` · 累计救出 ${options.history.rescued} 人 · 累计遇难 ${options.history.lost} 人</p>`
+    ? `<p class="history">第 ${options.history.runs} 次训练 · ${scenarioName}` +
+      ` · 最佳决策密度 ${options.history.bestDensity}/分钟` +
+      ` · 累计救出 ${options.history.rescued} 人 · 累计遇难 ${options.history.lost} 人</p>` +
+      `<p class="history">累计：门温试探 ${options.history.doorChecks} 次` +
+      ` · 门外等待 ${options.history.waits} 次` +
+      ` · 事件处理 ${options.history.incidentsHandled} 次` +
+      ` · 事件忽略 ${options.history.incidentsIgnored} 次</p>`
+    : `<p class="history">场景：${scenarioName}</p>`;
+  const nextButton = options.onNextScenario
+    ? `<button id="next-scenario">换一个场景再练${
+        options.nextScenarioName ? `：${options.nextScenarioName}` : ''
+      }</button>`
     : '';
 
   root.innerHTML = `
@@ -38,13 +58,14 @@ export function renderDebrief(
     ${history}
     <p>救出 ${card.tactical.rescued} / 被困 ${card.tactical.trapped} / 死亡 ${card.tactical.lost}${injury}${neighbor}</p>
     <p>灭火器消耗 ${used} · 决策密度 ${card.decisionDensity}/分钟（${card.decisions.length} 次）</p>
+    <h3>本次训练证据</h3>
+    <ul class="evidence">${evidence}</ul>
     <h3>决策记录</h3><ul>${decisions}</ul>
     <h3>时间线</h3><ul>${rows}</ul>
-    <h3>遗漏清单</h3><ul>${omissions}</ul>
-    <h3>学习记录</h3>
-    <ul>${card.learning.map((l) => `<li>${l.anchorId} · ${l.correct}/${l.attempts}</li>`).join('')}</ul>
+    <h3>未完成动作</h3><ul>${omissions}</ul>
     <button id="export">导出复盘卡 JSON</button>
     <button id="replay">同种子重打</button>
+    ${nextButton}
     <button id="title">返回标题</button>
   `;
 
@@ -62,6 +83,9 @@ export function renderDebrief(
 
   if (options.onRestart) {
     root.querySelector('#replay')?.addEventListener('click', options.onRestart);
+  }
+  if (options.onNextScenario) {
+    root.querySelector('#next-scenario')?.addEventListener('click', options.onNextScenario);
   }
   if (options.onTitle) {
     root.querySelector('#title')?.addEventListener('click', options.onTitle);

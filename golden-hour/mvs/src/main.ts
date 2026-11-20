@@ -28,6 +28,7 @@ import {
   type TrainingRecord,
 } from './app/records';
 import { beginRun, advance, restart } from './app/session';
+import { SCENARIOS, nextScenario as pickNextScenario } from './content/scenarios';
 
 const canvas = document.getElementById('app') as HTMLCanvasElement;
 const hudRoot = document.getElementById('hud')!;
@@ -93,7 +94,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
 
   const CAMERA_HOME = { x: 28, y: 24, z: 28 };
 
-  const sim = createWorld('GH-FIRE-MVS');
+  const sim = createWorld(records.lastSeed || SCENARIOS[0].seed);
   const spatial = createSpatialAudio(camera);
   const agents = createAgents(scene);
   const smoke = createSmoke(scene);
@@ -137,6 +138,20 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     debriefScheduled = false;
     debriefAt = 0;
     prevDoorAngle = 0;
+    startRun();
+  }
+
+  function nextScenarioRun(): void {
+    const next = pickNextScenario(sim.seed, records.seedPlays);
+    restart(sim, next.seed);
+    debriefRoot.style.display = 'none';
+    debriefShown = false;
+    debriefScheduled = false;
+    debriefAt = 0;
+    prevDoorAngle = 0;
+    records = { ...records, lastSeed: next.seed };
+    saveRecords(storage, records);
+    shell.setStats(records);
     startRun();
   }
 
@@ -230,7 +245,9 @@ function createApp(kit: ReturnType<typeof createScene>): App {
       debriefRoot.style.display = 'block';
       renderDebrief(debriefRoot, card, {
         history: records,
+        nextScenarioName: pickNextScenario(sim.seed, records.seedPlays).name,
         onRestart: retry,
+        onNextScenario: nextScenarioRun,
         onTitle: returnToTitle,
       });
     }

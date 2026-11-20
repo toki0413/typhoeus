@@ -30,7 +30,7 @@ describe('session', () => {
     expect(s.phase).toBe('debrief');
   });
 
-  it('restart 用同一种子重置世界', () => {
+  it('restart 默认用同一种子重置世界', () => {
     const s = createWorld('GH-FIRE-MVS');
     s.t = 50;
     s.phase = 'debrief';
@@ -41,5 +41,16 @@ describe('session', () => {
     expect(s.t).toBe(0);
     expect(s.phase).toBe('plan');
     expect(s.resources.extinguisher).toBe(2);
+  });
+
+  it('restart 可以切换到指定场景种子', () => {
+    const s = createWorld('GH-FIRE-MVS');
+    s.t = 40;
+    s.phase = 'debrief';
+
+    restart(s, 'GH-FIRE-05');
+    expect(s.seed).toBe('GH-FIRE-05');
+    expect(s.t).toBe(0);
+    expect(s.scenario).toEqual(createWorld('GH-FIRE-05').scenario);
   });
 });

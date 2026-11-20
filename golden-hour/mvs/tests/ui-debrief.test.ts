@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 describe('复盘界面', () => {
-  it('渲染救出结果、遗漏与学习记录', () => {
+  it('渲染救出结果、行为证据与未完成动作', () => {
     const s = createWorld('x');
     openDoor(s);
     const card = buildDebrief(s);
@@ -23,8 +23,10 @@ describe('复盘界面', () => {
     renderDebrief(root, card);
 
     expect(root.textContent).toContain('行动后回顾');
+    expect(root.textContent).toContain('本次训练证据');
+    expect(root.textContent).toContain('开门后发生回燃');
+    expect(root.textContent).toContain('未完成动作');
     expect(root.textContent).toContain('未进行门温试探');
-    expect(root.textContent).toContain('K-BACKDRAFT-FAIL');
   });
 
   it('成功救援时显示救出 1 人', () => {
@@ -95,13 +97,41 @@ describe('复盘界面', () => {
         lost: 1,
         lastDensity: 4,
         lastElapsedSec: 40,
+        doorChecks: 2,
+        waits: 1,
+        incidentsHandled: 3,
+        incidentsIgnored: 1,
+        seedPlays: {},
+        lastSeed: 'x',
       },
       onTitle,
     });
 
     expect(root.textContent).toContain('第 3 次训练');
     expect(root.textContent).toContain('最佳决策密度 7.5');
+    expect(root.textContent).toContain('门温试探 2 次');
+    expect(root.textContent).toContain('事件忽略 1 次');
     (root.querySelector('#title') as HTMLButtonElement).click();
     expect(onTitle).toHaveBeenCalledTimes(1);
+  });
+
+  it('展示本次训练证据，并可切换到下一个场景', () => {
+    const s = createWorld('GH-FIRE-MVS');
+    openDoor(s);
+    const root = document.createElement('div');
+    const onNext = vi.fn();
+
+    renderDebrief(root, buildDebrief(s), {
+      nextScenarioName: '浓烟早发局',
+      onNextScenario: onNext,
+    });
+
+    expect(root.textContent).toContain('本次训练证据');
+    expect(root.textContent).toContain('门温判断');
+    expect(root.textContent).toContain('并发事件优先级');
+    expect(root.textContent).toContain('浓烟早发局');
+
+    (root.querySelector('#next-scenario') as HTMLButtonElement).click();
+    expect(onNext).toHaveBeenCalledTimes(1);
   });
 });
