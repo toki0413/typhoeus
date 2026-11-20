@@ -78,6 +78,7 @@ const shell = createShell(shellRoot, {
     saveSettings(storage, next);
     applySettings(document, next);
     audio.setMuted(next.muted);
+    audio.setVolume(next.volume);
   },
 });
 shell.setStats(records);
@@ -114,6 +115,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     document.body.dataset.run = 'playing';
     paused = false;
     audio.unlock(settings.muted);
+    audio.setVolume(settings.volume);
     audio.setActive(true);
     beginRun(sim);
     acc = 0;

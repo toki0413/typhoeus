@@ -78,6 +78,22 @@ describe('产品外壳', () => {
     expect(sound.textContent).toContain('关');
   });
 
+  it('音量滑块回传 0–1 的音量并更新百分比', () => {
+    const root = document.createElement('div');
+    const onChange = vi.fn();
+    createShell(root, options({ onSettingsChange: onChange })).showTitle();
+
+    const slider = root.querySelector('[data-volume]') as HTMLInputElement;
+    expect(slider.value).toBe('75');
+    expect(root.textContent).toContain('75%');
+
+    slider.value = '30';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(onChange).toHaveBeenCalledWith({ ...DEFAULT_SETTINGS, volume: 0.3 });
+    expect(root.textContent).toContain('30%');
+  });
+
   it('渲染不可用时给出说明并禁用开始按钮', () => {
     const root = document.createElement('div');
     const shell = createShell(root, options());

@@ -1,5 +1,6 @@
 export interface Settings {
   muted: boolean;
+  volume: number;
   reducedMotion: boolean;
   largeText: boolean;
   highContrast: boolean;
@@ -7,6 +8,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   muted: false,
+  volume: 0.75,
   reducedMotion: false,
   largeText: false,
   highContrast: false,
@@ -19,6 +21,9 @@ export interface StorageLike {
 
 const SETTINGS_KEY = 'golden-hour.mvs.settings.v1';
 
+const isVolume = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+
 export function loadSettings(
   storage: StorageLike | null,
   prefersReducedMotion = false
@@ -30,10 +35,12 @@ export function loadSettings(
     const raw = storage.getItem(SETTINGS_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<Record<keyof Settings, unknown>>;
-    const read = (key: keyof Settings): boolean =>
+    type BooleanKey = Exclude<keyof Settings, 'volume'>;
+    const read = (key: BooleanKey): boolean =>
       typeof parsed[key] === 'boolean' ? (parsed[key] as boolean) : fallback[key];
     return {
       muted: read('muted'),
+      volume: isVolume(parsed.volume) ? parsed.volume : fallback.volume,
       reducedMotion: read('reducedMotion'),
       largeText: read('largeText'),
       highContrast: read('highContrast'),
@@ -52,7 +59,10 @@ export function saveSettings(storage: StorageLike | null, settings: Settings): v
   }
 }
 
-export function toggleSetting(settings: Settings, key: keyof Settings): Settings {
+export function toggleSetting(
+  settings: Settings,
+  key: Exclude<keyof Settings, 'volume'>
+): Settings {
   return { ...settings, [key]: !settings[key] };
 }
 

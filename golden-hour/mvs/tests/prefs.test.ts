@@ -32,9 +32,24 @@ describe('设置持久化', () => {
 
   it('保存后可完整读回', () => {
     const storage = new MemoryStorage();
-    const custom = { muted: true, reducedMotion: true, largeText: true, highContrast: false };
+    const custom = {
+      muted: true,
+      volume: 0.35,
+      reducedMotion: true,
+      largeText: true,
+      highContrast: false,
+    };
     saveSettings(storage, custom);
     expect(loadSettings(storage)).toEqual(custom);
+  });
+
+  it('越界或缺失的音量回落到默认值', () => {
+    const storage = new MemoryStorage();
+    storage.setItem('golden-hour.mvs.settings.v1', JSON.stringify({ volume: 3 }));
+    expect(loadSettings(storage).volume).toBe(DEFAULT_SETTINGS.volume);
+
+    storage.setItem('golden-hour.mvs.settings.v1', JSON.stringify({ muted: true }));
+    expect(loadSettings(storage).volume).toBe(DEFAULT_SETTINGS.volume);
   });
 
   it('损坏的 JSON 回落到默认值', () => {
@@ -51,6 +66,7 @@ describe('设置持久化', () => {
   it('应用设置时切换根元素样式类', () => {
     applySettings(document, {
       muted: false,
+      volume: 0.5,
       reducedMotion: true,
       largeText: true,
       highContrast: true,

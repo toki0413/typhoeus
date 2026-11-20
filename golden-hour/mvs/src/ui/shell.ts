@@ -19,8 +19,10 @@ export interface ShellApi {
   setNotice: (message: string | null) => void;
 }
 
+type ToggleKey = Exclude<keyof Settings, 'volume'>;
+
 interface ToggleDef {
-  key: keyof Settings;
+  key: ToggleKey;
   label: string;
 }
 
@@ -31,7 +33,7 @@ const TOGGLES: ToggleDef[] = [
   { key: 'highContrast', label: '高对比' },
 ];
 
-const isOn = (settings: Settings, key: keyof Settings): boolean =>
+const isOn = (settings: Settings, key: ToggleKey): boolean =>
   key === 'muted' ? !settings.muted : settings[key];
 
 export function createShell(root: HTMLElement, options: ShellOptions): ShellApi {
@@ -72,6 +74,11 @@ export function createShell(root: HTMLElement, options: ShellOptions): ShellApi 
         (toggle) =>
           `<button data-toggle="${toggle.key}" aria-pressed="false">${toggle.label}</button>`
       ).join('')}
+      <label class="volume">
+        <span>音量</span>
+        <input type="range" min="0" max="100" step="5" data-volume aria-label="训练音量" />
+        <span class="volume-value" data-volume-value></span>
+      </label>
     </section>
   `;
 
@@ -80,6 +87,8 @@ export function createShell(root: HTMLElement, options: ShellOptions): ShellApi 
   const statsLine = root.querySelector<HTMLElement>('[data-stats]')!;
   const noticeLine = root.querySelector<HTMLElement>('[data-notice]')!;
   const startButton = root.querySelector<HTMLButtonElement>('[data-action="start"]')!;
+  const volumeInput = root.querySelector<HTMLInputElement>('[data-volume]')!;
+  const volumeValue = root.querySelector<HTMLElement>('[data-volume-value]')!;
 
   function renderStats(): void {
     if (!stats) {
@@ -104,15 +113,32 @@ export function createShell(root: HTMLElement, options: ShellOptions): ShellApi 
     }
   }
 
+  function renderVolume(): void {
+    const percent = Math.round(settings.volume * 100);
+    volumeInput.value = String(percent);
+    volumeValue.textContent = `${percent}%`;
+    volumeInput.setAttribute('aria-valuetext', `${percent}%`);
+  }
+
   function setOpen(open: boolean): void {
     root.classList.toggle('open', open);
   }
+
+  root.addEventListener('input', (event) => {
+    const input = event.target as HTMLInputElement;
+    if (!input.hasAttribute('data-volume')) return;
+    const next = Number(input.value) / 100;
+    if (!Number.isFinite(next)) return;
+    settings = { ...settings, volume: Math.min(1, Math.max(0, next)) };
+    renderVolume();
+    options.onSettingsChange({ ...settings });
+  });
 
   root.addEventListener('click', (event) => {
     const button = (event.target as HTMLElement).closest('button');
     if (!button) return;
 
-    const toggleKey = button.dataset.toggle as keyof Settings | undefined;
+    const toggleKey = button.dataset.toggle as ToggleKey | undefined;
     if (toggleKey) {
       settings = { ...settings, [toggleKey]: !settings[toggleKey] };
       renderToggles();
@@ -141,6 +167,7 @@ export function createShell(root: HTMLElement, options: ShellOptions): ShellApi 
 
   renderStats();
   renderToggles();
+  renderVolume();
 
   return {
     showTitle() {

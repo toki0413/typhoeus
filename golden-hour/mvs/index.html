@@ -95,6 +95,15 @@
       button:focus-visible { outline: 2px solid #ffd479; outline-offset: 2px; }
       button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
       .settings button { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+      .volume {
+        display: flex; align-items: center; gap: 8px; margin-left: auto;
+        color: var(--muted); font: 11px/1 ui-monospace, "Noto Sans Mono CJK SC", monospace;
+        letter-spacing: 0.08em;
+      }
+      .volume input[type="range"] { width: 110px; accent-color: var(--accent); cursor: pointer; }
+      .volume-value { min-width: 36px; color: var(--accent); }
+      input[type="range"]:focus-visible { outline: 2px solid #ffd479; outline-offset: 3px; }
+      html.large-text .volume { font-size: 14px; }
 
       body:not([data-run="playing"]) #hud,
       body:not([data-run="playing"]) #door-ui,
