@@ -32,11 +32,11 @@ const media = mediaFiles.reduce((sum, file) => sum + readFileSync(file).length, 
 const total = js + css + html;
 
 const budgets = {
-  js: 190 * 1024,
+  js: 200 * 1024,
   css: 24 * 1024,
   html: 16 * 1024,
-  media: 700 * 1024,
-  total: 220 * 1024,
+  media: 2.6 * 1024 * 1024,
+  total: 232 * 1024,
 };
 
 const kb = (bytes) => `${(bytes / 1024).toFixed(1)} KB`;

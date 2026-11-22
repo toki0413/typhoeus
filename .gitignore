@@ -58,3 +58,7 @@ docs/demo/capture_burned/
 data/seed/cities/
 out/cities/*/*.tif
 
+
+# 金色时刻：消防员资产中间产物（build.py 可重新生成）
+golden-hour/mvs/assets-src/firefighter/shots/
+golden-hour/mvs/assets-src/firefighter/tex/

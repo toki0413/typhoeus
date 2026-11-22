@@ -13,7 +13,7 @@ export const DEFAULT_ANCHORS: SpatialAnchors = {
   fire: new THREE.Vector3(-4.5, 3.8, -1.5),
   door: new THREE.Vector3(0, 4.05, 1.05),
   stairs: new THREE.Vector3(-11.4, 0.5, -0.8),
-  crew: new THREE.Vector3(-9.5, 0.6, 0.4),
+  crew: new THREE.Vector3(-8.8, 0.6, 1.65),
 };
 
 const PAN_SCALE = 1.6;

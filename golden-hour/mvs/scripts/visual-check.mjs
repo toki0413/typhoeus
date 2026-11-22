@@ -44,6 +44,12 @@ try {
     .then(() => true)
     .catch(() => false);
   check('消防员 GLB 已加载', glbLoaded);
+  const clips = await page.evaluate(() => window.__gh?.crewClips?.() ?? []);
+  check(
+    'GLB 含 Idle/Walk/Reach 动画',
+    ['Idle', 'Walk', 'Reach'].every((name) => clips.includes(name)),
+    clips.join(', ')
+  );
   await new Promise((resolve) => setTimeout(resolve, 1600));
   await screenshot(page, '02-gameplay');
 

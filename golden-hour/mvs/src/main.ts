@@ -116,9 +116,16 @@ function createApp(kit: ReturnType<typeof createScene>): App {
         sim: typeof sim;
         agents: typeof agents;
         doorMesh: typeof doorMesh;
+        crewClips: () => string[];
       };
     };
-    debugWindow.__gh = { audio, sim, agents, doorMesh };
+    debugWindow.__gh = {
+      audio,
+      sim,
+      agents,
+      doorMesh,
+      crewClips: () => agents.clipNames(),
+    };
   }
 
   void loadCrewModel(`${import.meta.env.BASE_URL}assets/firefighter.glb`)

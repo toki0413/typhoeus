@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { FLOOR_H } from './constants';
 import { concreteTexture } from './textures';
 export { FLOOR_H };
 
-export const CAMERA_FRUSTUM = 12;
+export const CAMERA_FRUSTUM = 10;
 
 export function buildStaticGeometry(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
@@ -61,8 +62,15 @@ export function createScene(): {
   camera.lookAt(0, 3, 0);
   camera.updateProjectionMatrix();
 
-  scene.add(new THREE.HemisphereLight(0x9db3cc, 0x1a2028, 1.05));
-  scene.add(new THREE.AmbientLight(0x2b3440, 0.5));
+  scene.add(new THREE.HemisphereLight(0x9db3cc, 0x1a2028, 1.0));
+  scene.add(new THREE.AmbientLight(0x2b3440, 0.45));
+
+  // IBL keeps the authored PBR gear (leather, steel, reflective tape) readable.
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = envTexture;
+  scene.environmentIntensity = 0.16;
+  pmrem.dispose();
 
   const key = new THREE.DirectionalLight(0xffc894, 3.1);
   key.position.set(18, 30, 12);

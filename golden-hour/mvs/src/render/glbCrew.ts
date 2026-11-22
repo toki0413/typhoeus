@@ -1,52 +1,16 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-export interface CrewModelNodes {
+export interface CrewModel {
   root: THREE.Object3D;
-  torso: THREE.Object3D;
-  head: THREE.Object3D;
-  leftHip: THREE.Object3D;
-  rightHip: THREE.Object3D;
-  leftKnee: THREE.Object3D;
-  rightKnee: THREE.Object3D;
-  leftShoulder: THREE.Object3D;
-  rightShoulder: THREE.Object3D;
-  leftElbow: THREE.Object3D;
-  rightElbow: THREE.Object3D;
+  mixer: THREE.AnimationMixer;
+  actions: Map<string, THREE.AnimationAction>;
+  clipNames: string[];
 }
 
-export async function loadCrewModel(url: string): Promise<CrewModelNodes | null> {
+export async function loadCrewModel(url: string): Promise<CrewModel | null> {
   const gltf = await new GLTFLoader().loadAsync(url);
-  const root = gltf.scene.getObjectByName('Firefighter') ?? gltf.scene;
-
-  const named = (name: string): THREE.Object3D | null =>
-    gltf.scene.getObjectByName(name) ?? null;
-
-  const torso = named('Torso');
-  const head = named('Head');
-  const leftHip = named('Leg_L');
-  const rightHip = named('Leg_R');
-  const leftKnee = named('Shin_L');
-  const rightKnee = named('Shin_R');
-  const leftShoulder = named('Arm_L');
-  const rightShoulder = named('Arm_R');
-  const leftElbow = named('Forearm_L');
-  const rightElbow = named('Forearm_R');
-
-  if (
-    !torso ||
-    !head ||
-    !leftHip ||
-    !rightHip ||
-    !leftKnee ||
-    !rightKnee ||
-    !leftShoulder ||
-    !rightShoulder ||
-    !leftElbow ||
-    !rightElbow
-  ) {
-    return null;
-  }
+  const root = gltf.scene;
 
   root.traverse((object) => {
     if (object instanceof THREE.Mesh) {
@@ -55,17 +19,14 @@ export async function loadCrewModel(url: string): Promise<CrewModelNodes | null>
     }
   });
 
-  return {
-    root,
-    torso,
-    head,
-    leftHip,
-    rightHip,
-    leftKnee,
-    rightKnee,
-    leftShoulder,
-    rightShoulder,
-    leftElbow,
-    rightElbow,
-  };
+  const clipNames = gltf.animations.map((clip) => clip.name);
+  if (clipNames.length === 0) return null;
+
+  const mixer = new THREE.AnimationMixer(root);
+  const actions = new Map<string, THREE.AnimationAction>();
+  for (const clip of gltf.animations) {
+    actions.set(clip.name, mixer.clipAction(clip));
+  }
+
+  return { root, mixer, actions, clipNames };
 }
