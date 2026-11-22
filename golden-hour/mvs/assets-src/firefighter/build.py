@@ -14,6 +14,7 @@ Design goals (commercial-slice quality):
 
 import math
 import os
+import shutil
 import struct
 import zlib
 
@@ -28,6 +29,7 @@ ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 OUT = os.path.join(ROOT, "public", "assets", "firefighter.glb")
 SHOT_DIR = os.path.join(HERE, "shots")
 TEX_DIR = os.path.join(HERE, "tex")
+PREVIEW = os.path.join(HERE, "preview.png")
 for _d in (SHOT_DIR, TEX_DIR):
     os.makedirs(_d, exist_ok=True)
 
@@ -1500,6 +1502,10 @@ render_shot(cam, "reach", (3.3, -3.7, 1.55), target=(0, 0, 1.05), lens=58)
 arm.animation_data.action = None
 clear_pose()
 SCENE.frame_set(1)
+
+# keep the committed hero preview in sync with the QA contact sheet
+shutil.copyfile(os.path.join(SHOT_DIR, "hero.png"), PREVIEW)
+print("PREVIEW", PREVIEW)
 
 # ---------------------------------------------------------------------------
 # export
