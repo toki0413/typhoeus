@@ -76,6 +76,14 @@ class FakeConvolver extends FakeNode {
   buffer: AudioBuffer | null = null;
 }
 
+class FakeAnalyser extends FakeNode {
+  fftSize = 1024;
+
+  getFloatTimeDomainData(data: Float32Array): void {
+    data.fill(0.25);
+  }
+}
+
 class FakeAudioContext {
   static instances: FakeAudioContext[] = [];
 
@@ -107,6 +115,10 @@ class FakeAudioContext {
 
   createConvolver(): FakeConvolver {
     return new FakeConvolver();
+  }
+
+  createAnalyser(): FakeAnalyser {
+    return new FakeAnalyser();
   }
 
   createOscillator(): FakeOscillator {
@@ -170,6 +182,7 @@ describe('音频引擎', () => {
 
     expect(ctx.oscillators).toBeGreaterThan(0);
     expect(s.t).toBeGreaterThan(5);
+    expect(audio.level()).toBeGreaterThan(0);
   });
 
   it('接受 Three.js 传来的声像并播放门轴运动声', () => {

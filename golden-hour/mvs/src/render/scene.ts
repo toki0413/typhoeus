@@ -3,6 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { FLOOR_H } from './constants';
 export { FLOOR_H };
 
+export const CAMERA_FRUSTUM = 12;
+
 export function buildStaticGeometry(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
 
@@ -39,7 +41,7 @@ export function createScene(): {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowPower ? 1.25 : 1.75));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.3;
   renderer.shadowMap.enabled = !lowPower;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -48,7 +50,7 @@ export function createScene(): {
   scene.fog = new THREE.FogExp2(0x0b0e12, 0.011);
 
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
-  const frustum = 16;
+  const frustum = CAMERA_FRUSTUM;
   const aspect = window.innerWidth / window.innerHeight;
   camera.left = -frustum * aspect;
   camera.right = frustum * aspect;
@@ -58,9 +60,10 @@ export function createScene(): {
   camera.lookAt(0, 3, 0);
   camera.updateProjectionMatrix();
 
-  scene.add(new THREE.HemisphereLight(0x8fa3b8, 0x101318, 0.55));
+  scene.add(new THREE.HemisphereLight(0x9db3cc, 0x1a2028, 1.05));
+  scene.add(new THREE.AmbientLight(0x2b3440, 0.5));
 
-  const key = new THREE.DirectionalLight(0xffc894, 2.4);
+  const key = new THREE.DirectionalLight(0xffc894, 3.1);
   key.position.set(18, 30, 12);
   if (!lowPower) {
     key.castShadow = true;
@@ -75,13 +78,13 @@ export function createScene(): {
   }
   scene.add(key);
 
-  const fill = new THREE.DirectionalLight(0x6f8fb5, 0.75);
+  const fill = new THREE.DirectionalLight(0x6f8fb5, 1.05);
   fill.position.set(-20, 16, -10);
   scene.add(fill);
 
   const building = new THREE.Mesh(
     buildStaticGeometry(),
-    new THREE.MeshStandardMaterial({ color: 0x3f4650, roughness: 0.92, metalness: 0.04 })
+    new THREE.MeshStandardMaterial({ color: 0x59626d, roughness: 0.9, metalness: 0.04 })
   );
   building.castShadow = true;
   building.receiveShadow = true;
@@ -89,7 +92,7 @@ export function createScene(): {
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(200, 200),
-    new THREE.MeshStandardMaterial({ color: 0x0f1216, roughness: 1 })
+    new THREE.MeshStandardMaterial({ color: 0x151a20, roughness: 1 })
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.16;

@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0a0c0f" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230a0c0f'/%3E%3Cpath d='M32 9c8 10 14 17 14 26a14 14 0 1 1-28 0c0-6 4-10 7-15 2 5 5 7 7 9 2-7 0-13 0-20z' fill='%23e5b567'/%3E%3C/svg%3E"
+    />
     <title>黄金时间 · MVS</title>
     <style>
       :root {
@@ -112,7 +116,11 @@
         background: rgba(7, 9, 12, 0.97); border: 0; border-radius: 0; box-shadow: none;
       }
       #debrief > * { max-width: 980px; margin-left: auto; margin-right: auto; }
+      #debrief { font-size: 14px; }
       #debrief h2 { margin-top: 0; font-size: clamp(26px, 3vw, 34px); letter-spacing: 0.04em; }
+      .debrief-actions {
+        display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 8px;
+      }
       #debrief h3 { margin: 28px auto 10px; color: var(--accent); font-size: 13px; letter-spacing: 0.12em; }
       #debrief .history { color: #b8b2a7; font-size: 13px; }
       #debrief ul { padding-left: 18px; }
@@ -154,6 +162,12 @@
         background: rgba(255, 255, 255, 0.025);
       }
       .flow b { display: block; color: var(--accent); font: 600 11px/1 var(--mono); letter-spacing: 0.14em; }
+      .title-art {
+        position: fixed; right: 4vw; top: 50%; width: min(34vw, 420px);
+        transform: translateY(-50%); pointer-events: none;
+      }
+      .title-art svg { width: 100%; height: auto; filter: drop-shadow(0 0 42px rgba(229, 181, 103, 0.12)); }
+      @media (max-width: 1100px) { .title-art { display: none; } }
       .flow span { display: block; margin-top: 6px; color: #d3cec5; font-size: 13px; }
       .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 32px 0 16px; }
       .hint { color: #7f7a72; font-size: 12px; letter-spacing: 0.08em; }

@@ -1,6 +1,6 @@
 import { createWorld } from './sim/world';
 import { buildDebrief } from './eval/debrief';
-import { createScene } from './render/scene';
+import { createScene, CAMERA_FRUSTUM } from './render/scene';
 import { createAgents } from './render/agents';
 import { createSmoke } from './render/smoke';
 import { createDoor } from './render/door';
@@ -108,6 +108,13 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   const incidents = createIncidentUi(incidentRoot, sim);
   const radio = createRadio(radioRoot);
 
+  if (import.meta.env.DEV) {
+    const debugWindow = window as unknown as {
+      __gh: { audio: typeof audio; sim: typeof sim };
+    };
+    debugWindow.__gh = { audio, sim };
+  }
+
   let paused = false;
   let debriefShown = false;
   let debriefScheduled = false;
@@ -183,7 +190,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
 
   window.addEventListener('resize', () => {
     const aspect = window.innerWidth / window.innerHeight;
-    const frustum = 16;
+    const frustum = CAMERA_FRUSTUM;
     camera.left = -frustum * aspect;
     camera.right = frustum * aspect;
     camera.updateProjectionMatrix();

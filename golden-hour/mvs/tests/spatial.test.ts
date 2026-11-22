@@ -20,12 +20,14 @@ function makeCamera(): THREE.OrthographicCamera {
 }
 
 describe('Three.js 空间音频适配', () => {
-  it('声像来自场景世界坐标：火源居中，楼梯与班组在左', () => {
+  it('声像来自场景世界坐标：火源在左前，楼梯与班组更靠左', () => {
     const spatial = createSpatialAudio(makeCamera());
     const pans = spatial.read();
 
-    expect(Math.abs(pans.firePan)).toBeLessThan(0.15);
+    expect(pans.firePan).toBeLessThan(-0.18);
+    expect(pans.firePan).toBeGreaterThan(-0.5);
     expect(pans.stairsPan).toBeLessThan(-0.4);
+    expect(pans.stairsPan).toBeLessThan(pans.firePan);
     expect(pans.crewPan).toBeLessThan(-0.2);
     expect(pans.crewPan).toBeGreaterThan(pans.stairsPan);
     expect(pans.doorPan).toBeGreaterThan(-0.3);

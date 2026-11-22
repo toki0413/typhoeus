@@ -9,6 +9,8 @@ export interface AudioEngine {
   setActive(active: boolean): void;
   setDoorMotion(rate: number): void;
   update(s: SimState, spatial?: AudioSpatial): void;
+  record: () => MediaStream | null;
+  level: () => number;
 }
 
 type AudioContextCtor = new () => AudioContext;
@@ -56,6 +58,9 @@ export function createAudio(): AudioEngine {
   let comms: GainNode | null = null;
   let muffle: BiquadFilterNode | null = null;
   let master: GainNode | null = null;
+  let output: AudioNode | null = null;
+  let analyser: AnalyserNode | null = null;
+  let levelData: Float32Array<ArrayBuffer> | null = null;
   let fireGain: GainNode | null = null;
   let fireFilter: BiquadFilterNode | null = null;
   let firePanner: StereoPannerNode | null = null;
@@ -234,7 +239,7 @@ export function createAudio(): AudioEngine {
     muffle.Q.value = 0.4;
 
     master = c.createGain();
-    master.gain.value = muted ? 0 : volume * 0.9;
+    master.gain.value = muted ? 0 : volume * 1.8;
 
     const compressor = c.createDynamicsCompressor();
     compressor.threshold.value = -18;
@@ -256,6 +261,11 @@ export function createAudio(): AudioEngine {
     muffle.connect(master);
     master.connect(compressor);
     compressor.connect(c.destination);
+
+    output = compressor;
+    analyser = c.createAnalyser();
+    analyser.fftSize = 1024;
+    compressor.connect(analyser);
 
     if (typeof c.createConvolver === 'function') {
       const convolver = c.createConvolver();
@@ -342,7 +352,7 @@ export function createAudio(): AudioEngine {
   function playRadio(gain: number): void {
     burst({
       duration: 0.2,
-      gain: 0.11 * gain,
+      gain: 0.16 * gain,
       filter: 'bandpass',
       freq: 1350,
       q: 0.9,
@@ -624,15 +634,15 @@ export function createAudio(): AudioEngine {
       osc.start(at);
       osc.stop(at + 0.18);
     };
-    thump(0.001, 0.24 * gain);
-    thump(0.18, 0.15 * gain);
+    thump(0.001, 0.3 * gain);
+    thump(0.18, 0.19 * gain);
   }
 
   function playCrackle(gain: number): void {
     const freq = rand(900, 2400);
     burst({
       duration: rand(0.035, 0.09),
-      gain: gain * rand(0.02, 0.085),
+      gain: gain * rand(0.03, 0.1),
       filter: 'highpass',
       freq,
       pan: spatial.firePan + rand(-0.45, 0.45),
@@ -655,7 +665,7 @@ export function createAudio(): AudioEngine {
     stepParity = 1 - stepParity;
     burst({
       duration: rand(0.12, 0.16),
-      gain: 0.085,
+      gain: 0.11,
       filter: 'lowpass',
       freq: stepParity ? 380 : 310,
       endFreq: 140,
@@ -667,7 +677,7 @@ export function createAudio(): AudioEngine {
     breathParity = 1 - breathParity;
     burst({
       duration: 0.5,
-      gain: 0.018,
+      gain: 0.026,
       filter: 'bandpass',
       freq: breathParity ? 640 : 470,
       endFreq: breathParity ? 520 : 380,
@@ -691,8 +701,8 @@ export function createAudio(): AudioEngine {
 
     const envelope = c.createGain();
     envelope.gain.setValueAtTime(0.0001, now);
-    envelope.gain.linearRampToValueAtTime(0.017, now + 0.7);
-    envelope.gain.setValueAtTime(0.017, now + 1.9);
+    envelope.gain.linearRampToValueAtTime(0.024, now + 0.7);
+    envelope.gain.setValueAtTime(0.024, now + 1.9);
     envelope.gain.linearRampToValueAtTime(0.0001, now + 3);
 
     osc.connect(filter).connect(envelope);
@@ -703,7 +713,7 @@ export function createAudio(): AudioEngine {
 
   function applyOutputGain(): void {
     if (!ctx || !master) return;
-    master.gain.setTargetAtTime(muted ? 0 : volume * 0.9, ctx.currentTime, 0.08);
+    master.gain.setTargetAtTime(muted ? 0 : volume * 1.8, ctx.currentTime, 0.08);
   }
 
   return {
@@ -745,6 +755,24 @@ export function createAudio(): AudioEngine {
       playHinge(rate);
     },
 
+    record() {
+      if (!ctx || !output || typeof ctx.createMediaStreamDestination !== 'function') {
+        return null;
+      }
+      const destination = ctx.createMediaStreamDestination();
+      output.connect(destination);
+      return destination.stream;
+    },
+
+    level() {
+      if (!ctx || !analyser) return 0;
+      levelData ??= new Float32Array(analyser.fftSize);
+      analyser.getFloatTimeDomainData(levelData);
+      let sum = 0;
+      for (const sample of levelData) sum += sample * sample;
+      return Math.sqrt(sum / levelData.length);
+    },
+
     update(s: SimState, nextSpatial?: AudioSpatial) {
       if (nextSpatial) spatial = nextSpatial;
       if (!ctx || !master) return;
@@ -758,12 +786,12 @@ export function createAudio(): AudioEngine {
 
       if (now - lastMixAt >= 0.1) {
         lastMixAt = now;
-        setParam(fireGain?.gain, 0.03 + mix.fire * 0.1, 0.3);
-        setParam(fireFilter?.frequency, 180 + mix.fire * 520, 0.3);
+        setParam(fireGain?.gain, 0.065 + mix.fire * 0.18, 0.3);
+        setParam(fireFilter?.frequency, 250 + mix.fire * 900, 0.3);
         setParam(firePanner?.pan ?? null, spatial.firePan, 0.6);
-        setParam(subGain?.gain, 0.01 + mix.fire * 0.05, 0.35);
-        setParam(airGain?.gain, 0.012 + mix.airGain * 0.03, 0.4);
-        setParam(airFilter?.frequency, 380 + mix.airGain * 460, 0.4);
+        setParam(subGain?.gain, 0.018 + mix.fire * 0.07, 0.35);
+        setParam(airGain?.gain, 0.02 + mix.airGain * 0.045, 0.4);
+        setParam(airFilter?.frequency, 400 + mix.airGain * 520, 0.4);
         // 受伤后短暂耳鸣：高频被压住，再慢慢恢复。
         const targetMuffle = now < muffleUntil ? Math.min(mix.muffleHz, 900) : mix.muffleHz;
         setParam(muffle?.frequency, targetMuffle, 0.25);

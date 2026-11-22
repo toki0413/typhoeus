@@ -61,6 +61,38 @@ export function createShell(root: HTMLElement, options: ShellOptions): ShellApi 
       <p class="hint">一次约 10–12 分钟 · 触屏可操作 · Esc 暂停</p>
       <p class="notice" data-notice hidden></p>
       <p class="stats" data-stats></p>
+      <div class="title-art" aria-hidden="true">
+        <svg viewBox="0 0 420 420">
+          <defs>
+            <radialGradient id="gh-glow">
+              <stop offset="0" stop-color="#e5b567" stop-opacity="0.26" />
+              <stop offset="1" stop-color="#e5b567" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+          <circle cx="210" cy="210" r="196" fill="url(#gh-glow)" />
+          <g stroke="#e5b567" stroke-opacity="0.55" fill="none" stroke-width="1.4">
+            <rect x="70" y="90" width="280" height="220" rx="6" />
+            <line x1="70" y1="200" x2="350" y2="200" />
+            <line x1="70" y1="145" x2="350" y2="145" stroke-opacity="0.22" />
+            <line x1="70" y1="255" x2="350" y2="255" stroke-opacity="0.22" />
+            <path d="M140 90v45M210 90v45M280 90v45" />
+            <path d="M140 310v-45M210 310v-45M280 310v-45" />
+            <path d="M90 200v20h14v14h14v14h14" stroke-opacity="0.7" />
+            <path d="M70 330h280" stroke-dasharray="3 7" stroke-opacity="0.25" />
+          </g>
+          <g fill="#ff9a55">
+            <circle cx="240" cy="150" r="22" fill-opacity="0.08" />
+            <circle cx="240" cy="150" r="4" />
+          </g>
+          <g fill="#e5b567" fill-opacity="0.6" font-family="ui-monospace, monospace" font-size="9" letter-spacing="2">
+            <text x="70" y="72">FLOOR 02</text>
+            <text x="70" y="352">FLOOR 01</text>
+            <text x="262" y="146">102</text>
+            <text x="92" y="252">STAIR</text>
+            <text x="300" y="252">EXIT</text>
+          </g>
+        </svg>
+      </div>
     </section>
 
     <section class="screen" data-screen="pause" hidden>

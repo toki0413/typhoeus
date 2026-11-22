@@ -236,6 +236,15 @@ export function createCorridorDetails(scene: THREE.Scene): { group: THREE.Group 
     })
   );
 
+  // 楼道顶灯的真实照明：让剖面内部可读，同时不参与阴影计算。
+  for (let f = 0; f < 2; f++) {
+    for (const x of [-8, 0, 8]) {
+      const light = new THREE.PointLight(0xffc48a, 16, 11, 2);
+      light.position.set(x, f * FLOOR_H + 2.5, 1.9);
+      group.add(light);
+    }
+  }
+
   scene.add(group);
   return { group };
 }

@@ -63,7 +63,7 @@ export function createSmoke(scene: THREE.Scene): {
     for (let i = 0; i < PUFFS_PER_FLOOR; i++) {
       const material = new THREE.SpriteMaterial({
         map: texture,
-        color: 0xaab2bc,
+        color: 0xbcc3cb,
         transparent: true,
         opacity: 0,
         depthWrite: false,
@@ -108,7 +108,7 @@ export function createSmoke(scene: THREE.Scene): {
         const fade = Math.sin(Math.PI * local);
         const scale = p.baseScale * (0.85 + local * 0.5);
         p.sprite.scale.set(scale, scale, 1);
-        (p.sprite.material as THREE.SpriteMaterial).opacity = v * 0.5 * fade;
+        (p.sprite.material as THREE.SpriteMaterial).opacity = v * 0.65 * fade;
       }
     },
   };

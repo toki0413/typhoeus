@@ -60,13 +60,15 @@ export function renderDebrief(
     <p>灭火器消耗 ${used} · 决策密度 ${card.decisionDensity}/分钟（${card.decisions.length} 次）</p>
     <h3>本次训练证据</h3>
     <ul class="evidence">${evidence}</ul>
+    <div class="debrief-actions">
+      <button id="export">导出复盘卡 JSON</button>
+      <button id="replay">同种子重打</button>
+      ${nextButton}
+      <button id="title">返回标题</button>
+    </div>
     <h3>决策记录</h3><ul>${decisions}</ul>
     <h3>时间线</h3><ul>${rows}</ul>
     <h3>未完成动作</h3><ul>${omissions}</ul>
-    <button id="export">导出复盘卡 JSON</button>
-    <button id="replay">同种子重打</button>
-    ${nextButton}
-    <button id="title">返回标题</button>
   `;
 
   root.querySelector('#export')?.addEventListener('click', () => {
