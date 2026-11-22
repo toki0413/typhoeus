@@ -21,12 +21,16 @@ export function createIncidentUi(
       if (renderedId !== incident.id) {
         renderedId = incident.id;
         root.innerHTML = `
-          <div>${incident.title}</div>
-          <div>${incident.detail}</div>
-          <div>${incident.options
-            .map((o) => `<button data-opt="${o.id}">${o.label}</button>`)
-            .join('')}</div>
-          <div data-timer></div>
+          <div class="incident-head">
+            <span class="incident-title">${incident.title}</span>
+            <span class="incident-timer" data-timer></span>
+          </div>
+          <p class="incident-detail">${incident.detail}</p>
+          <div class="incident-options">
+            ${incident.options
+              .map((o) => `<button data-opt="${o.id}">${o.label}</button>`)
+              .join('')}
+          </div>
         `;
 
         root.querySelectorAll<HTMLButtonElement>('[data-opt]').forEach((button) => {

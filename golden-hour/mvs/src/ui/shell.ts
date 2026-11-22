@@ -50,6 +50,11 @@ export function createShell(root: HTMLElement, options: ShellOptions): ShellApi 
         <p>你是先到场的社区应急班组。专业消防队还有十五分钟。</p>
         <p>楼里可能还有人。你看什么、先做什么，都会留下后果。</p>
       </div>
+      <div class="flow" aria-label="训练流程">
+        <div><b>01</b><span>观察楼道与堆物</span></div>
+        <div><b>02</b><span>判断门温、烟气与顺序</span></div>
+        <div><b>03</b><span>承担后果，再看证据</span></div>
+      </div>
       <div class="actions">
         <button class="primary" data-action="start">开始训练</button>
       </div>

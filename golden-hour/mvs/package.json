@@ -7,6 +7,8 @@
     "dev": "vite --host 0.0.0.0 --port 5174",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "check": "tsc --noEmit && vitest run && vite build && node scripts/check-bundle.mjs",
     "preview": "vite preview --host 0.0.0.0 --port 4174"
   },
   "dependencies": {

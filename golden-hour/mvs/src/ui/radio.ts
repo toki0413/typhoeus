@@ -16,12 +16,16 @@ export function createRadio(root: HTMLElement): { update: (s: SimState) => void 
       }
 
       const visible = RADIO_SCRIPT.slice(Math.max(0, shown - 3), shown);
-      root.innerHTML = visible
+      const lines = visible
         .map((line, index) => {
           const latest = index === visible.length - 1;
-          return `<div class="radio-line${latest ? '' : ' dim'}"><b>${line.speaker}</b> ${line.text}</div>`;
+          return (
+            `<div class="radio-line${latest ? '' : ' dim'}">` +
+            `<span class="radio-speaker">${line.speaker}</span>${line.text}</div>`
+          );
         })
         .join('');
+      root.innerHTML = `<div class="radio-head"><span class="radio-dot"></span>无线电 · 现场支援</div>${lines}`;
     },
   };
 }

@@ -11,6 +11,24 @@ export function createDoor(scene: THREE.Scene): {
   group.position.set(3.7, 4.05, 6.9);
   scene.add(group);
 
+  const frameGroup = new THREE.Group();
+  frameGroup.position.copy(group.position);
+  scene.add(frameGroup);
+
+  const frameMaterial = new THREE.MeshStandardMaterial({
+    color: 0x3c444d,
+    roughness: 0.55,
+    metalness: 0.35,
+  });
+  const jamb = new THREE.BoxGeometry(0.12, 2.24, 0.34);
+  const leftJamb = new THREE.Mesh(jamb, frameMaterial);
+  leftJamb.position.set(-0.06, 0.02, 0);
+  const rightJamb = new THREE.Mesh(jamb, frameMaterial);
+  rightJamb.position.set(1.46, 0.02, 0);
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(1.64, 0.14, 0.34), frameMaterial);
+  lintel.position.set(0.7, 1.12, 0);
+  frameGroup.add(leftJamb, rightJamb, lintel);
+
   const material = new THREE.MeshStandardMaterial({
     color: 0x6b4a2c,
     roughness: 0.7,
@@ -22,6 +40,48 @@ export function createDoor(scene: THREE.Scene): {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.1, 0.16), material);
   mesh.position.set(0.7, 0, 0);
   group.add(mesh);
+
+  const inset = new THREE.Mesh(
+    new THREE.BoxGeometry(1.04, 1.5, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x5b3d22, roughness: 0.8 })
+  );
+  inset.position.set(0.7, 0.05, 0.09);
+  group.add(inset);
+
+  const kick = new THREE.Mesh(
+    new THREE.BoxGeometry(1.24, 0.18, 0.03),
+    new THREE.MeshStandardMaterial({ color: 0x8d9196, roughness: 0.4, metalness: 0.5 })
+  );
+  kick.position.set(0.7, -0.88, 0.09);
+  group.add(kick);
+
+  const handle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.035, 0.035, 0.18, 10),
+    new THREE.MeshStandardMaterial({ color: 0xb08a4a, roughness: 0.3, metalness: 0.7 })
+  );
+  handle.rotation.x = Math.PI / 2;
+  handle.position.set(1.2, -0.02, 0.16);
+  group.add(handle);
+
+  const plate = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.22, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x7a5c32, roughness: 0.45, metalness: 0.5 })
+  );
+  plate.position.set(1.2, -0.02, 0.09);
+  group.add(plate);
+
+  group.traverse((object) => {
+    if (object instanceof THREE.Mesh) {
+      object.castShadow = true;
+      object.receiveShadow = true;
+    }
+  });
+  frameGroup.traverse((object) => {
+    if (object instanceof THREE.Mesh) {
+      object.castShadow = true;
+      object.receiveShadow = true;
+    }
+  });
 
   let angle = 0;
 

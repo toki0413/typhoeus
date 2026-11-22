@@ -4,6 +4,7 @@ import { createScene } from './render/scene';
 import { createAgents } from './render/agents';
 import { createSmoke } from './render/smoke';
 import { createDoor } from './render/door';
+import { createFireGlow } from './render/fire';
 import { createCorridorDetails } from './render/corridor';
 import { createSpatialAudio } from './render/spatial';
 import { createHud } from './ui/hud';
@@ -99,6 +100,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   const agents = createAgents(scene);
   const smoke = createSmoke(scene);
   const doorMesh = createDoor(scene);
+  const fireGlow = createFireGlow(scene);
   createCorridorDetails(scene);
   const hud = createHud(hudRoot);
   const doorUi = createDoorUi(doorRoot, sim);
@@ -111,6 +113,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   let debriefScheduled = false;
   let debriefAt = 0;
   let prevDoorAngle = 0;
+  let introAt = 0;
   let acc = 0;
   let last = performance.now();
   let hudTimer = 0;
@@ -126,6 +129,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     beginRun(sim);
     acc = 0;
     last = performance.now();
+    introAt = last;
     prevDoorAngle = doorMesh.getAngle();
     debriefScheduled = false;
     debriefAt = 0;
@@ -255,6 +259,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     agents.update(sim);
     smoke.update(sim);
     doorMesh.update(sim);
+    fireGlow.update(sim);
     const doorAngle = doorMesh.getAngle();
     const hingeRate = Math.abs(doorAngle - prevDoorAngle) * 60;
     prevDoorAngle = doorAngle;
@@ -276,6 +281,12 @@ function createApp(kit: ReturnType<typeof createScene>): App {
       : 0;
     camera.position.x = CAMERA_HOME.x + Math.sin(now * 0.009) * shake;
     camera.position.y = CAMERA_HOME.y + Math.cos(now * 0.012) * shake * 0.6;
+
+    // 开始训练时轻微推近，建立镜头感；减少动态时直接停在最终视角。
+    const intro = settings.reducedMotion ? 1 : Math.min(1, (now - introAt) / 1400);
+    const eased = 1 - Math.pow(1 - intro, 3);
+    camera.zoom = 0.92 + 0.08 * eased;
+    camera.updateProjectionMatrix();
     vignette.style.opacity = running
       ? String(Math.min(0.5, sim.exposure.smoke * 0.75))
       : '0';

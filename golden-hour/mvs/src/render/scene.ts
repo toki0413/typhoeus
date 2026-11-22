@@ -32,12 +32,20 @@ export function createScene(): {
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
 } {
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
-  renderer.shadowMap.enabled = false;
+  const lowPower =
+    typeof navigator !== 'undefined' && (navigator.hardwareConcurrency ?? 8) <= 4;
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowPower ? 1.25 : 1.75));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = !lowPower;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0d0f12);
+  scene.background = new THREE.Color(0x0b0e12);
+  scene.fog = new THREE.FogExp2(0x0b0e12, 0.011);
 
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
   const frustum = 16;
@@ -50,23 +58,42 @@ export function createScene(): {
   camera.lookAt(0, 3, 0);
   camera.updateProjectionMatrix();
 
-  scene.add(new THREE.HemisphereLight(0x8fa3b8, 0x14181d, 1.1));
-  const key = new THREE.DirectionalLight(0xffe0c0, 1.2);
-  key.position.set(24, 36, 18);
+  scene.add(new THREE.HemisphereLight(0x8fa3b8, 0x101318, 0.55));
+
+  const key = new THREE.DirectionalLight(0xffc894, 2.4);
+  key.position.set(18, 30, 12);
+  if (!lowPower) {
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.camera.left = -18;
+    key.shadow.camera.right = 18;
+    key.shadow.camera.top = 16;
+    key.shadow.camera.bottom = -16;
+    key.shadow.camera.near = 1;
+    key.shadow.camera.far = 80;
+    key.shadow.bias = -0.0006;
+  }
   scene.add(key);
+
+  const fill = new THREE.DirectionalLight(0x6f8fb5, 0.75);
+  fill.position.set(-20, 16, -10);
+  scene.add(fill);
 
   const building = new THREE.Mesh(
     buildStaticGeometry(),
-    new THREE.MeshStandardMaterial({ color: 0x4a515a, roughness: 0.95 })
+    new THREE.MeshStandardMaterial({ color: 0x3f4650, roughness: 0.92, metalness: 0.04 })
   );
+  building.castShadow = true;
+  building.receiveShadow = true;
   scene.add(building);
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(200, 200),
-    new THREE.MeshStandardMaterial({ color: 0x121519, roughness: 1 })
+    new THREE.MeshStandardMaterial({ color: 0x0f1216, roughness: 1 })
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.16;
+  ground.receiveShadow = true;
   scene.add(ground);
 
   return { scene, camera, renderer };

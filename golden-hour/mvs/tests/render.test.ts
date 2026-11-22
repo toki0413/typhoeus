@@ -3,20 +3,26 @@ import * as THREE from 'three';
 import { createAgents } from '../src/render/agents';
 import { createDoor } from '../src/render/door';
 import { createSmoke } from '../src/render/smoke';
+import { createFireGlow } from '../src/render/fire';
 import { createWorld } from '../src/sim/world';
 
 describe('渲染对象', () => {
-  it('创建两个班组实例且更新不产生 NaN', () => {
+  it('班组与被困者位置更新不产生 NaN', () => {
     const scene = new THREE.Scene();
     const a = createAgents(scene);
-    expect(a.mesh.count).toBe(2);
-    a.update(createWorld('x'));
-    const m = new THREE.Matrix4();
-    a.mesh.getMatrixAt(0, m);
-    expect(m.elements.every(Number.isFinite)).toBe(true);
-    const m1 = new THREE.Matrix4();
-    a.mesh.getMatrixAt(1, m1);
-    expect(m1.elements.every(Number.isFinite)).toBe(true);
+    const s = createWorld('x');
+    s.phase = 'execute';
+    s.crew.order = { kind: 'search', floor: 1 };
+
+    for (let i = 0; i < 60; i++) {
+      s.t += 0.05;
+      s.crew.progress = (s.crew.progress + 0.01) % 1;
+      a.update(s);
+    }
+
+    expect(Number.isFinite(a.crew.position.y)).toBe(true);
+    expect(a.crew.position.y).toBeGreaterThan(0);
+    expect(a.group.children).toHaveLength(2);
   });
 
   it('烟层有两条且烟团随 smoke 出现', () => {
@@ -58,21 +64,33 @@ describe('渲染对象', () => {
     expect(d.getAngle()).toBeCloseTo(d.group.rotation.y, 5);
   });
 
-  it('被困者救出后实例被缩到不可见', () => {
+  it('火光与点光源随火势增强', () => {
+    const scene = new THREE.Scene();
+    const glow = createFireGlow(scene);
+    const s = createWorld('x');
+
+    s.fire = 0.05;
+    glow.update(s);
+    const low = glow.light.intensity;
+    const lowOpacity = (glow.sprite.material as THREE.SpriteMaterial).opacity;
+
+    s.fire = 0.9;
+    glow.update(s);
+    expect(glow.light.intensity).toBeGreaterThan(low);
+    expect((glow.sprite.material as THREE.SpriteMaterial).opacity).toBeGreaterThan(lowOpacity);
+    expect(Number.isFinite(glow.light.intensity)).toBe(true);
+  });
+
+  it('被困者救出后隐藏', () => {
     const scene = new THREE.Scene();
     const a = createAgents(scene);
     const s = createWorld('x');
     s.victim.rescued = true;
     a.update(s);
+    expect(a.victim.visible).toBe(false);
 
-    const m = new THREE.Matrix4();
-    const pos = new THREE.Vector3();
-    const quat = new THREE.Quaternion();
-    const scale = new THREE.Vector3();
-    a.mesh.getMatrixAt(1, m);
-    m.decompose(pos, quat, scale);
-
-    expect(scale.x).toBeLessThan(0.01);
-    expect(scale.y).toBeLessThan(0.01);
+    s.victim.rescued = false;
+    a.update(s);
+    expect(a.victim.visible).toBe(true);
   });
 });

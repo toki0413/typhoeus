@@ -87,7 +87,10 @@ function merged(group: THREE.Group, parts: THREE.BufferGeometry[], material: THR
   if (!parts.length) return;
   const geometry = mergeGeometries(parts, false);
   if (!geometry) return;
-  group.add(new THREE.Mesh(geometry, material));
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
 }
 
 export function createCorridorDetails(scene: THREE.Scene): { group: THREE.Group } {
@@ -97,6 +100,7 @@ export function createCorridorDetails(scene: THREE.Scene): { group: THREE.Group 
   const metalParts: THREE.BufferGeometry[] = [];
   const cardboardParts: THREE.BufferGeometry[] = [];
   const redParts: THREE.BufferGeometry[] = [];
+  const lightParts: THREE.BufferGeometry[] = [];
 
   for (let f = 0; f < 2; f++) {
     const base = f * FLOOR_H;
@@ -190,6 +194,11 @@ export function createCorridorDetails(scene: THREE.Scene): { group: THREE.Group 
 
     // 灭火器箱
     redParts.push(box(0.55, 0.8, 0.24, -4, base + 1.4, 1.28));
+
+    // 楼道顶灯：给剖面一点真实光源的暗示
+    for (const x of [-8, 0, 8]) {
+      lightParts.push(box(1.3, 0.06, 0.26, x, base + FLOOR_H - 0.1, -1.2));
+    }
   }
 
   // 逃生门上的儿童画与出租告示
@@ -211,11 +220,21 @@ export function createCorridorDetails(scene: THREE.Scene): { group: THREE.Group 
     group.add(exit);
   }
 
-  merged(group, concreteParts, new THREE.MeshStandardMaterial({ color: 0x4a515a, roughness: 1 }));
+  merged(group, concreteParts, new THREE.MeshStandardMaterial({ color: 0x424a54, roughness: 1 }));
   merged(group, woodParts, new THREE.MeshStandardMaterial({ color: 0x6b4a2c, roughness: 0.85 }));
-  merged(group, metalParts, new THREE.MeshStandardMaterial({ color: 0x3a3f45, roughness: 0.7 }));
-  merged(group, cardboardParts, new THREE.MeshStandardMaterial({ color: 0x9c7b52, roughness: 0.95 }));
-  merged(group, redParts, new THREE.MeshStandardMaterial({ color: 0xb23a30, roughness: 0.8 }));
+  merged(group, metalParts, new THREE.MeshStandardMaterial({ color: 0x2f353c, roughness: 0.6, metalness: 0.3 }));
+  merged(group, cardboardParts, new THREE.MeshStandardMaterial({ color: 0x8f6f4a, roughness: 0.95 }));
+  merged(group, redParts, new THREE.MeshStandardMaterial({ color: 0xa8342b, roughness: 0.8 }));
+  merged(
+    group,
+    lightParts,
+    new THREE.MeshStandardMaterial({
+      color: 0x2a2620,
+      emissive: 0xffcf94,
+      emissiveIntensity: 1.3,
+      roughness: 0.6,
+    })
+  );
 
   scene.add(group);
   return { group };

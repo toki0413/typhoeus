@@ -6,11 +6,15 @@ export function createDoorUi(
   sim: SimState
 ): { update: (s: SimState) => void } {
   root.innerHTML = `
-    <div>门</div>
-    <div data-status></div>
-    <button data-act="check">按住：触碰门把</button>
-    <button data-act="wait">等待</button>
-    <button data-act="open">开门</button>
+    <div class="panel-head">
+      <span class="panel-title">入户门</span>
+      <span class="status-pill" data-status></span>
+    </div>
+    <button data-act="check" class="primary">按住：触碰门把</button>
+    <div class="row">
+      <button data-act="wait">等待</button>
+      <button data-act="open" class="danger">开门</button>
+    </div>
   `;
 
   let holdTimer: number | null = null;
