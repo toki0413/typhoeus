@@ -39,6 +39,11 @@ try {
 
   await page.click('[data-action="start"]');
   await page.waitForFunction(() => document.body.dataset.run === 'playing', { timeout: 10000 });
+  const glbLoaded = await page
+    .waitForFunction(() => window.__gh?.agents?.usingGLB?.() === true, { timeout: 10000 })
+    .then(() => true)
+    .catch(() => false);
+  check('消防员 GLB 已加载', glbLoaded);
   await new Promise((resolve) => setTimeout(resolve, 1600));
   await screenshot(page, '02-gameplay');
 

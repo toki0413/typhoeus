@@ -65,7 +65,7 @@ export function createFireGlow(scene: THREE.Scene): {
 } {
   const group = new THREE.Group();
   // 火在 202 室内，正好照亮门口与被困者。
-  group.position.set(-3.5, FLOOR_H + 0.1, -1);
+  group.position.set(-4.5, FLOOR_H + 0.1, -1.5);
   scene.add(group);
 
   const light = new THREE.PointLight(0xff7a33, 0, 18, 2);

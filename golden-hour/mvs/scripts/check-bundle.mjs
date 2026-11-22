@@ -21,15 +21,21 @@ const cssFiles = readdirSync(join(dist, 'assets'))
   .map((name) => join(dist, 'assets', name));
 const htmlFile = join(dist, 'index.html');
 
+const mediaFiles = readdirSync(join(dist, 'assets'))
+  .filter((name) => /\.(glb|gltf|bin|ktx2)$/.test(name))
+  .map((name) => join(dist, 'assets', name));
+
 const js = jsFiles.reduce((sum, file) => sum + gzipSize(file), 0);
 const css = cssFiles.reduce((sum, file) => sum + gzipSize(file), 0);
 const html = gzipSize(htmlFile);
+const media = mediaFiles.reduce((sum, file) => sum + readFileSync(file).length, 0);
 const total = js + css + html;
 
 const budgets = {
   js: 190 * 1024,
   css: 24 * 1024,
   html: 16 * 1024,
+  media: 700 * 1024,
   total: 220 * 1024,
 };
 
@@ -38,12 +44,14 @@ const kb = (bytes) => `${(bytes / 1024).toFixed(1)} KB`;
 console.log(`JS  gzip ${kb(js)} / ${kb(budgets.js)}`);
 console.log(`CSS gzip ${kb(css)} / ${kb(budgets.css)}`);
 console.log(`HTML gzip ${kb(html)} / ${kb(budgets.html)}`);
+console.log(`3D 资产 ${kb(media)} / ${kb(budgets.media)}`);
 console.log(`总计 gzip ${kb(total)} / ${kb(budgets.total)}`);
 
 const failures = [
   ['JS', js, budgets.js],
   ['CSS', css, budgets.css],
   ['HTML', html, budgets.html],
+  ['3D 资产', media, budgets.media],
   ['总计', total, budgets.total],
 ].filter(([, actual, budget]) => actual > budget);
 

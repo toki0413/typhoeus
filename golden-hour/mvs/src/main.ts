@@ -7,6 +7,7 @@ import { createDoor } from './render/door';
 import { createFireGlow } from './render/fire';
 import { createCorridorDetails } from './render/corridor';
 import { createSpatialAudio } from './render/spatial';
+import { loadCrewModel } from './render/glbCrew';
 import { createHud } from './ui/hud';
 import { createDoorUi } from './ui/door';
 import { createActions } from './ui/actions';
@@ -119,6 +120,16 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     };
     debugWindow.__gh = { audio, sim, agents, doorMesh };
   }
+
+  void loadCrewModel(`${import.meta.env.BASE_URL}assets/firefighter.glb`)
+    .then((model) => {
+      if (model) agents.useCrewModel(model);
+    })
+    .catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn('消防员 GLB 加载失败，继续使用程序化模型', error);
+      }
+    });
 
   let paused = false;
   let debriefShown = false;

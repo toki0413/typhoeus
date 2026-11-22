@@ -1,19 +1,20 @@
 import * as THREE from 'three';
 import type { SimState } from '../sim/types';
 import { FLOOR_H } from './constants';
+import type { CrewModelNodes } from './glbCrew';
 
 interface Rig {
-  group: THREE.Group;
-  torso: THREE.Group;
-  head: THREE.Group;
-  leftHip: THREE.Group;
-  rightHip: THREE.Group;
-  leftKnee: THREE.Group;
-  rightKnee: THREE.Group;
-  leftShoulder: THREE.Group;
-  rightShoulder: THREE.Group;
-  leftElbow: THREE.Group;
-  rightElbow: THREE.Group;
+  group: THREE.Object3D;
+  torso: THREE.Object3D;
+  head: THREE.Object3D;
+  leftHip: THREE.Object3D;
+  rightHip: THREE.Object3D;
+  leftKnee: THREE.Object3D;
+  rightKnee: THREE.Object3D;
+  leftShoulder: THREE.Object3D;
+  rightShoulder: THREE.Object3D;
+  leftElbow: THREE.Object3D;
+  rightElbow: THREE.Object3D;
   shadow: THREE.Mesh;
 }
 
@@ -324,8 +325,10 @@ const damp = (current: number, target: number, rate: number): number =>
 
 export function createAgents(scene: THREE.Scene): {
   group: THREE.Group;
-  crew: THREE.Group;
-  victim: THREE.Group;
+  crew: THREE.Object3D;
+  victim: THREE.Object3D;
+  useCrewModel: (model: CrewModelNodes) => void;
+  usingGLB: () => boolean;
   update: (s: SimState) => void;
 } {
   const group = new THREE.Group();
@@ -338,10 +341,41 @@ export function createAgents(scene: THREE.Scene): {
   victim.group.rotation.y = -0.3;
   group.add(crew.group, victim.group);
 
+  let rig: Rig = crew;
+  let usingModel = false;
+
+  function useCrewModel(model: CrewModelNodes): void {
+    if (usingModel) return;
+
+    crew.group.visible = false;
+    const shadow = shadowMesh(0.4);
+    model.root.add(shadow);
+    model.root.position.set(-9.5, 0, 0.4);
+    group.add(model.root);
+
+    rig = {
+      group: model.root,
+      torso: model.torso,
+      head: model.head,
+      leftHip: model.leftHip,
+      rightHip: model.rightHip,
+      leftKnee: model.leftKnee,
+      rightKnee: model.rightKnee,
+      leftShoulder: model.leftShoulder,
+      rightShoulder: model.rightShoulder,
+      leftElbow: model.leftElbow,
+      rightElbow: model.rightElbow,
+      shadow,
+    };
+    usingModel = true;
+  }
+
   return {
     group,
     crew: crew.group,
     victim: victim.group,
+    useCrewModel,
+    usingGLB: () => usingModel,
     update(s: SimState) {
       const target = s.crew.order
         ? Math.min(s.crew.order.floor, s.smoke.length - 1)
@@ -352,46 +386,46 @@ export function createAgents(scene: THREE.Scene): {
       const phase = s.t * 8.5;
 
       const stride = moving ? Math.sin(phase) * 0.55 : 0;
-      crew.leftHip.rotation.x = damp(crew.leftHip.rotation.x, stride, 0.25);
-      crew.rightHip.rotation.x = damp(crew.rightHip.rotation.x, -stride, 0.25);
-      crew.leftKnee.rotation.x = damp(
-        crew.leftKnee.rotation.x,
+      rig.leftHip.rotation.x = damp(rig.leftHip.rotation.x, stride, 0.25);
+      rig.rightHip.rotation.x = damp(rig.rightHip.rotation.x, -stride, 0.25);
+      rig.leftKnee.rotation.x = damp(
+        rig.leftKnee.rotation.x,
         moving ? Math.max(0, -Math.sin(phase)) * 0.8 : 0,
         0.25
       );
-      crew.rightKnee.rotation.x = damp(
-        crew.rightKnee.rotation.x,
+      rig.rightKnee.rotation.x = damp(
+        rig.rightKnee.rotation.x,
         moving ? Math.max(0, Math.sin(phase)) * 0.8 : 0,
         0.25
       );
 
       const armSwing = moving ? -stride * 0.7 : 0;
       const reach = s.crew.atDoor && !s.door.opened;
-      crew.leftShoulder.rotation.x = damp(crew.leftShoulder.rotation.x, armSwing, 0.2);
-      crew.rightShoulder.rotation.x = damp(
-        crew.rightShoulder.rotation.x,
+      rig.leftShoulder.rotation.x = damp(rig.leftShoulder.rotation.x, armSwing, 0.2);
+      rig.rightShoulder.rotation.x = damp(
+        rig.rightShoulder.rotation.x,
         reach ? -1.15 : -armSwing,
         0.2
       );
-      crew.rightElbow.rotation.x = damp(crew.rightElbow.rotation.x, reach ? -0.2 : 0.08, 0.2);
+      rig.rightElbow.rotation.x = damp(rig.rightElbow.rotation.x, reach ? -0.2 : 0.08, 0.2);
 
       const bob = moving ? Math.abs(Math.sin(phase)) * 0.035 : 0;
-      const targetX = reach ? -2 : -9.5;
-      crew.group.position.set(
-        damp(crew.group.position.x, targetX, 0.22),
+      const targetX = reach ? -1.4 : -9.5;
+      rig.group.position.set(
+        damp(rig.group.position.x, targetX, 0.22),
         base + bob,
         0.4
       );
-      crew.group.rotation.y = damp(
-        crew.group.rotation.y,
+      rig.group.rotation.y = damp(
+        rig.group.rotation.y,
         reach ? Math.PI / 2 : 0,
         0.12
       );
-      crew.shadow.position.y = -bob + 0.015;
+      rig.shadow.position.y = -bob + 0.015;
 
-      crew.torso.rotation.x = damp(crew.torso.rotation.x, moving ? 0.09 : 0.02, 0.15);
-      crew.torso.scale.y = 1 + Math.sin(s.t * 2.1) * 0.006;
-      crew.head.rotation.y = Math.sin(s.t * 0.7) * 0.12;
+      rig.torso.rotation.x = damp(rig.torso.rotation.x, moving ? 0.09 : 0.02, 0.15);
+      rig.torso.scale.y = 1 + Math.sin(s.t * 2.1) * 0.006;
+      rig.head.rotation.y = Math.sin(s.t * 0.7) * 0.12;
 
       const victimVisible = s.victim.alive && !s.victim.rescued;
       victim.group.visible = victimVisible;

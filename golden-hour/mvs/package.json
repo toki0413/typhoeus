@@ -9,6 +9,7 @@
     "test": "vitest run",
     "check:bundle": "node scripts/check-bundle.mjs",
     "check": "tsc --noEmit && vitest run && vite build && node scripts/check-bundle.mjs",
+    "build:firefighter": "blender --background --factory-startup --python assets-src/firefighter/build.py",
     "verify:visual": "node scripts/visual-check.mjs",
     "verify:audio": "node scripts/audio-check.mjs",
     "verify": "npm run verify:visual && npm run verify:audio",
