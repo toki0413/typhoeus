@@ -52,7 +52,7 @@ export function stepSim(s: SimState, dt: number): void {
       at: s.t,
       type: 'rescue',
       anchorId: 'K-NEIGHBOR-RESCUE',
-      detail: '102 居民获救',
+      detail: '202 居民获救',
     });
   }
 
@@ -62,7 +62,7 @@ export function stepSim(s: SimState, dt: number): void {
       at: s.t,
       type: 'death',
       anchorId: 'K-VICTIM-LOST',
-      detail: '102 居民未能获救',
+      detail: '202 居民未能获救',
     });
   }
 

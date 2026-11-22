@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { FLOOR_H } from './constants';
+import { concreteTexture } from './textures';
 export { FLOOR_H };
 
 export const CAMERA_FRUSTUM = 12;
@@ -82,9 +83,15 @@ export function createScene(): {
   fill.position.set(-20, 16, -10);
   scene.add(fill);
 
+  const wallMap = concreteTexture();
   const building = new THREE.Mesh(
     buildStaticGeometry(),
-    new THREE.MeshStandardMaterial({ color: 0x59626d, roughness: 0.9, metalness: 0.04 })
+    new THREE.MeshStandardMaterial({
+      color: wallMap ? 0xffffff : 0x59626d,
+      map: wallMap ?? undefined,
+      roughness: 0.92,
+      metalness: 0.03,
+    })
   );
   building.castShadow = true;
   building.receiveShadow = true;
@@ -92,7 +99,7 @@ export function createScene(): {
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(200, 200),
-    new THREE.MeshStandardMaterial({ color: 0x151a20, roughness: 1 })
+    new THREE.MeshStandardMaterial({ color: 0x12161b, roughness: 1 })
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.16;

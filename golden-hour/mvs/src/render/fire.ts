@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { SimState } from '../sim/types';
+import { FLOOR_H } from './constants';
 
 function radialTexture(): THREE.DataTexture {
   const size = 64;
@@ -63,7 +64,8 @@ export function createFireGlow(scene: THREE.Scene): {
   update: (s: SimState) => void;
 } {
   const group = new THREE.Group();
-  group.position.set(-2.4, 0.1, 5.4);
+  // 火在 202 室内，正好照亮门口与被困者。
+  group.position.set(-3.5, FLOOR_H + 0.1, -1);
   scene.add(group);
 
   const light = new THREE.PointLight(0xff7a33, 0, 18, 2);
@@ -86,9 +88,9 @@ export function createFireGlow(scene: THREE.Scene): {
 
   const flameMap = flameTexture();
   const flameDefs = [
-    { color: 0xff5a1f, x: 0, y: 0.92, z: 0, sx: 1.2, sy: 2.1, opacity: 0.55 },
-    { color: 0xffa33e, x: 0.1, y: 0.74, z: 0.08, sx: 0.8, sy: 1.45, opacity: 0.62 },
-    { color: 0xffe08a, x: -0.06, y: 0.56, z: -0.04, sx: 0.5, sy: 0.9, opacity: 0.72 },
+    { color: 0xff5a1f, x: 0, y: 1.2, z: 0, sx: 1.9, sy: 3.2, opacity: 0.66 },
+    { color: 0xffa33e, x: 0.14, y: 0.95, z: 0.08, sx: 1.25, sy: 2.3, opacity: 0.74 },
+    { color: 0xffe08a, x: -0.1, y: 0.7, z: -0.04, sx: 0.78, sy: 1.4, opacity: 0.82 },
   ];
   const flames = flameDefs.map((def) => {
     const sprite = new THREE.Sprite(
@@ -107,6 +109,29 @@ export function createFireGlow(scene: THREE.Scene): {
     return { sprite, ...def };
   });
 
+  // 低多边形火舌：即使精灵被门框部分遮挡，也能读出“这里有火”。
+  const cones = [
+    { height: 1.75, radius: 0.42, color: 0xff6a24, x: 0, z: 0 },
+    { height: 1.25, radius: 0.3, color: 0xffa33e, x: 0.12, z: 0.06 },
+    { height: 0.8, radius: 0.2, color: 0xffdd82, x: -0.1, z: -0.04 },
+  ].map((def) => {
+    const geometry = new THREE.ConeGeometry(def.radius, def.height, 7);
+    geometry.translate(0, def.height / 2, 0);
+    const mesh = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({
+        color: def.color,
+        transparent: true,
+        opacity: 0.62,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    mesh.position.set(def.x, 0, def.z);
+    group.add(mesh);
+    return { mesh, def };
+  });
+
   return {
     group,
     light,
@@ -120,7 +145,7 @@ export function createFireGlow(scene: THREE.Scene): {
       (glow.material as THREE.SpriteMaterial).opacity =
         (0.12 + level * 0.62) * flicker;
 
-      const scale = 3 + level * 5.4;
+      const scale = 3.8 + level * 6.5;
       glow.scale.set(scale, scale * 0.7, 1);
 
       flames.forEach((flame, index) => {
@@ -133,6 +158,13 @@ export function createFireGlow(scene: THREE.Scene): {
         );
         (flame.sprite.material as THREE.SpriteMaterial).opacity =
           flame.opacity * (0.5 + level * 0.65) * flicker;
+      });
+
+      cones.forEach((cone, index) => {
+        const pulse = 0.86 + Math.sin(s.t * (8 + index * 2.1) + index) * 0.12;
+        cone.mesh.scale.set(pulse, 0.7 + level * 0.6 + pulse * 0.1, pulse);
+        (cone.mesh.material as THREE.MeshBasicMaterial).opacity =
+          0.55 + level * 0.3;
       });
     },
   };

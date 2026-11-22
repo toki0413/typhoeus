@@ -19,7 +19,7 @@ describe('并发事件面板', () => {
     ui.update(sim);
 
     expect(root.style.display).toBe('block');
-    expect(root.textContent).toContain('102');
+    expect(root.textContent).toContain('202');
     expect(root.textContent).toContain('还剩');
   });
 

@@ -7,7 +7,7 @@ export function createDoorUi(
 ): { update: (s: SimState) => void } {
   root.innerHTML = `
     <div class="panel-head">
-      <span class="panel-title">入户门</span>
+      <span class="panel-title">202 · 入户门</span>
       <span class="status-pill" data-status></span>
     </div>
     <button data-act="check" class="primary">按住：触碰门把</button>

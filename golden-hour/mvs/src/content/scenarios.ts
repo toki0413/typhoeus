@@ -13,7 +13,7 @@ export const SCENARIOS: ScenarioDef[] = [
   {
     seed: 'GH-FIRE-05',
     name: '浓烟早发局',
-    brief: '烟气源头更重，102 与楼梯间的事件都来得更早。',
+    brief: '烟气源头更重，202 与楼梯间的事件都来得更早。',
   },
   {
     seed: 'GH-FIRE-02',

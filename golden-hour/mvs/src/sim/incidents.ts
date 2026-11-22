@@ -9,7 +9,7 @@ export function createIncidents(shift = 0): Incident[] {
       id: 'neighbor',
       at: neighborAt,
       deadline: neighborAt + 12,
-      title: '102 有人呼救',
+      title: '202 有人呼救',
       detail: '陈桂英被反锁在家，烟已经从门缝进来。',
       options: [
         { id: 'coach', label: '指导她关门堵缝' },

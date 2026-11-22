@@ -63,20 +63,20 @@ export function createSmoke(scene: THREE.Scene): {
     for (let i = 0; i < PUFFS_PER_FLOOR; i++) {
       const material = new THREE.SpriteMaterial({
         map: texture,
-        color: 0xbcc3cb,
+        color: 0xc8ced6,
         transparent: true,
         opacity: 0,
         depthWrite: false,
       });
       const sprite = new THREE.Sprite(material);
-      const baseScale = 1.8 + rnd() * 1.6;
+      const baseScale = 2.5 + rnd() * 2.1;
       sprite.scale.set(baseScale, baseScale, 1);
       floorGroup.add(sprite);
       puffs.push({
         sprite,
         floor: f,
         x: -10 + rnd() * 20,
-        z: -5 + rnd() * 10,
+        z: -4.5 + rnd() * 5,
         phase: rnd(),
         speed: 0.25 + rnd() * 0.35,
         baseScale,
@@ -108,7 +108,7 @@ export function createSmoke(scene: THREE.Scene): {
         const fade = Math.sin(Math.PI * local);
         const scale = p.baseScale * (0.85 + local * 0.5);
         p.sprite.scale.set(scale, scale, 1);
-        (p.sprite.material as THREE.SpriteMaterial).opacity = v * 0.65 * fade;
+        (p.sprite.material as THREE.SpriteMaterial).opacity = v * 0.9 * fade;
       }
     },
   };

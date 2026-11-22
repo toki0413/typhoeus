@@ -23,9 +23,9 @@ export function renderDebrief(
     : '<li>无</li>';
   const injury = card.tactical.crewInjured ? ' · 班组受伤' : '';
   const neighbor = card.tactical.neighborSaved
-    ? ' · 102 获救'
+    ? ' · 202 获救'
     : card.tactical.neighborLost
-      ? ' · 102 遇难'
+      ? ' · 202 遇难'
       : '';
   const used = card.tactical.resourcesConsumed.extinguisher ?? 0;
   const decisions = card.decisions

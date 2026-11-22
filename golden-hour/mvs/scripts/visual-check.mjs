@@ -57,7 +57,20 @@ try {
   check('HUD 显示现场数据', renderState.hud.includes('烟') && renderState.hud.includes('体力'));
 
   await page.keyboard.press('t');
-  await new Promise((resolve) => setTimeout(resolve, 800));
+  // 无头环境会节流 rAF，强制推进若干帧让班组走到门口再截图。
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        let frames = 0;
+        const step = () => {
+          frames += 1;
+          if (frames > 45) resolve();
+          else requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      })
+  );
+  await new Promise((resolve) => setTimeout(resolve, 300));
   await screenshot(page, '03-door');
 
   const doorVisible = await page.evaluate(() => {

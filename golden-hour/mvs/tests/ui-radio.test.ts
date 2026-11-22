@@ -25,7 +25,7 @@ describe('无线电支援小队', () => {
 
     sim.t = 9;
     radio.update(sim);
-    expect(root.textContent).toContain('102');
+    expect(root.textContent).toContain('202');
   });
 
   it('王姨的传言会在后面自我反证', () => {

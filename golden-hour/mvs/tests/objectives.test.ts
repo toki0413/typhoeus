@@ -65,9 +65,9 @@ describe('训练目标证据', () => {
 
     const priority = objective(s, 'priority');
     expect(priority.observed.indexOf('楼梯间异响')).toBeLessThan(
-      priority.observed.indexOf('102 有人呼救')
+      priority.observed.indexOf('202 有人呼救')
     );
-    expect(priority.outcome).toContain('102 获救');
+    expect(priority.outcome).toContain('202 获救');
     expect(priority.outcome).toContain('楼梯坍塌');
     expect(priority.practiced).toBe(true);
   });

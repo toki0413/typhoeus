@@ -87,7 +87,7 @@ export function createShell(root: HTMLElement, options: ShellOptions): ShellApi 
           <g fill="#e5b567" fill-opacity="0.6" font-family="ui-monospace, monospace" font-size="9" letter-spacing="2">
             <text x="70" y="72">FLOOR 02</text>
             <text x="70" y="352">FLOOR 01</text>
-            <text x="262" y="146">102</text>
+            <text x="262" y="146">202</text>
             <text x="92" y="252">STAIR</text>
             <text x="300" y="252">EXIT</text>
           </g>

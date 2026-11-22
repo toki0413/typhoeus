@@ -18,7 +18,7 @@ export const RADIO_SCRIPT: RadioLine[] = [
   {
     at: 8,
     speaker: '林队',
-    text: '102 有人在敲门。去不去，你自己判断。',
+    text: '202 有人在敲门。去不去，你自己判断。',
   },
   {
     at: 18,

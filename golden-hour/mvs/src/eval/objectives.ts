@@ -54,10 +54,10 @@ export function buildObjectives(s: SimState): ObjectiveEvidence[] {
     : '没有处理并发事件';
 
   const neighborOutcome = s.neighbor.saved
-    ? '102 获救'
+    ? '202 获救'
     : !s.neighbor.alive
-      ? '102 遇难'
-      : '102 仍未脱险';
+      ? '202 遇难'
+      : '202 仍未脱险';
   const priorityOutcome = `${neighborOutcome}；${stairsOutcome(s)}`;
 
   return [

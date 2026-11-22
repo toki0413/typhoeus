@@ -110,9 +110,14 @@ function createApp(kit: ReturnType<typeof createScene>): App {
 
   if (import.meta.env.DEV) {
     const debugWindow = window as unknown as {
-      __gh: { audio: typeof audio; sim: typeof sim };
+      __gh: {
+        audio: typeof audio;
+        sim: typeof sim;
+        agents: typeof agents;
+        doorMesh: typeof doorMesh;
+      };
     };
-    debugWindow.__gh = { audio, sim };
+    debugWindow.__gh = { audio, sim, agents, doorMesh };
   }
 
   let paused = false;
@@ -292,7 +297,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     // 开始训练时轻微推近，建立镜头感；减少动态时直接停在最终视角。
     const intro = settings.reducedMotion ? 1 : Math.min(1, (now - introAt) / 1400);
     const eased = 1 - Math.pow(1 - intro, 3);
-    camera.zoom = 0.92 + 0.08 * eased;
+    camera.zoom = 1.02 + 0.06 * eased;
     camera.updateProjectionMatrix();
     vignette.style.opacity = running
       ? String(Math.min(0.5, sim.exposure.smoke * 0.75))

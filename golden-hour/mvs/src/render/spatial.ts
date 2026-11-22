@@ -10,10 +10,10 @@ export interface SpatialAnchors {
 
 // 与场景布局保持一致：火源在楼体中部，门在前侧，楼梯与班组在左侧。
 export const DEFAULT_ANCHORS: SpatialAnchors = {
-  fire: new THREE.Vector3(-2.4, 0.8, 5.4),
-  door: new THREE.Vector3(3.7, 4.05, 6.9),
-  stairs: new THREE.Vector3(-11.4, 0.5, 4.2),
-  crew: new THREE.Vector3(-9.5, 0.6, 2.4),
+  fire: new THREE.Vector3(-3.5, 3.8, -1),
+  door: new THREE.Vector3(0, 4.05, 1.05),
+  stairs: new THREE.Vector3(-11.4, 0.5, -0.8),
+  crew: new THREE.Vector3(-9.5, 0.6, 0.4),
 };
 
 const PAN_SCALE = 1.6;

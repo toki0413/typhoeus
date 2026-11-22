@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { SimState } from '../sim/types';
+import { metalTexture, woodTexture } from './textures';
 
 export function createDoor(scene: THREE.Scene): {
   group: THREE.Group;
@@ -8,15 +9,18 @@ export function createDoor(scene: THREE.Scene): {
   update: (s: SimState) => void;
 } {
   const group = new THREE.Group();
-  group.position.set(3.7, 4.05, 6.9);
+  group.position.set(-0.7, 4.05, 1.05);
   scene.add(group);
 
   const frameGroup = new THREE.Group();
   frameGroup.position.copy(group.position);
   scene.add(frameGroup);
 
+  const metalMap = metalTexture();
+  const woodMap = woodTexture();
   const frameMaterial = new THREE.MeshStandardMaterial({
-    color: 0x3c444d,
+    color: metalMap ? 0xffffff : 0x3c444d,
+    map: metalMap ?? undefined,
     roughness: 0.55,
     metalness: 0.35,
   });
@@ -30,10 +34,11 @@ export function createDoor(scene: THREE.Scene): {
   frameGroup.add(leftJamb, rightJamb, lintel);
 
   const material = new THREE.MeshStandardMaterial({
-    color: 0x6b4a2c,
+    color: woodMap ? 0xffffff : 0x6b4a2c,
+    map: woodMap ?? undefined,
     roughness: 0.7,
-    emissive: 0x341c08,
-    emissiveIntensity: 0.6,
+    emissive: 0x4a2508,
+    emissiveIntensity: 0.5,
   });
 
   // 门板挂在铰链上：本地 x 偏移半个门宽
@@ -43,14 +48,23 @@ export function createDoor(scene: THREE.Scene): {
 
   const inset = new THREE.Mesh(
     new THREE.BoxGeometry(1.04, 1.5, 0.02),
-    new THREE.MeshStandardMaterial({ color: 0x5b3d22, roughness: 0.8 })
+    new THREE.MeshStandardMaterial({
+      color: woodMap ? 0x9a7a5c : 0x5b3d22,
+      map: woodMap ?? undefined,
+      roughness: 0.8,
+    })
   );
   inset.position.set(0.7, 0.05, 0.09);
   group.add(inset);
 
   const kick = new THREE.Mesh(
     new THREE.BoxGeometry(1.24, 0.18, 0.03),
-    new THREE.MeshStandardMaterial({ color: 0x8d9196, roughness: 0.4, metalness: 0.5 })
+    new THREE.MeshStandardMaterial({
+      color: metalMap ? 0xffffff : 0x8d9196,
+      map: metalMap ?? undefined,
+      roughness: 0.4,
+      metalness: 0.5,
+    })
   );
   kick.position.set(0.7, -0.88, 0.09);
   group.add(kick);
