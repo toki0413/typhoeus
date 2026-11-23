@@ -126,6 +126,15 @@ export const ROOM_COLS = 8;
 export const ROOM_ROWS = 8;
 export const CELL_SIZE = 0.75;
 
+/** 202 房间沙发的格坐标；场景与房间初始化共用。 */
+export const SOFA_CELLS: [number, number][] = [
+  [5, 3],
+  [6, 3],
+  [5, 4],
+  [6, 4],
+  [5, 5],
+];
+
 const VISIBILITY_SMOKE_WEIGHT = 0.6;
 const VISIBILITY_STEAM_WEIGHT = 0.4;
 
@@ -229,14 +238,7 @@ export function createRoom(config: Partial<RoomConfig> = {}): RoomState {
   };
 
   // 沙发：靠窗的一块 L 形可燃家具（A 类固体火）
-  const sofa = [
-    [5, 3],
-    [6, 3],
-    [5, 4],
-    [6, 4],
-    [5, 5],
-  ];
-  for (const [x, y] of sofa) {
+  for (const [x, y] of SOFA_CELLS) {
     if (!inBounds(full, x, y)) continue;
     Object.assign(cellAt(state, x, y), makeFuel(1, 0.8, 1.4, 'A'));
   }

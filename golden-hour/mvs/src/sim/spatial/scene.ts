@@ -1,7 +1,7 @@
-import { cellAt, roomSummary, type Cell } from './fields';
+import { SOFA_CELLS, cellAt, roomSummary, type Cell } from './fields';
 import type { BuildingGraph } from './rooms';
 import { createBuilding } from './rooms';
-import { stepRoom } from './spread';
+import { FIXED_DT, stepRoom } from './spread';
 import type { ActorState } from './actor';
 import type { OccupantState } from './rescue';
 
@@ -42,6 +42,7 @@ function quietRoom(cells: Cell[]): void {
     cell.structure = 1;
     cell.combustibility = 0;
     cell.smokeYield = 0;
+    cell.fireClass = 'A';
   }
 }
 
@@ -54,14 +55,7 @@ export function createBuildingScenario(): ScenarioDefinition {
   }
 
   const room = building.rooms['room-202-F1'].room;
-  const sofa: [number, number][] = [
-    [5, 3],
-    [6, 3],
-    [5, 4],
-    [6, 4],
-    [5, 5],
-  ];
-  for (const [x, y] of sofa) {
+  for (const [x, y] of SOFA_CELLS) {
     const cell = cellAt(room, x, y);
     cell.fuel = 1;
     cell.combustibility = 0.8;
@@ -85,7 +79,7 @@ export function createBuildingScenario(): ScenarioDefinition {
 }
 
 /** 推进整栋楼；目前只有 202 有火，其它房间保持安静。 */
-export function stepScenario(def: ScenarioDefinition, dt: number): void {
+export function stepScenario(def: ScenarioDefinition, dt = FIXED_DT): void {
   for (const node of Object.values(def.building.rooms)) {
     stepRoom(node.room, dt);
   }
@@ -98,7 +92,7 @@ export function snapshotScenario(
   occupant: OccupantState
 ): ScenarioSnapshot {
   const rooms: Record<string, RoomSnapshot> = {};
-  let t = 0;
+  const t = def.building.rooms[def.startRoom].room.t;
 
   for (const [id, node] of Object.entries(def.building.rooms)) {
     const summary = roomSummary(node.room);
@@ -108,15 +102,18 @@ export function snapshotScenario(
       heat: summary.heat,
       oxygen: summary.oxygen,
     };
-    t = Math.max(t, node.room.t);
   }
+
+  const objectivesDone: string[] = [];
+  if (roomId === def.targetRoom || occupant.rescued) objectivesDone.push('进入 202');
+  if (occupant.rescued) objectivesDone.push('救出居民');
 
   return {
     t,
     roomId,
-    actor,
-    occupant,
+    actor: { ...actor, exposure: { ...actor.exposure } },
+    occupant: { ...occupant },
     rooms,
-    objectivesDone: [],
+    objectivesDone,
   };
 }

@@ -31,9 +31,11 @@ describe('建筑场景', () => {
       if (id === 'room-202-F1') {
         expect(summary.smoke).toBeGreaterThan(0.1);
         expect(summary.heat).toBeGreaterThan(0.05);
+        expect(summary.oxygen).toBeLessThan(0.8);
       } else {
         expect(summary.smoke).toBe(0);
         expect(summary.heat).toBeLessThanOrEqual(0.05);
+        expect(summary.oxygen).toBeCloseTo(0.95, 5);
       }
     }
   });
@@ -89,6 +91,31 @@ describe('建筑场景', () => {
     expect(snap.rooms['room-202-F1'].fire).toBeGreaterThan(0);
     expect(snap.rooms['entrance'].smoke).toBe(0);
     expect(snap.occupant.id).toBe('resident-202');
-    expect(snap.actor).toBe(actor);
+    expect(snap.actor).toEqual(actor);
+    expect(snap.actor).not.toBe(actor);
+  });
+
+  it('目标进度由当前房间与救援状态推导', () => {
+    const def = createBuildingScenario();
+    const actor = createActor();
+    const occupant = createOccupant();
+
+    expect(snapshotScenario(def, 'entrance', actor, occupant).objectivesDone).toEqual([]);
+
+    expect(
+      snapshotScenario(def, 'room-202-F1', actor, occupant).objectivesDone
+    ).toContain('进入 202');
+
+    occupant.rescued = true;
+    expect(snapshotScenario(def, 'entrance', actor, occupant).objectivesDone).toContain(
+      '救出居民'
+    );
+  });
+
+  it('快照时钟来自起点房间', () => {
+    const def = createBuildingScenario();
+    for (let i = 0; i < 600; i++) stepScenario(def, 0.1);
+    const snap = snapshotScenario(def, 'entrance', createActor(), createOccupant());
+    expect(snap.t).toBeCloseTo(60, 5);
   });
 });
