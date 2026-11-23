@@ -29,9 +29,38 @@ export interface RescueResult {
   residentId: string;
 }
 
+/** 多区域的门口：与抵达目标区域时的落点一致。 */
+export const ZONE_EXIT = { x: -2.4, z: 0 };
+/** 门口确认半径（米） */
+export const CONFIRM_RADIUS = 1.5;
+
+export type EscortReason =
+  | 'ok'
+  | 'actor-downed'
+  | 'already-escorted'
+  | 'already-rescued'
+  | 'lost'
+  | 'not-found'
+  | 'too-far'
+  | 'unconscious-needs-carry';
+
+export interface EscortResult {
+  ok: boolean;
+  reason: EscortReason;
+  residentId: string;
+}
+
+export type ConfirmReason = 'ok' | 'not-escorted' | 'already-rescued' | 'lost' | 'too-far';
+
+export interface ConfirmResult {
+  ok: boolean;
+  reason: ConfirmReason;
+  residentId: string;
+}
+
 export interface CrowdEvent {
   at: number;
-  kind: 'rescued' | 'lost';
+  kind: 'rescued' | 'lost' | 'escorted';
   residentId: string;
   detail: string;
 }
@@ -167,6 +196,94 @@ export function rescueResident(
     kind: 'rescued',
     residentId,
     detail: `${verb === 'carry' ? '背出' : '牵出'}用时 ${seconds}s`,
+  });
+
+  return { ok: true, reason: 'ok', residentId };
+}
+
+/**
+ * 把一名居民带离原位，等待送到门口确认。
+ * 校验顺序与 rescueResident 一致，也会按动词消耗模拟时间、期间受 carried 保护；
+ * 但成功后只标记 escorted，不增加 crowd.rescued，也不置 rescued。
+ */
+export function escortResident(
+  crowd: CrowdState,
+  residentId: string,
+  actor: ActorState,
+  room: RoomState,
+  verb: RescueVerb,
+  reach = RESCUE_REACH
+): EscortResult {
+  if (actor.downed) return { ok: false, reason: 'actor-downed', residentId };
+
+  const resident = crowd.residents.find((item) => item.id === residentId);
+  if (!resident) return { ok: false, reason: 'not-found', residentId };
+
+  if (resident.rescued) return { ok: false, reason: 'already-rescued', residentId };
+  if (resident.escorted) return { ok: false, reason: 'already-escorted', residentId };
+  if (resident.dead) return { ok: false, reason: 'lost', residentId };
+  if (!findResident(resident, actor)) return { ok: false, reason: 'not-found', residentId };
+  if (distanceTo(resident, actor) > reach) {
+    return { ok: false, reason: 'too-far', residentId };
+  }
+  // 失去意识（健康归零）的人无法牵着走，只能背
+  if (verb === 'lead' && (resident.mood === 'unconscious' || resident.health <= 0)) {
+    return { ok: false, reason: 'unconscious-needs-carry', residentId };
+  }
+
+  // 带离期间同样保护目标：冻结掉血与死亡计时
+  resident.carried = true;
+
+  const seconds = verb === 'carry' ? CARRY_TIME : LEAD_TIME;
+  const ticks = Math.max(1, Math.round(seconds / FIXED_DT));
+  for (let i = 0; i < ticks; i++) {
+    stepCrowd(crowd, room, FIXED_DT);
+  }
+
+  // 成功后结束背起态，只保留“等待确认”
+  resident.carried = false;
+  resident.escorted = true;
+  resident.hidden = false;
+  crowd.events.push({
+    at: crowd.t,
+    kind: 'escorted',
+    residentId,
+    detail: '已带离，等待确认',
+  });
+
+  return { ok: true, reason: 'ok', residentId };
+}
+
+/**
+ * 在门口确认送达：把 escorted 居民转为已救出，并计入 crowd.rescued。
+ * 确认本身不消耗模拟时间，只校验状态与玩家到出口的距离。
+ */
+export function confirmResident(
+  crowd: CrowdState,
+  residentId: string,
+  actor: ActorState
+): ConfirmResult {
+  // 倒地时无法完成交接，沿用“太远”让调用方给出位置类提示
+  if (actor.downed) return { ok: false, reason: 'too-far', residentId };
+
+  const resident = crowd.residents.find((item) => item.id === residentId);
+  if (!resident) return { ok: false, reason: 'not-escorted', residentId };
+
+  if (resident.rescued) return { ok: false, reason: 'already-rescued', residentId };
+  if (resident.dead) return { ok: false, reason: 'lost', residentId };
+  if (!resident.escorted) return { ok: false, reason: 'not-escorted', residentId };
+  if (Math.hypot(actor.x - ZONE_EXIT.x, actor.z - ZONE_EXIT.z) > CONFIRM_RADIUS) {
+    return { ok: false, reason: 'too-far', residentId };
+  }
+
+  resident.rescued = true;
+  resident.escorted = false;
+  crowd.rescued++;
+  crowd.events.push({
+    at: crowd.t,
+    kind: 'rescued',
+    residentId,
+    detail: '送达门口确认',
   });
 
   return { ok: true, reason: 'ok', residentId };

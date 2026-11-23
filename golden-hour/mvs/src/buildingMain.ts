@@ -7,10 +7,14 @@ import {
   type ResidentState,
 } from './sim/agents/resident';
 import {
+  confirmResident,
   createCrowd,
+  escortResident,
   rescueResident,
   stepCrowd,
+  type ConfirmReason,
   type CrowdState,
+  type EscortReason,
   type RescueReason,
   type RescueVerb,
 } from './sim/agents/crowd';
@@ -449,7 +453,7 @@ function advanceWorld(dt: number, stepCrowdNow = true): void {
   recordLosses();
 }
 
-function reasonText(reason: RescueReason): string {
+function reasonText(reason: RescueReason | EscortReason): string {
   switch (reason) {
     case 'too-far':
       return '离居民太远';
@@ -463,8 +467,26 @@ function reasonText(reason: RescueReason): string {
       return '你已失去行动能力';
     case 'already-rescued':
       return '已救出';
+    case 'already-escorted':
+      return '已带离';
     case 'ok':
       return '成功';
+  }
+}
+
+/** 确认送达失败时的中文提示；与救援的距离/状态文案区分开。 */
+function confirmReasonText(reason: ConfirmReason): string {
+  switch (reason) {
+    case 'too-far':
+      return '离门口太远';
+    case 'not-escorted':
+      return '尚未带离';
+    case 'lost':
+      return '已经失去';
+    case 'already-rescued':
+      return '已确认';
+    case 'ok':
+      return '已确认';
   }
 }
 
@@ -482,8 +504,8 @@ function renderRoutes(): void {
     return;
   }
   if (currentRoom === targetRoom()) {
-    out.routes.innerHTML =
-      '<p class="hint">在目标房间：WASD/方向键移动，靠近居民后牵出或背出；角落可能有躲藏者。工具在右侧面板。</p>';
+    const escortHint = household ? '带离后走到门口，按“确认送达”。' : '';
+    out.routes.innerHTML = `<p class="hint">在目标房间：WASD/方向键移动，靠近居民后牵出或背出；角落可能有躲藏者。工具在右侧面板。${escortHint}</p>`;
     return;
   }
   if (!routes.length) {
@@ -556,19 +578,22 @@ function renderResidents(): void {
       const state = residentVisualState(resident);
       const isDead = state === 'dead';
       const canLead = state !== 'unconscious' && !isDead;
-      return `<div class="resident-row">
-        <span class="resident-name">居民 ${resident.id}</span>
-        <span class="resident-meta">${Math.round(resident.health * 100)}% · ${
-          STATE_TEXT[state]
-        }</span>
-        <span class="resident-actions">
-          <button data-rescue="${resident.id}:lead" aria-label="牵出居民 ${resident.id}"${
+      // 已带离的居民只等门口确认；未带离的仍按牵/背处理。
+      const label = resident.escorted ? '待确认' : STATE_TEXT[state];
+      const actions = resident.escorted
+        ? `<button data-confirm="${resident.id}" aria-label="确认送达居民 ${resident.id}"${
+            isDead ? ' disabled' : ''
+          }>确认送达</button>`
+        : `<button data-rescue="${resident.id}:lead" aria-label="牵出居民 ${resident.id}"${
             canLead ? '' : ' disabled'
           }>牵</button>
           <button data-rescue="${resident.id}:carry" aria-label="背出居民 ${resident.id}"${
             isDead ? ' disabled' : ''
-          }>背</button>
-        </span>
+          }>背</button>`;
+      return `<div class="resident-row">
+        <span class="resident-name">居民 ${resident.id}</span>
+        <span class="resident-meta">${Math.round(resident.health * 100)}% · ${label}</span>
+        <span class="resident-actions">${actions}</span>
       </div>`;
     })
     .join('');
@@ -600,8 +625,10 @@ function residentSignature(): string {
         .map(
           (resident) =>
             `${resident.id}:${resident.rescued ? 1 : 0}:${resident.dead ? 1 : 0}:${
-              resident.mood
-            }:${Math.round(resident.health * 20)}:${findResident(resident, actor) ? 1 : 0}`
+              resident.escorted ? 1 : 0
+            }:${resident.mood}:${Math.round(resident.health * 20)}:${
+              findResident(resident, actor) ? 1 : 0
+            }`
         )
         .join(',');
       return `${zone.roomId}=${people}`;
@@ -615,8 +642,10 @@ function residentSignature(): string {
     ? crowd.residents.map(
         (resident) =>
           `${resident.id}:${resident.rescued ? 1 : 0}:${resident.dead ? 1 : 0}:${
-            resident.mood
-          }:${Math.round(resident.health * 20)}:${findResident(resident, actor) ? 1 : 0}`
+            resident.escorted ? 1 : 0
+          }:${resident.mood}:${Math.round(resident.health * 20)}:${
+            findResident(resident, actor) ? 1 : 0
+          }`
       )
     : [];
   return `${currentRoom}|${ended ? 1 : 0}|${parts.join(',')}`;
@@ -755,7 +784,10 @@ function handleRescue(id: string, verb: RescueVerb): void {
   const before = sampleRoom(room);
   const at = room.t;
   const t0 = crowdNow.t;
-  const result = rescueResident(crowdNow, id, actor, room, verb);
+  // 多区域先带离、到门口再确认；单区域沿用一次完成的原子救援。
+  const result = household
+    ? escortResident(crowdNow, id, actor, room, verb)
+    : rescueResident(crowdNow, id, actor, room, verb);
   const elapsed = crowdNow.t - t0;
 
   // 救援消耗的模拟时间同样推进火场与玩家暴露，让取舍有真实代价。
@@ -775,7 +807,11 @@ function handleRescue(id: string, verb: RescueVerb): void {
   });
 
   if (result.ok) {
-    addLog(`${verb === 'carry' ? '已背出' : '已牵出'} 居民 ${id}`, 'ok');
+    if (household) {
+      addLog(`居民 ${id} 已带离，走到门口确认送达。`, 'ok');
+    } else {
+      addLog(`${verb === 'carry' ? '已背出' : '已牵出'} 居民 ${id}`, 'ok');
+    }
     // 救援内部推进过世界，工具余量可能随动作变化，刷新面板。
     refreshTools();
   } else {
@@ -784,6 +820,44 @@ function handleRescue(id: string, verb: RescueVerb): void {
 
   recordLosses();
   syncResidents();
+  updateHud();
+  checkOutcome();
+}
+
+/** 多区域专属：在门口把已带离的居民转为已救出。 */
+function handleConfirm(id: string): void {
+  if (!household || ended) return;
+  if (allZonesDone()) return;
+  if (currentRoom !== targetRoom()) {
+    addLog('先到目标房间才能确认送达。', 'danger');
+    return;
+  }
+
+  const crowdNow = activeCrowd();
+  if (!crowdNow) return;
+  const room = roomOf(targetRoom());
+  const before = sampleRoom(room);
+  const at = room.t;
+  const result = confirmResident(crowdNow, id, actor);
+
+  actions.push({
+    id: 'confirm-' + id + '-' + ++actionSeq,
+    at,
+    action: 'confirm',
+    roomId: targetRoom(),
+    before,
+    after: sampleRoom(room),
+  });
+
+  if (result.ok) {
+    addLog(`居民 ${id} 已送达门口`, 'ok');
+  } else {
+    addLog(`${confirmReasonText(result.reason)}（居民 ${id}）`, 'danger');
+  }
+
+  recordLosses();
+  syncResidents();
+  refreshTools();
   updateHud();
   checkOutcome();
 }
@@ -1268,6 +1342,12 @@ document.getElementById('routes')!.addEventListener('click', (event) => {
 out.residents.addEventListener('click', (event) => {
   const button = (event.target as HTMLElement).closest('button');
   if (!button || (button as HTMLButtonElement).disabled) return;
+  // 先处理门口确认，再回落到牵/背。
+  const confirmId = button.dataset.confirm;
+  if (confirmId) {
+    handleConfirm(confirmId);
+    return;
+  }
   const spec = button.dataset.rescue;
   if (!spec) return;
   const [id, verb] = spec.split(':');

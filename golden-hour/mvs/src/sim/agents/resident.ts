@@ -28,6 +28,8 @@ export interface ResidentState {
   injury: number;
   /** 被背起中 */
   carried: boolean;
+  /** 已被带离原位，等待送到门口确认；旧对象缺省按 false 处理 */
+  escorted: boolean;
   /** 已救出 */
   rescued: boolean;
   /** 失去意识后累计时间；超过宽限期即死亡 */
@@ -77,6 +79,7 @@ export function createResident(
     health: 1,
     injury: 0,
     carried: false,
+    escorted: false,
     rescued: false,
     downedFor: 0,
     dead: false,
