@@ -39,13 +39,7 @@ import {
   serializeSave,
   type GameSave,
 } from './app/save';
-import {
-  compareRuns,
-  scoreRun,
-  type RunComparison,
-  type RunResult,
-  type ScoreBreakdown,
-} from './eval/score';
+import { compareRuns, scoreRun, type RunResult } from './eval/score';
 import { createToolLoadout, type CarryLoadout } from './sim/interaction/tools';
 import { executeVerb } from './sim/interaction/multiSolution';
 import {
@@ -56,7 +50,7 @@ import {
   type DirectorEvent,
 } from './sim/events/director';
 import { sampleRoom, buildDebrief, type ActionRecord } from './eval/causal';
-import { buildCurvePaths, trimCurve, type CurveSample } from './eval/curves';
+import { trimCurve, type CurveSample } from './eval/curves';
 import {
   BRIEFING,
   RADIO_LINES,
@@ -68,6 +62,14 @@ import { travelRoute } from './sim/nav/travel';
 import { createBuildingView } from './render/buildingView';
 import { residentMarkers, residentVisualState } from './render/residents';
 import { installDiagnostics } from './app/diagnostics';
+import { createMovementInput } from './app/buildingInput';
+import {
+  bestStorageKey,
+  readBest,
+  saveStorageKey,
+  writeBest,
+  type BestRecord,
+} from './app/buildingStorage';
 import {
   RESIDENT_STATE_TEXT,
   ZONE_STATUS_TEXT,
@@ -75,6 +77,11 @@ import {
   rescueReasonText,
   windText,
 } from './app/buildingText';
+import {
+  renderCurve,
+  renderDebrief,
+  renderScore,
+} from './app/buildingOutcome';
 
 /** 版本、全局错误与匿名运行摘要；只写本地环形缓冲。 */
 const diag = installDiagnostics(window);
@@ -171,7 +178,7 @@ if (!multi) {
 }
 
 /** 存档键：与最佳记录一样按户型 + 种子 + 模式隔离，只在同模式下恢复。 */
-const SAVE_KEY = 'gh-save:' + layout.id + ':' + seed + ':' + mode;
+const SAVE_KEY = saveStorageKey(layout.id, seed, mode);
 
 let currentRoom = def.startRoom;
 let routes: Route[] = [];
@@ -203,8 +210,6 @@ let wrongAgent = 0;
 const exposureSamples: CurveSample[] = [];
 let lastSampleT = -1;
 let radioCursor = 0;
-/** 当前按下的移动键；键盘与触控 D-pad 共用同一集合。 */
-const held = new Set<string>();
 /** 三类前兆只提示一次，避免在 HUD 节流循环里重复刷屏。 */
 let airWarned = false;
 let backdraftWarned = false;
@@ -274,6 +279,14 @@ if (singleLink) {
   else url.searchParams.set('seed', String(seed));
   singleLink.href = url.toString();
 }
+
+/** 键盘/触控移动；快捷动作交给入口处理。 */
+const movement = createMovementInput(window, document, (key) => {
+  if (key === '1') takeRoute(0);
+  if (key === '2') takeRoute(1);
+  if (key === '3') takeRoute(2);
+  if (key === 'r') recalcRoutes();
+});
 
 function addLog(text: string, kind: 'info' | 'ok' | 'danger' = 'info'): void {
   logs = [{ text, kind }, ...logs].slice(0, 6);
@@ -867,39 +880,8 @@ function checkOutcome(): void {
   }
 }
 
-/** 最佳记录：本局结果 + 暴露曲线，用于结算时的幽灵对比。 */
-interface BestRecord {
-  run: RunResult;
-  curve: CurveSample[];
-}
-
-/** 结算时先画本次实线；若最佳记录有曲线，再叠两条虚线幽灵。 */
-function renderCurve(bestCurve: CurveSample[]): void {
-  const curve = buildCurvePaths(exposureSamples);
-  if (!curve.hasData) {
-    out.curve.innerHTML = '<p class="hint">没有采样到暴露曲线。</p>';
-    return;
-  }
-  // 最佳曲线复用同一画布尺寸，横向按各自时间轴铺满。
-  const ghost = bestCurve.length
-    ? buildCurvePaths(bestCurve, curve.width, curve.height)
-    : null;
-  const ghostPaths = ghost?.hasData
-    ? `<path class="ghost-smoke" d="${ghost.smoke}" />
-        <path class="ghost-heat" d="${ghost.heat}" />`
-    : '';
-  const legend = ghostPaths ? '实线 本次 · 虚线 最佳' : '烟 / 热 / 火（0–1）';
-  out.curve.innerHTML = `<svg viewBox="0 0 ${curve.width} ${curve.height}" role="img" aria-label="烟热暴露曲线">
-        <path class="smoke" d="${curve.smoke}" />
-        <path class="heat" d="${curve.heat}" />
-        <path class="fire" d="${curve.fire}" />
-        ${ghostPaths}
-      </svg>
-      <div class="curve-legend">${legend}</div>`;
-}
-
 /** 最佳记录按户型 + 种子 + 模式隔离，避免每日挑战与普通局互相覆盖。 */
-const BEST_KEY = `gh-best:${layout.id}:${seed}:${mode}`;
+const BEST_KEY = bestStorageKey(layout.id, seed, mode);
 
 /** 汇总本局结果：时间取目标区域时钟，峰值暴露取采样中烟+热的最大值。 */
 function collectRun(): RunResult {
@@ -933,69 +915,6 @@ function collectRun(): RunResult {
     wrongAgent,
     airLeft: actor.air,
   };
-}
-
-const RUN_KEYS = [
-  'rescued',
-  'lost',
-  'total',
-  'seconds',
-  'peakExposure',
-  'wrongAgent',
-  'airLeft',
-] as const;
-
-/** 判断对象是否含完整的 RunResult 数值字段。 */
-function isRunResult(value: unknown): value is RunResult {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  return RUN_KEYS.every(
-    (key) => typeof record[key] === 'number' && Number.isFinite(record[key] as number)
-  );
-}
-
-/** 只保留数值合法的曲线采样点，坏点直接丢弃。 */
-function readCurve(value: unknown): CurveSample[] {
-  if (!Array.isArray(value)) return [];
-  const samples: CurveSample[] = [];
-  for (const item of value) {
-    if (!item || typeof item !== 'object') continue;
-    const sample = item as Record<string, unknown>;
-    const { t, smoke, heat, fire } = sample;
-    if (typeof t !== 'number' || !Number.isFinite(t)) continue;
-    if (typeof smoke !== 'number' || !Number.isFinite(smoke)) continue;
-    if (typeof heat !== 'number' || !Number.isFinite(heat)) continue;
-    const cleaned: CurveSample = { t, smoke, heat };
-    if (typeof fire === 'number' && Number.isFinite(fire)) cleaned.fire = fire;
-    samples.push(cleaned);
-  }
-  return samples;
-}
-
-/** 读取最佳记录；兼容旧的纯 RunResult 格式（无曲线）。 */
-function loadBest(): BestRecord | null {
-  try {
-    const raw = window.localStorage.getItem(BEST_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as unknown;
-    // 旧格式直接存 RunResult：视为 run 且 curve 为空。
-    if (isRunResult(parsed)) return { run: parsed, curve: [] };
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    const record = parsed as Record<string, unknown>;
-    if (!isRunResult(record.run)) return null;
-    return { run: record.run, curve: readCurve(record.curve) };
-  } catch {
-    return null;
-  }
-}
-
-/** 写入最佳记录（结果 + 截断曲线）；隐私模式或配额不足时静默放弃。 */
-function saveBest(record: BestRecord): void {
-  try {
-    window.localStorage.setItem(BEST_KEY, JSON.stringify(record));
-  } catch {
-    // 忽略写入失败。
-  }
 }
 
 /** 把存档写回运行期状态；只刷新入口面板，不改动模拟层。 */
@@ -1061,27 +980,6 @@ function saveCurrent(): void {
   addLog('已保存当前进度。', 'ok');
 }
 
-/** 渲染星级、分数、原因列表、本次/最佳对比与该户型最佳分。 */
-function renderScore(
-  breakdown: ScoreBreakdown,
-  comparison: RunComparison | null,
-  bestScore: number
-): void {
-  const stars = '★'.repeat(breakdown.stars) + '☆'.repeat(3 - breakdown.stars);
-  const versus = comparison
-    ? `本次 vs 最佳：救出 ${comparison.rescuedDelta >= 0 ? '+' : ''}${
-        comparison.rescuedDelta
-      } · 用时 ${comparison.timeDelta >= 0 ? '+' : ''}${comparison.timeDelta.toFixed(
-        1
-      )}s · 峰值暴露 ${comparison.exposureDelta >= 0 ? '+' : ''}${comparison.exposureDelta.toFixed(
-        2
-      )}`
-    : '首次记录，已保存为最佳';
-  out.outcomeScore.innerHTML = `<b class="stars">${stars}</b> ${breakdown.score} 分<div class="reasons">${breakdown.reasons.join(
-    ' · '
-  )}</div><div class="versus">${versus}</div><div class="progress-best">该户型最佳 ${bestScore} 分</div>`;
-}
-
 function end(title: string, body: string): void {
   ended = true;
   out.outcomeTitle.textContent = title;
@@ -1103,30 +1001,26 @@ function end(title: string, body: string): void {
       wrongAgent: run.wrongAgent,
     })
   );
-  const previous = loadBest();
+  const previous = readBest(window.localStorage, BEST_KEY);
   const comparison = previous ? compareRuns(run, previous.run) : null;
   // 首次记录或刷新最佳时，连同截断后的曲线一起写回。
   const record: BestRecord =
     !previous || comparison?.better
       ? { run, curve: trimCurve(exposureSamples, 150) }
       : previous;
-  if (!previous || comparison?.better) saveBest(record);
+  if (!previous || comparison?.better)
+    writeBest(window.localStorage, BEST_KEY, record);
   // 解锁进度按户型记最高分；每日挑战与普通局共用同一份进度。
   progress = recordRun(progress, layout.id, breakdown.score);
   saveProgress(progress);
-  renderScore(breakdown, comparison, progress.best[layout.id]);
-  renderCurve(record.curve);
+  renderScore(out.outcomeScore, breakdown, comparison, progress.best[layout.id]);
+  renderCurve(out.curve, exposureSamples, record.curve);
   // 取最近 6 条动作，逐条给出前后场差异与中文因果解释。
   const debrief = buildDebrief(actions).slice(-6);
-  out.debrief.innerHTML = debrief.length
-    ? debrief
-        .map((entry) => {
-          // 多区域用区域显示名，单区域保持原始房间 id。
-          const room = household ? zoneLabel(household, entry.roomId) : entry.roomId;
-          return `<li><b>${entry.at.toFixed(1)}s</b> ${entry.action} · ${room}<span>${entry.summary}</span></li>`;
-        })
-        .join('')
-    : '<li>没有可复盘的动作。</li>';
+  // 多区域用区域显示名，单区域保持原始房间 id。
+  renderDebrief(out.debrief, debrief, (roomId) =>
+    household ? zoneLabel(household, roomId) : roomId
+  );
   out.outcome.classList.add('show');
   renderZones();
   renderResidents();
@@ -1142,23 +1036,13 @@ let perfElapsed = 0;
 let perfStepMs = 0;
 
 /** 把当前按下的移动键合成 -1/0/1 的方向；没有输入时返回 null。 */
-function moveInput(): { x: number; z: number } | null {
-  let x = 0;
-  let z = 0;
-  if (held.has('w') || held.has('arrowup')) z -= 1;
-  if (held.has('s') || held.has('arrowdown')) z += 1;
-  if (held.has('a') || held.has('arrowleft')) x -= 1;
-  if (held.has('d') || held.has('arrowright')) x += 1;
-  return x === 0 && z === 0 ? null : { x, z };
-}
-
 function frame(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
   if (!ended) {
     // 只有进入当前目标区域后才能自由移动；移动方向由键盘/D-pad 合成。
-    const input = currentRoom === targetRoom() ? moveInput() : null;
+    const input = currentRoom === targetRoom() ? movement.vector() : null;
     const moving = input !== null;
     if (input) moveActor(actor, input.x, input.z, dt);
 
@@ -1228,62 +1112,6 @@ function frame(now: number): void {
   }
 
   requestAnimationFrame(frame);
-}
-
-/** 键盘移动键；统一用小写，和触控 D-pad 共用 held 集合。 */
-const MOVE_KEYS = new Set([
-  'w',
-  'a',
-  's',
-  'd',
-  'arrowup',
-  'arrowdown',
-  'arrowleft',
-  'arrowright',
-]);
-
-window.addEventListener('keydown', (event) => {
-  if (event.ctrlKey || event.metaKey || event.altKey) return;
-  const key = event.key.toLowerCase();
-  if (MOVE_KEYS.has(key)) {
-    // 方向键默认会滚动页面，移动时阻止默认行为。
-    event.preventDefault();
-    held.add(key);
-  }
-  if (event.repeat) return;
-  if (key === '1') takeRoute(0);
-  if (key === '2') takeRoute(1);
-  if (key === '3') takeRoute(2);
-  if (key === 'r') recalcRoutes();
-});
-
-window.addEventListener('keyup', (event) => {
-  const key = event.key.toLowerCase();
-  if (MOVE_KEYS.has(key)) held.delete(key);
-});
-
-/** 触控 D-pad 的按钮方向映射到与键盘相同的键名。 */
-const MOVE_BUTTON_KEYS: Record<string, string> = {
-  up: 'w',
-  left: 'a',
-  down: 's',
-  right: 'd',
-};
-
-for (const button of document.querySelectorAll<HTMLButtonElement>('#move-pad [data-move]')) {
-  const key = MOVE_BUTTON_KEYS[button.dataset.move ?? ''];
-  if (!key) continue;
-  button.addEventListener('pointerdown', (event) => {
-    event.preventDefault();
-    button.setPointerCapture(event.pointerId);
-    held.add(key);
-  });
-  const release = (): void => {
-    held.delete(key);
-  };
-  button.addEventListener('pointerup', release);
-  button.addEventListener('pointercancel', release);
-  button.addEventListener('pointerleave', release);
 }
 
 document.getElementById('routes')!.addEventListener('click', (event) => {
