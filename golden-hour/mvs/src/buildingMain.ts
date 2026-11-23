@@ -1,7 +1,11 @@
 import { clamp01, roomSummary } from './sim/spatial/fields';
 import { FIXED_DT } from './sim/spatial/spread';
-import { createActor, stepActor } from './sim/spatial/actor';
-import { createResident, type ResidentState } from './sim/agents/resident';
+import { createActor, moveActor, stepActor } from './sim/spatial/actor';
+import {
+  createResident,
+  findResident,
+  type ResidentState,
+} from './sim/agents/resident';
 import {
   createCrowd,
   rescueResident,
@@ -61,12 +65,16 @@ function residentAt(
   return resident;
 }
 
+/** 居民 C 初始就躲在远离门侧入口的角落，需玩家靠近搜索才能发现。 */
+const residentC = residentAt('C', 6, 6, 0.22, 0.3);
+residentC.hidden = true;
+
 const crowd = createCrowd(
   def.targetRoom,
   [
     residentAt('A', 2, 5, 1, 0),
     residentAt('B', 2, 2, 0.45, 0.6),
-    residentAt('C', 4, 6, 0.22, 0.3),
+    residentC,
   ],
   def.seed
 );
@@ -94,6 +102,8 @@ let actionSeq = 0;
 const exposureSamples: CurveSample[] = [];
 let lastSampleT = -1;
 let radioCursor = 0;
+/** 当前按下的移动键；键盘与触控 D-pad 共用同一集合。 */
+const held = new Set<string>();
 
 const out = {
   room: document.getElementById('hud-room')!,
@@ -247,7 +257,7 @@ function recalcRoutes(): void {
 function renderRoutes(): void {
   if (currentRoom === targetRoom()) {
     out.routes.innerHTML =
-      '<p class="hint">在目标房间：从居民列表选择牵出或背出。</p>';
+      '<p class="hint">在目标房间：WASD/方向键移动，靠近居民后牵出或背出；角落可能有躲藏者。</p>';
     return;
   }
   if (!routes.length) {
@@ -279,6 +289,7 @@ function renderResidents(): void {
 
   const rows = crowd.residents
     .filter((resident) => !resident.rescued)
+    .filter((resident) => !resident.hidden || findResident(resident, actor))
     .map((resident) => {
       const state = residentVisualState(resident);
       const isDead = state === 'dead';
@@ -300,7 +311,8 @@ function renderResidents(): void {
     })
     .join('');
 
-  out.residents.innerHTML = rows || '<p class="hint">没有待救的居民。</p>';
+  out.residents.innerHTML =
+    rows || '<p class="hint">房间角落可能有居民，靠近搜索。</p>';
 }
 
 let residentsSig = '';
@@ -311,7 +323,7 @@ function residentSignature(): string {
     (resident) =>
       `${resident.id}:${resident.rescued ? 1 : 0}:${resident.dead ? 1 : 0}:${
         resident.mood
-      }:${Math.round(resident.health * 20)}`
+      }:${Math.round(resident.health * 20)}:${findResident(resident, actor) ? 1 : 0}`
   );
   return `${currentRoom}|${ended ? 1 : 0}|${parts.join(',')}`;
 }
@@ -369,9 +381,6 @@ function takeRoute(index: number): void {
   checkOutcome();
 }
 
-/** 建筑入口按“同处一室即可施救”处理：室内逐米位移留到后续阶段。 */
-const ROOM_REACH = 6;
-
 function handleRescue(id: string, verb: RescueVerb): void {
   if (ended) return;
   if (currentRoom !== def.targetRoom) {
@@ -388,8 +397,7 @@ function handleRescue(id: string, verb: RescueVerb): void {
     id,
     actor,
     roomOf(def.targetRoom),
-    verb,
-    ROOM_REACH
+    verb
   );
   const elapsed = crowd.t - t0;
 
@@ -484,15 +492,31 @@ function end(title: string, body: string): void {
 
 let last = performance.now();
 
+/** 把当前按下的移动键合成 -1/0/1 的方向；没有输入时返回 null。 */
+function moveInput(): { x: number; z: number } | null {
+  let x = 0;
+  let z = 0;
+  if (held.has('w') || held.has('arrowup')) z -= 1;
+  if (held.has('s') || held.has('arrowdown')) z += 1;
+  if (held.has('a') || held.has('arrowleft')) x -= 1;
+  if (held.has('d') || held.has('arrowright')) x += 1;
+  return x === 0 && z === 0 ? null : { x, z };
+}
+
 function frame(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
   if (!ended) {
+    // 只有进入目标房间后才能自由移动；移动方向由键盘/D-pad 合成。
+    const input = currentRoom === def.targetRoom ? moveInput() : null;
+    const moving = input !== null;
+    if (input) moveActor(actor, input.x, input.z, dt);
+
     acc += dt;
     while (acc >= FIXED_DT) {
       advanceWorld(FIXED_DT);
-      stepActor(actor, roomOf(currentRoom), FIXED_DT, false);
+      stepActor(actor, roomOf(currentRoom), FIXED_DT, moving);
       acc -= FIXED_DT;
     }
     checkOutcome();
@@ -505,7 +529,8 @@ function frame(now: number): void {
     currentRoom,
     targetRoom(),
     routes[0]?.steps.map((step) => step.id) ?? [],
-    residentMarkers(crowd.residents)
+    residentMarkers(crowd.residents, actor),
+    currentRoom === def.targetRoom ? { x: actor.x, z: actor.z } : undefined
   );
   view.render();
 
@@ -518,14 +543,61 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 
+/** 键盘移动键；统一用小写，和触控 D-pad 共用 held 集合。 */
+const MOVE_KEYS = new Set([
+  'w',
+  'a',
+  's',
+  'd',
+  'arrowup',
+  'arrowdown',
+  'arrowleft',
+  'arrowright',
+]);
+
 window.addEventListener('keydown', (event) => {
-  if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
   const key = event.key.toLowerCase();
+  if (MOVE_KEYS.has(key)) {
+    // 方向键默认会滚动页面，移动时阻止默认行为。
+    event.preventDefault();
+    held.add(key);
+  }
+  if (event.repeat) return;
   if (key === '1') takeRoute(0);
   if (key === '2') takeRoute(1);
   if (key === '3') takeRoute(2);
   if (key === 'r') recalcRoutes();
 });
+
+window.addEventListener('keyup', (event) => {
+  const key = event.key.toLowerCase();
+  if (MOVE_KEYS.has(key)) held.delete(key);
+});
+
+/** 触控 D-pad 的按钮方向映射到与键盘相同的键名。 */
+const MOVE_BUTTON_KEYS: Record<string, string> = {
+  up: 'w',
+  left: 'a',
+  down: 's',
+  right: 'd',
+};
+
+for (const button of document.querySelectorAll<HTMLButtonElement>('#move-pad [data-move]')) {
+  const key = MOVE_BUTTON_KEYS[button.dataset.move ?? ''];
+  if (!key) continue;
+  button.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    button.setPointerCapture(event.pointerId);
+    held.add(key);
+  });
+  const release = (): void => {
+    held.delete(key);
+  };
+  button.addEventListener('pointerup', release);
+  button.addEventListener('pointercancel', release);
+  button.addEventListener('pointerleave', release);
+}
 
 document.getElementById('routes')!.addEventListener('click', (event) => {
   const target = (event.target as HTMLElement).closest('button');

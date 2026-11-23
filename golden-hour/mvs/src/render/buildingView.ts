@@ -9,7 +9,8 @@ export interface BuildingView {
     currentRoom: string,
     targetRoom: string,
     routeLinks: string[],
-    markers?: ResidentMarker[]
+    markers?: ResidentMarker[],
+    playerLocal?: { x: number; z: number }
   ): void;
   render(): void;
   resize(): void;
@@ -18,11 +19,11 @@ export interface BuildingView {
 
 const BASE = [23, 28, 34] as const;
 
-/** 居民标记配色；hidden 由视图决定不画，这里给个占位色。 */
+/** 居民标记配色；是否显示由数据层决定。 */
 const MARKER_COLORS: Record<ResidentVisualState, string> = {
   calm: '#6fbf9a',
   panic: '#e5b567',
-  hidden: '#6fbf9a',
+  hidden: '#c39a7f',
   unconscious: '#e06a4a',
   dead: '#5a2a2a',
   rescued: '#6fbf9a',
@@ -66,7 +67,8 @@ export function createBuildingView(canvas: HTMLCanvasElement): BuildingView {
     currentRoom: string,
     targetRoom: string,
     routeLinks: string[],
-    markers: ResidentMarker[] = []
+    markers: ResidentMarker[] = [],
+    playerLocal?: { x: number; z: number }
   ): void {
     if (!ctx) return;
     const w = canvas.width;
@@ -127,18 +129,27 @@ export function createBuildingView(canvas: HTMLCanvasElement): BuildingView {
 
     const player = centers[currentRoom];
     if (player) {
+      // 目标房间里玩家按局部坐标映射到房间矩形内；否则仍画在房间中心。
+      const playerRect = rects.find((item) => item.id === currentRoom);
+      const px =
+        playerLocal && playerRect
+          ? playerRect.x + markerOffset(playerLocal.x) * playerRect.w
+          : player.x;
+      const py =
+        playerLocal && playerRect
+          ? playerRect.y + markerOffset(playerLocal.z) * playerRect.h
+          : player.y;
       ctx.beginPath();
       ctx.fillStyle = '#3f6f5c';
-      ctx.arc(player.x, player.y, 7 * dpr, 0, Math.PI * 2);
+      ctx.arc(px, py, 7 * dpr, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#e5b567';
       ctx.lineWidth = 2 * dpr;
       ctx.stroke();
     }
 
-    // 居民标记：按房间矩形归一化局部坐标；hidden 不在剖视图上暴露。
+    // 居民标记：按房间矩形归一化局部坐标；未被发现的躲藏者已在数据层过滤。
     for (const marker of markers) {
-      if (marker.state === 'hidden') continue;
       const rect = rects.find((item) => item.id === marker.roomId);
       if (!rect) continue;
       const px = rect.x + markerOffset(marker.x) * rect.w;

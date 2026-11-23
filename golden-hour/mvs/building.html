@@ -247,6 +247,54 @@
         outline: 2px solid var(--accent);
         outline-offset: 2px;
       }
+      /* 触控/键盘通用的移动 D-pad：桌面也显示，但按钮更小。 */
+      #move-pad {
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        display: grid;
+        grid-template-columns: repeat(3, 38px);
+        grid-template-rows: repeat(2, 38px);
+        gap: 6px;
+        padding: 8px;
+      }
+      #move-pad button {
+        width: 38px;
+        height: 38px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--ink);
+        border-radius: 9px;
+        font: 14px/1 var(--sans);
+        cursor: pointer;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      #move-pad button[data-move="up"] {
+        grid-column: 2;
+        grid-row: 1;
+      }
+      #move-pad button[data-move="left"] {
+        grid-column: 1;
+        grid-row: 2;
+      }
+      #move-pad button[data-move="down"] {
+        grid-column: 2;
+        grid-row: 2;
+      }
+      #move-pad button[data-move="right"] {
+        grid-column: 3;
+        grid-row: 2;
+      }
+      #move-pad button:active {
+        background: rgba(229, 181, 103, 0.22);
+        border-color: rgba(229, 181, 103, 0.55);
+      }
+      #move-pad button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
       #outcome {
         position: fixed;
         inset: 0;
@@ -343,6 +391,16 @@
         #outcome button {
           min-height: 44px;
         }
+        #move-pad {
+          grid-template-columns: repeat(3, 48px);
+          grid-template-rows: repeat(2, 48px);
+          gap: 8px;
+        }
+        #move-pad button {
+          width: 48px;
+          height: 48px;
+          font-size: 18px;
+        }
       }
       @media (max-width: 900px) {
         #log,
@@ -365,6 +423,10 @@
           bottom: 14px;
           width: calc(100vw - 28px);
           max-height: 46vh;
+        }
+        /* 窄屏把移动面板抬到路线面板上方，避免互相遮挡。 */
+        #move-pad {
+          bottom: calc(46vh + 24px);
         }
       }
     </style>
@@ -396,8 +458,16 @@
 
     <section class="panel" id="log" aria-live="polite"></section>
 
+    <section class="panel" id="move-pad" aria-label="移动方向键">
+      <button data-move="up" aria-label="向上移动">▲</button>
+      <button data-move="left" aria-label="向左移动">◀</button>
+      <button data-move="down" aria-label="向下移动">▼</button>
+      <button data-move="right" aria-label="向右移动">▶</button>
+    </section>
+
     <section class="panel" id="hint">
       <div><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> 选择路线 · <kbd>R</kbd> 重算 · 点击居民牵出/背出</div>
+      <div><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / 方向键移动 · 触屏用方向键</div>
       <div>风向会改变烟路。</div>
     </section>
 

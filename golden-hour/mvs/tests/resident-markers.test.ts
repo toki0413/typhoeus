@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createResident } from '../src/sim/agents/resident';
+import { createActor } from '../src/sim/spatial/actor';
 import { residentMarkers, residentVisualState } from '../src/render/residents';
 
 describe('居民视图映射', () => {
@@ -43,5 +44,26 @@ describe('居民视图映射', () => {
     expect(marker.x).toBe(-1.875);
     expect(marker.z).toBe(1.875);
     expect(marker.state).toBe('calm');
+  });
+
+  it('躲藏居民距玩家 3m 不显示，1m 时被搜索到', () => {
+    const actor = createActor(0, 0);
+    const far = createResident('r', 3, 0, 'far');
+    far.hidden = true;
+    far.mood = 'hidden';
+    const near = createResident('r', 1, 0, 'near');
+    near.hidden = true;
+    near.mood = 'hidden';
+
+    expect(residentMarkers([far], actor)).toHaveLength(0);
+    expect(residentMarkers([near], actor).map((marker) => marker.id)).toEqual(['near']);
+  });
+
+  it('不传 actor 时仍保留 hidden 居民', () => {
+    const hidden = createResident('r', 3, 0, 'H');
+    hidden.hidden = true;
+    hidden.mood = 'hidden';
+
+    expect(residentMarkers([hidden]).map((marker) => marker.id)).toEqual(['H']);
   });
 });
