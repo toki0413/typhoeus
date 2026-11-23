@@ -330,19 +330,16 @@ function createApp(kit: ReturnType<typeof createScene>): App {
       });
     }
 
-    agents.update(sim);
+    agents.move(paused ? 0 : keyDir || padDir);
+    agents.update(sim, Math.min(raw, 0.25));
 
-    // Once the crew settles at the door, push in for a hero beat; releasing
-    // the shot (open, retry, pause-to-debrief) eases back to the diorama view.
-    if (running && sim.crew.atDoor && !sim.door.opened && !heroArmed) {
-      const focus = agents.crewFocus();
-      if (Math.abs(focus.x) < 0.45) {
-        heroArmed = true;
-        heroAutoRuns += 1;
-        heroCam.trigger(focus);
-      }
+    // 玩家把班组走到门口并停稳后，才推近英雄镜头。
+    if (running && agents.nearDoor() && agents.speed() < 0.12 && !sim.door.opened && !heroArmed) {
+      heroArmed = true;
+      heroAutoRuns += 1;
+      heroCam.trigger(agents.crewFocus());
     }
-    if (sim.door.opened || sim.phase !== 'execute') heroCam.release();
+    if (sim.door.opened || sim.phase !== 'execute' || !agents.nearDoor()) heroCam.release();
     heroCam.update(paused ? 0 : Math.min(raw, 0.25));
     heroLights.key.intensity = 12 * heroCam.strength;
     heroLights.rim.intensity = 7 * heroCam.strength;
@@ -351,6 +348,15 @@ function createApp(kit: ReturnType<typeof createScene>): App {
       heroUiOn = heroOn;
       document.body.dataset.hero = heroOn ? 'on' : 'off';
     }
+
+    moveUi.update(
+      !paused &&
+        sim.phase === 'execute' &&
+        sim.crew.atDoor &&
+        !sim.door.opened &&
+        !agents.nearDoor(),
+      Math.abs(agents.crewX())
+    );
 
     smoke.update(sim);
     doorMesh.update(sim);
@@ -361,7 +367,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     if (sim.door.opened && !debriefShown && hingeRate > 0.02) {
       audio.setDoorMotion(hingeRate);
     }
-    doorUi.update(sim);
+    doorUi.update(sim, agents.nearDoor());
     actions.update(sim);
     incidents.update(sim);
     radio.update(sim);

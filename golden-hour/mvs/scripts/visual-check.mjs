@@ -77,20 +77,29 @@ try {
   check('HUD 显示现场数据', hudReady);
 
   await page.keyboard.press('t');
-  // 无头环境会节流 rAF，强制推进若干帧让班组走到门口再截图。
-  await page.evaluate(
-    () =>
-      new Promise((resolve) => {
-        let frames = 0;
-        const step = () => {
-          frames += 1;
-          if (frames > 24) resolve();
-          else requestAnimationFrame(step);
-        };
-        requestAnimationFrame(step);
-      })
-  );
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  const mobile = await page
+    .waitForFunction(() => window.__gh?.agents?.mobile?.() === true, { timeout: 30000 })
+    .then(() => true)
+    .catch(() => false);
+  check('班组抵达二层并可操控', mobile);
+
+  await page.keyboard.down('d');
+  const walked = await page
+    .waitForFunction(() => window.__gh?.agents?.nearDoor?.() === true, { timeout: 45000 })
+    .then(() => true)
+    .catch(() => false);
+  await page.keyboard.up('d');
+  if (!walked) {
+    const state = await page.evaluate(() => ({
+      run: document.body.dataset.run,
+      mobile: window.__gh?.agents?.mobile?.(),
+      x: window.__gh?.agents?.crewX?.(),
+      speed: window.__gh?.agents?.speed?.(),
+      near: window.__gh?.agents?.nearDoor?.(),
+    }));
+    console.log('WALK STATE', JSON.stringify(state));
+  }
+  check('操控班组走到 202 门口', walked);
 
   const heroAuto = await page
     .waitForFunction(() => (window.__gh?.hero?.autoRuns?.() ?? 0) >= 1, {

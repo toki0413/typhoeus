@@ -451,8 +451,8 @@ export function createAgents(scene: THREE.Scene): {
         dtIn === undefined
           ? lastT === 0
             ? 0
-            : Math.min(0.1, Math.max(0, s.t - lastT))
-          : Math.max(0, Math.min(0.1, dtIn));
+            : Math.min(0.25, Math.max(0, s.t - lastT))
+          : Math.max(0, Math.min(0.25, dtIn));
       lastT = s.t;
 
       const targetFloor = s.crew.order
