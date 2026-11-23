@@ -2043,6 +2043,18 @@ git commit -m "feat(mvs): deterministic building camera shots"
 
 ### Phase 2 — 工具与多解矩阵
 
+**执行状态（2026-11-23）：Phase 2 核心已完成。**
+
+| 任务 | 状态 | 提交 |
+| --- | --- | --- |
+| P2.1 工具资源模型 | 完成 | `0a99975`、`f3f04b0` |
+| P2.2/P2.3 多解矩阵与特殊工具 | 完成 | `ab99575`、`a4b949f` |
+| P2.4 工具轮盘 | 完成 | `81bc9d0`、`902b265` |
+
+已落地：17 个动词（门 4 / 窗 3 / 墙 3 / 火 5 / 居民 3）、携带工具重量与装备、
+按次消耗与余量判断、热像扫描、排烟、破拆、旧工具面板替换为轮盘。
+梯子/绳已建模，但路线接入留到后续阶段。
+
 **新文件：**
 - `src/sim/interaction/tools.ts`：`ToolId = 'hose' | 'extinguisher' | 'axe' | 'fan' | 'thermal' | 'ladder' | 'rope'`
 - `src/sim/interaction/multiSolution.ts`：`Obstacle = 'door' | 'window' | 'wall' | 'fire' | 'occupant'`，`verbsFor(obstacle): Verb[]`
