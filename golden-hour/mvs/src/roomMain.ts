@@ -12,14 +12,23 @@ import { inspectTool, measureOpening, openOpening, spray } from './sim/spatial/v
 import { type AgentId } from './sim/spatial/agents';
 import { useImprovised } from './sim/spatial/improvised';
 import { createRoomView } from './render/roomView';
+import { createActor, moveActor, stepActor } from './sim/spatial/actor';
+import {
+  attachOccupant,
+  createOccupant,
+  extractOccupant,
+  stepOccupant,
+  syncCarriedOccupant,
+} from './sim/spatial/rescue';
 
 const canvas = document.getElementById('room-canvas') as HTMLCanvasElement;
 const view = createRoomView(canvas);
 
 let room: RoomState = createRoom();
-let player = { x: -2.35, z: 0 };
+const actor = createActor();
+const occupant = createOccupant();
+let unconsciousLogged = false;
 let lowStance = false;
-let exposure = { smoke: 0, heat: 0 };
 let lastBackdraft: number | null = null;
 let ended = false;
 let lastLesson = '先贴门测温，再决定要不要开。';
@@ -114,7 +123,7 @@ function nearestFire(gx: number, gy: number): { x: number; y: number } | null {
 }
 
 function playerGrid(): { x: number; y: number } {
-  const g = view.worldToGrid(player.x, player.z);
+  const g = view.worldToGrid(actor.x, actor.z);
   return {
     x: Math.min(room.config.cols - 1, Math.max(0, g.x)),
     y: Math.min(room.config.rows - 1, Math.max(0, g.y)),
@@ -139,7 +148,7 @@ function action(name: string): void {
   }
 
   if (name === 'door') {
-    if (Math.abs(player.x + 3) > 1.7 || Math.abs(player.z) > 1.3) {
+    if (Math.abs(actor.x + 3) > 1.7 || Math.abs(actor.z) > 1.3) {
       addLog('离门太远，先走到门边。', 'info');
       return;
     }
@@ -156,7 +165,7 @@ function action(name: string): void {
   }
 
   if (name === 'window') {
-    if (Math.abs(player.x - 3) > 1.7 || Math.abs(player.z) > 1.3) {
+    if (Math.abs(actor.x - 3) > 1.7 || Math.abs(actor.z) > 1.3) {
       addLog('离窗太远，先走到窗边。', 'info');
       return;
     }
@@ -209,6 +218,27 @@ function action(name: string): void {
     addLog(res.lesson, 'lesson');
     return;
   }
+
+  if (name === 'carry') {
+    if (occupant.carried) {
+      const exit = Math.abs(actor.x + 3) < Math.abs(actor.x - 3) ? 'door' : 'window';
+      const ok = extractOccupant(occupant, actor, room, exit);
+      addLog(
+        ok ? '把居民带出火场，任务完成。' : '先把人背到打开的门或窗边再撤。',
+        ok ? 'lesson' : 'info'
+      );
+    } else if (attachOccupant(actor, occupant)) {
+      addLog(
+        occupant.mood === 'unconscious'
+          ? '居民已经失去意识，只能硬背，移动会明显变慢。'
+          : '背起居民，移动会明显变慢。',
+        'lesson'
+      );
+    } else {
+      addLog('离居民太远，先靠近再背。', 'info');
+    }
+    return;
+  }
 }
 
 function setBar(bar: HTMLElement, value: number): void {
@@ -218,7 +248,7 @@ function setBar(bar: HTMLElement, value: number): void {
 function updateHud(): void {
   const s = roomSummary(room);
   const risk = computeBackdraftRisk(room);
-  const self = clamp01(exposure.smoke + exposure.heat);
+  const self = clamp01(actor.exposure.smoke + actor.exposure.heat);
   const doorC = Math.round(20 + room.openings.door.temp * 700);
 
   out.oxygen.textContent = `${Math.round(s.oxygen * 100)}%`;
@@ -238,15 +268,26 @@ function updateHud(): void {
 
 function checkOutcome(): void {
   if (ended) return;
-  const s = roomSummary(room);
-  const self = exposure.smoke + exposure.heat;
 
-  if (self >= 1) {
-    end('你被烟和热压倒了', '暴露超限。低姿、湿毛巾、先排烟都能降低吸入；别在浓烟里硬撑。');
+  if (actor.downed) {
+    end(
+      '你被烟和热压倒了',
+      '暴露超限。低姿、湿毛巾、先排烟都能降低吸入；别在浓烟里硬撑。'
+    );
     return;
   }
-  if (room.t > 8 && s.fire < 0.015 && s.smoke < 0.5) {
-    end('火势控制住了', '你把这个房间的火压到可控范围。复盘时可以对比：是先冷却、先排烟，还是直接灭火源。');
+
+  if (occupant.rescued) {
+    end(
+      '居民已救出',
+      `用时 ${room.t.toFixed(1)} 秒，水耗 ${room.stats.waterUsed.toFixed(2)}，烟排出 ${room.stats.smokeVented.toFixed(2)}。`
+    );
+    return;
+  }
+
+  if (occupant.health <= 0 && occupant.mood === 'unconscious' && !unconsciousLogged) {
+    unconsciousLogged = true;
+    addLog('居民失去意识，尽快背出去。', 'danger');
   }
 }
 
@@ -258,27 +299,24 @@ function end(title: string, body: string): void {
 }
 
 function update(dt: number): void {
-  const speed = lowStance ? 0.85 : 1.6;
   let dx = 0;
   let dz = 0;
   if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
   if (keys.has('d') || keys.has('arrowright')) dx += 1;
   if (keys.has('w') || keys.has('arrowup')) dz -= 1;
   if (keys.has('s') || keys.has('arrowdown')) dz += 1;
-  const len = Math.hypot(dx, dz);
-  if (len > 0) {
-    player.x = Math.max(-2.6, Math.min(2.6, player.x + (dx / len) * speed * dt));
-    player.z = Math.max(-2.6, Math.min(2.6, player.z + (dz / len) * speed * dt));
-  }
 
-  const g = playerGrid();
-  const cell = cellAt(room, g.x, g.y);
-  exposure.smoke += cell.smoke * (lowStance ? 0.16 : 0.42) * dt;
-  exposure.heat += cell.heat * 0.22 * dt;
+  actor.stance = lowStance ? 'low' : 'upright';
+  const moving = Math.hypot(dx, dz) > 0;
+  if (moving) moveActor(actor, dx, dz, dt);
+
+  syncCarriedOccupant(occupant, actor);
+  stepActor(actor, room, dt, moving);
+  stepOccupant(occupant, room, dt);
 
   if (room.backdraftAt !== null && room.backdraftAt !== lastBackdraft) {
     lastBackdraft = room.backdraftAt;
-    exposure.heat = clamp01(exposure.heat + 0.55);
+    actor.exposure.heat = clamp01(actor.exposure.heat + 0.55);
     addLog('回燃！热浪和烟一起涌出来，你被迫后退。', 'danger');
   }
 }
@@ -300,7 +338,7 @@ function frame(now: number): void {
     checkOutcome();
   }
 
-  view.sync(room, player, dt);
+  view.sync(room, actor, dt, occupant);
   view.render();
 
   if (now - lastHud > 100) {
@@ -324,6 +362,7 @@ window.addEventListener('keydown', (event) => {
   if (k === '4') action('wetBlanket');
   if (k === '5') action('powerCut');
   if (k === '6') action('closeDoor');
+  if (k === 'c') action('carry');
 });
 
 window.addEventListener('keyup', (event) => {

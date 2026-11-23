@@ -7,7 +7,12 @@ import { ROOM_SIZE_M, worldToGrid, gridToWorld } from '../sim/spatial/coords';
  * 门/窗按开合状态摆动，火源用点光。只负责画面，不碰模拟。
  */
 export interface RoomView {
-  sync(state: RoomState, player: { x: number; z: number }, dt: number): void;
+  sync(
+    state: RoomState,
+    actor: { x: number; z: number },
+    dt: number,
+    occupant?: { x: number; z: number; rescued: boolean }
+  ): void;
   render(): void;
   resize(): void;
   worldToGrid(wx: number, wz: number): { x: number; y: number };
@@ -21,6 +26,7 @@ const COLORS = {
   fire: new THREE.Color(0xff7a1a),
   smoke: new THREE.Color(0x4a4f55),
   water: new THREE.Color(0x2a6296),
+  steam: new THREE.Color(0xbfc7cf),
 };
 
 export function createRoomView(canvas: HTMLCanvasElement): RoomView {
@@ -166,7 +172,22 @@ export function createRoomView(canvas: HTMLCanvasElement): RoomView {
   player.add(helmet);
   scene.add(player);
 
-  function sync(state: RoomState, p: { x: number; z: number }, _dt: number): void {
+  // 被困居民：侧躺的胶囊体
+  const occupantMesh = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.2, 0.75, 6, 12),
+    new THREE.MeshStandardMaterial({ color: 0x9c6b58, roughness: 0.85 })
+  );
+  occupantMesh.rotation.z = Math.PI / 2;
+  occupantMesh.position.y = 0.22;
+  occupantMesh.castShadow = true;
+  scene.add(occupantMesh);
+
+  function sync(
+    state: RoomState,
+    p: { x: number; z: number },
+    _dt: number,
+    occupant?: { x: number; z: number; rescued: boolean }
+  ): void {
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
         const cell = state.cells[y * cols + x];
@@ -176,6 +197,7 @@ export function createRoomView(canvas: HTMLCanvasElement): RoomView {
         color.lerp(COLORS.fire, clamp01(cell.fire * 1.1));
         color.lerp(COLORS.smoke, clamp01(cell.smoke * 0.55));
         color.lerp(COLORS.water, clamp01(cell.water * 0.65));
+        color.lerp(COLORS.steam, clamp01(cell.steam * 0.5));
         mesh.material.color.copy(color);
       }
     }
@@ -200,6 +222,11 @@ export function createRoomView(canvas: HTMLCanvasElement): RoomView {
     windowPane.visible = !state.openings.window.open && !state.openings.window.broken;
 
     player.position.set(p.x, 0, p.z);
+
+    occupantMesh.visible = !!occupant && !occupant.rescued;
+    if (occupant && !occupant.rescued) {
+      occupantMesh.position.set(occupant.x, 0.22, occupant.z);
+    }
   }
 
   function resize(): void {
@@ -227,15 +254,20 @@ function cellColor(c: {
   fire: number;
   smoke: number;
   water: number;
+  steam: number;
 }): string {
   const heat = clamp01(c.heat) * 0.8;
   const fire = clamp01(c.fire) * 1.1;
   const smoke = clamp01(c.smoke) * 0.35;
   const water = clamp01(c.water) * 0.5;
+  const steam = clamp01(c.steam) * 0.5;
   const base = FALLBACK_BASE;
-  const r = Math.min(255, base[0] + 159 * heat + 232 * fire + 51 * smoke + 19 * water);
-  const g = Math.max(0, Math.min(255, base[1] + 30 * heat + 94 * fire + 51 * smoke + 70 * water));
-  const b = Math.max(0, Math.min(255, base[2] + 4 * heat + 4 * fire + 51 * smoke + 116 * water));
+  let r = Math.min(255, base[0] + 159 * heat + 232 * fire + 51 * smoke + 19 * water);
+  let g = Math.max(0, Math.min(255, base[1] + 30 * heat + 94 * fire + 51 * smoke + 70 * water));
+  let b = Math.max(0, Math.min(255, base[2] + 4 * heat + 4 * fire + 51 * smoke + 116 * water));
+  r += (191 - r) * steam;
+  g += (199 - g) * steam;
+  b += (207 - b) * steam;
   return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
 }
 
@@ -260,7 +292,12 @@ function createFallbackView(
   resize();
   window.addEventListener('resize', resize);
 
-  function sync(state: RoomState, player: { x: number; z: number }): void {
+  function sync(
+    state: RoomState,
+    player: { x: number; z: number },
+    _dt?: number,
+    occupant?: { x: number; z: number; rescued: boolean }
+  ): void {
     if (!ctx) return;
     const w = canvas.width;
     const h = canvas.height;
@@ -297,6 +334,16 @@ function createFallbackView(
     ctx.strokeStyle = '#e5b567';
     ctx.lineWidth = 2;
     ctx.stroke();
+
+    // 被困居民（未救出时显示）
+    if (occupant && !occupant.rescued) {
+      const ox = originX + ((occupant.x + size / 2) / size) * board;
+      const oy = originY + ((occupant.z + size / 2) / size) * board;
+      ctx.beginPath();
+      ctx.fillStyle = '#c39a7f';
+      ctx.arc(ox, oy, cell * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // 烟层整体
     let smoke = 0;
