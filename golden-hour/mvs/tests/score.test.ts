@@ -48,6 +48,17 @@ describe('单局评分', () => {
     expect(scoreRun(run({ wrongAgent: 2 })).score).toBeLessThan(scoreRun(run()).score);
   });
 
+  it('带区域数据时给出完成区域原因且分数不变', () => {
+    const withZones = scoreRun(run({ zonesDone: 2, zonesTotal: 3 }));
+    expect(withZones.reasons).toContain('完成 2/3 区域');
+    expect(withZones.score).toBe(scoreRun(run()).score);
+  });
+
+  it('不传区域数据时不出现区域原因', () => {
+    const breakdown = scoreRun(run());
+    expect(breakdown.reasons.some((reason) => reason.includes('区域'))).toBe(false);
+  });
+
   it('compareRuns 给出 better 与四个差值', () => {
     const current = run();
     const best = run({

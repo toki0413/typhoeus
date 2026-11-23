@@ -62,6 +62,26 @@ export const RADIO_LINES: NarrativeLine[] = [
   },
 ];
 
+/** 进入区域时的无线电提示。 */
+export function zoneEnterLine(label: string): NarrativeLine {
+  return {
+    at: 0,
+    role: 'radio',
+    speaker: '林队',
+    text: `进入 ${label}，先看门缝和烟压。`,
+  };
+}
+
+/** 区域处理完时的无线电提示。 */
+export function zoneDoneLine(label: string): NarrativeLine {
+  return {
+    at: 0,
+    role: 'radio',
+    speaker: '林队',
+    text: `${label} 处理完，报一下还剩几个人。`,
+  };
+}
+
 /** 取截至 t 的全部提示（含 t 当时），不修改原数组。 */
 export function linesUpTo(lines: NarrativeLine[], t: number): NarrativeLine[] {
   return lines.filter((line) => line.at <= t);

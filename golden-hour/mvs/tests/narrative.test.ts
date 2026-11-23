@@ -4,6 +4,8 @@ import {
   RADIO_LINES,
   linesBetween,
   linesUpTo,
+  zoneDoneLine,
+  zoneEnterLine,
   type NarrativeLine,
 } from '../src/content/narrative';
 
@@ -47,6 +49,18 @@ describe('叙事无线电', () => {
     expect(between[0].at).toBe(20);
   });
 
+  it('区域进退无线电带区域名，角色为无线电且内容不同', () => {
+    const enter = zoneEnterLine('201 卧室');
+    const done = zoneDoneLine('201 卧室');
+
+    for (const line of [enter, done]) {
+      expect(line.role).toBe('radio');
+      expect(line.speaker.length).toBeGreaterThan(0);
+      expect(line.text).toContain('201 卧室');
+    }
+    expect(enter.text).not.toBe(done.text);
+  });
+
   it('辅助函数不修改原数组', () => {
     const snapshot = RADIO_LINES.map((line) => ({ ...line }));
     const length = RADIO_LINES.length;
@@ -54,6 +68,8 @@ describe('叙事无线电', () => {
 
     linesUpTo(RADIO_LINES, 20);
     linesBetween(RADIO_LINES, 8, 35);
+    zoneEnterLine('201 卧室');
+    zoneDoneLine('201 卧室');
 
     expect(RADIO_LINES).toHaveLength(length);
     expect(RADIO_LINES[0]).toBe(first);

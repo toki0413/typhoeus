@@ -14,6 +14,9 @@ export interface RunResult {
   peakExposure: number;
   wrongAgent: number;
   airLeft: number;
+  /** 多区域模式已完成区域数与总数；单区域不填。 */
+  zonesDone?: number;
+  zonesTotal?: number;
 }
 
 export interface ScoreBreakdown {
@@ -46,6 +49,9 @@ export function scoreRun(result: RunResult): ScoreBreakdown {
   const stars: 1 | 2 | 3 = score >= 80 ? 3 : score >= 55 ? 2 : 1;
 
   const reasons = [`救出 ${result.rescued}/${result.total}`];
+  if (result.zonesTotal !== undefined && result.zonesTotal > 0) {
+    reasons.push(`完成 ${result.zonesDone ?? 0}/${result.zonesTotal} 区域`);
+  }
   let clean = true;
   if (result.lost > 0) {
     reasons.push(`失去 ${result.lost} 人`);

@@ -56,7 +56,12 @@ import {
 } from './sim/events/director';
 import { sampleRoom, buildDebrief, type ActionRecord } from './eval/causal';
 import { buildCurvePaths, trimCurve, type CurveSample } from './eval/curves';
-import { BRIEFING, RADIO_LINES } from './content/narrative';
+import {
+  BRIEFING,
+  RADIO_LINES,
+  zoneDoneLine,
+  zoneEnterLine,
+} from './content/narrative';
 import { findRoutes, type Route } from './sim/nav/graph';
 import { travelRoute } from './sim/nav/travel';
 import { createBuildingView } from './render/buildingView';
@@ -332,7 +337,8 @@ function flushZoneEvents(): void {
 
   for (; zoneEventCursor < household.events.length; zoneEventCursor++) {
     const event = household.events[zoneEventCursor];
-    addLog(event.detail, 'info');
+    const line = zoneDoneLine(zoneLabel(household, event.roomId));
+    addLog(`【${line.speaker}】${line.text}`, 'info');
   }
 
   if (household.activeRoomId === zoneWatchRoom) return;
@@ -343,7 +349,10 @@ function flushZoneEvents(): void {
   refreshTools();
   updateHud();
   if (household.activeRoomId) {
-    addLog('前往 ' + zoneLabel(household, household.activeRoomId), 'info');
+    const label = zoneLabel(household, household.activeRoomId);
+    addLog('前往 ' + label, 'info');
+    const line = zoneEnterLine(label);
+    addLog(`【${line.speaker}】${line.text}`, 'info');
   }
 }
 
@@ -831,6 +840,8 @@ function collectRun(): RunResult {
       peakExposure: clamp01(peak),
       wrongAgent,
       airLeft: actor.air,
+      zonesDone: summary.done,
+      zonesTotal: household.zones.length,
     };
   }
 
@@ -1015,10 +1026,11 @@ function end(title: string, body: string): void {
   const debrief = buildDebrief(actions).slice(-6);
   out.debrief.innerHTML = debrief.length
     ? debrief
-        .map(
-          (entry) =>
-            `<li><b>${entry.at.toFixed(1)}s</b> ${entry.action} · ${entry.roomId}<span>${entry.summary}</span></li>`
-        )
+        .map((entry) => {
+          // 多区域用区域显示名，单区域保持原始房间 id。
+          const room = household ? zoneLabel(household, entry.roomId) : entry.roomId;
+          return `<li><b>${entry.at.toFixed(1)}s</b> ${entry.action} · ${room}<span>${entry.summary}</span></li>`;
+        })
         .join('')
     : '<li>没有可复盘的动作。</li>';
   out.outcome.classList.add('show');
