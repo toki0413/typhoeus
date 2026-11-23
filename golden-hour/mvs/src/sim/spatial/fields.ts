@@ -33,6 +33,8 @@ export interface Cell {
   oxygen: number;
   /** 水膜 0..1，会持续抑制燃烧并带走热量 */
   water: number;
+  /** 蒸汽 0..1：水遇高温产生，降低能见度 */
+  steam: number;
   /** 结构完整度 1..0 */
   structure: number;
   /** 可燃性 0..1 */
@@ -144,6 +146,7 @@ function emptyCell(): Cell {
     smoke: 0,
     oxygen: 0.95,
     water: 0,
+    steam: 0,
     structure: 1,
     combustibility: 0,
     smokeYield: 0,
@@ -256,6 +259,8 @@ export function roomSummary(state: RoomState): {
   fire: number;
   heat: number;
   smoke: number;
+  steam: number;
+  visibility: number;
   oxygen: number;
   fuel: number;
   structure: number;
@@ -264,6 +269,7 @@ export function roomSummary(state: RoomState): {
   let fire = 0;
   let heat = 0;
   let smoke = 0;
+  let steam = 0;
   let oxygen = 0;
   let fuel = 0;
   let structure = 0;
@@ -271,14 +277,19 @@ export function roomSummary(state: RoomState): {
     fire += c.fire;
     heat += c.heat;
     smoke += c.smoke;
+    steam += c.steam;
     oxygen += c.oxygen;
     fuel += c.fuel;
     structure += c.structure;
   }
+  const avgSmoke = smoke / n;
+  const avgSteam = steam / n;
   return {
     fire: fire / n,
     heat: heat / n,
-    smoke: smoke / n,
+    smoke: avgSmoke,
+    steam: avgSteam,
+    visibility: clamp01(1 - avgSmoke * 0.6 - avgSteam * 0.4),
     oxygen: oxygen / n,
     fuel: fuel / n,
     structure: structure / n,

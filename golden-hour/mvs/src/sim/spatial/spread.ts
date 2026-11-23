@@ -76,10 +76,12 @@ function diffuse(state: RoomState, dt: number): void {
   const smoke = new Float32Array(n);
   const oxygen = new Float32Array(n);
   const heat = new Float32Array(n);
+  const steam = new Float32Array(n);
 
   const kSmoke = Math.min(0.9, SMOKE_DIFFUSION * dt);
   const kOxy = Math.min(0.9, OXYGEN_DIFFUSION * dt);
   const kHeat = Math.min(0.9, HEAT_DIFFUSION * dt);
+  const kSteam = Math.min(0.9, 1.4 * dt);
 
   for (let y = 0; y < config.rows; y++) {
     for (let x = 0; x < config.cols; x++) {
@@ -88,7 +90,9 @@ function diffuse(state: RoomState, dt: number): void {
       let sAcc = c.smoke;
       let oAcc = c.oxygen;
       let hAcc = c.heat;
+      let stAcc = c.steam;
       let count = 1;
+
       for (const [dx, dy] of [
         [1, 0],
         [-1, 0],
@@ -102,11 +106,14 @@ function diffuse(state: RoomState, dt: number): void {
         sAcc += nb.smoke;
         oAcc += nb.oxygen;
         hAcc += nb.heat;
+        stAcc += nb.steam;
         count += 1;
       }
+
       smoke[i] = clamp01(c.smoke + (sAcc / count - c.smoke) * kSmoke);
       oxygen[i] = clamp01(c.oxygen + (oAcc / count - c.oxygen) * kOxy);
       heat[i] = clamp01(c.heat + (hAcc / count - c.heat) * kHeat);
+      steam[i] = clamp01(c.steam + (stAcc / count - c.steam) * kSteam);
     }
   }
 
@@ -114,6 +121,7 @@ function diffuse(state: RoomState, dt: number): void {
     cells[i].smoke = smoke[i];
     cells[i].oxygen = oxygen[i];
     cells[i].heat = heat[i];
+    cells[i].steam = steam[i];
   }
 }
 
@@ -181,10 +189,19 @@ function burn(state: RoomState, dt: number): void {
 
 function applyWater(state: RoomState, dt: number): void {
   for (const c of state.cells) {
-    if (c.water <= 0) continue;
-    c.fire = clamp01(c.fire - c.water * 0.9 * dt);
-    c.heat = clamp01(c.heat - c.water * 0.5 * dt);
-    c.water = Math.max(0, c.water - 0.12 * dt);
+    if (c.water > 0) {
+      if (c.heat > 0.1) {
+        const vapor = c.water * (c.heat - 0.1) * 1.8 * dt;
+        c.steam = clamp01(c.steam + vapor);
+        c.heat = clamp01(c.heat - vapor * 0.6);
+      }
+
+      c.fire = clamp01(c.fire - c.water * 0.9 * dt);
+      c.heat = clamp01(c.heat - c.water * 0.5 * dt);
+      c.water = Math.max(0, c.water - 0.12 * dt);
+    }
+
+    c.steam = Math.max(0, c.steam - c.steam * 0.12 * dt);
   }
 }
 
