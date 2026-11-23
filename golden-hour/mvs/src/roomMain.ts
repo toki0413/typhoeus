@@ -5,13 +5,18 @@ import {
   createRoom,
   roomSummary,
   type RoomState,
-  type ToolKey,
 } from './sim/spatial/fields';
 import { FIXED_DT, stepRoom } from './sim/spatial/spread';
 import { gridToWorld } from './sim/spatial/coords';
-import { inspectTool, measureOpening, openOpening, spray } from './sim/spatial/verbs';
-import { type AgentId } from './sim/spatial/agents';
+import { measureOpening, openOpening } from './sim/spatial/verbs';
 import { useImprovised } from './sim/spatial/improvised';
+import {
+  availableVerbs,
+  executeVerb,
+  type Obstacle,
+} from './sim/interaction/multiSolution';
+import { createToolLoadout } from './sim/interaction/tools';
+import { createToolWheel } from './ui/toolWheel';
 import { createRoomView } from './render/roomView';
 import { createActor, moveActor, stepActor } from './sim/spatial/actor';
 import {
@@ -25,6 +30,10 @@ import {
 
 const canvas = document.getElementById('room-canvas') as HTMLCanvasElement;
 const view = createRoomView(canvas);
+
+const loadout = createToolLoadout();
+const wheelRoot = document.getElementById('wheel')!;
+const wheel = createToolWheel(wheelRoot, loadout, (verbId) => runVerb(verbId));
 
 let room: RoomState = createRoom();
 const actor = createActor();
@@ -52,21 +61,11 @@ const out = {
   barRisk: document.getElementById('bar-risk')!,
   barDoor: document.getElementById('bar-door')!,
   barSelf: document.getElementById('bar-self')!,
-  tools: document.getElementById('tool-list')!,
   log: document.getElementById('log')!,
   outcome: document.getElementById('outcome')!,
   outcomeTitle: document.getElementById('outcome-title')!,
   outcomeBody: document.getElementById('outcome-body')!,
 };
-
-const TOOL_ROWS: { key: ToolKey; label: string }[] = [
-  { key: 'water', label: '水枪 / 水带' },
-  { key: 'dryPowder', label: 'ABC 干粉' },
-  { key: 'co2', label: '二氧化碳' },
-  { key: 'foam', label: '泡沫' },
-  { key: 'wetChemical', label: '湿化学（F 类）' },
-  { key: 'sand', label: '干沙 / 覆盖' },
-];
 
 function addLog(text: string, kind: 'info' | 'lesson' | 'danger' = 'info'): void {
   logs = [{ text, kind }, ...logs].slice(0, 6);
@@ -81,30 +80,7 @@ function renderLog(): void {
 }
 
 function renderTools(): void {
-  out.tools.innerHTML = TOOL_ROWS.map((row) => {
-    const info = inspectTool(room, row.key);
-    const pct = Math.round(info.charge * 100);
-    const tag =
-      info.condition === 'ok'
-        ? `<span class="tag">${pct}%</span>`
-        : `<span class="tag bad">${conditionText(info.condition)}</span>`;
-    return `<div class="tool"><div>${row.label}<br><small>${info.advice}</small></div>${tag}</div>`;
-  }).join('');
-}
-
-function conditionText(condition: string): string {
-  switch (condition) {
-    case 'expired':
-      return '已过期';
-    case 'depressurized':
-      return '压力不足';
-    case 'broken':
-      return '破损';
-    case 'empty':
-      return '空';
-    default:
-      return '可用';
-  }
+  wheel.refresh();
 }
 
 function nearestFire(gx: number, gy: number): { x: number; y: number } | null {
@@ -130,6 +106,40 @@ function playerGrid(): { x: number; y: number } {
     x: Math.min(room.config.cols - 1, Math.max(0, g.x)),
     y: Math.min(room.config.rows - 1, Math.max(0, g.y)),
   };
+}
+
+function verbTarget(verbId: string): { x: number; y: number } {
+  if (verbId.startsWith('door-')) {
+    return { x: room.openings.door.x, y: room.openings.door.y };
+  }
+  if (verbId.startsWith('window-')) {
+    return { x: room.openings.window.x, y: room.openings.window.y };
+  }
+  const g = playerGrid();
+  if (verbId.startsWith('fire-')) {
+    return nearestFire(g.x, g.y) ?? g;
+  }
+  return g;
+}
+
+function runVerb(verbId: string): void {
+  if (ended) return;
+  const result = executeVerb(verbId, {
+    room,
+    loadout,
+    target: verbTarget(verbId),
+    actor,
+    occupant,
+  });
+  addLog(result.lesson, result.ok ? 'lesson' : 'danger');
+  if (result.scan) {
+    addLog(
+      `热像仪：${result.scan.x},${result.scan.y} 热度 ${Math.round(result.scan.heat * 100)}%${result.scan.throughWall ? '（隔墙）' : ''}`,
+      'lesson'
+    );
+  }
+  wheel.refresh();
+  checkOutcome();
 }
 
 function nearOpening(id: 'door' | 'window', range = 1.7): boolean {
@@ -185,32 +195,18 @@ function action(name: string): void {
     return;
   }
 
-  if (name === 'water' || name === 'dryPowder' || name === 'co2') {
-    const target = nearestFire(g.x, g.y);
-    if (!target) {
-      addLog('附近没有明火，先把周围降降温。', 'info');
-      return;
-    }
-    const dist = Math.hypot(target.x - g.x, target.y - g.y);
-    if (dist > 4) {
-      addLog('火点太远，需要靠近再喷。', 'info');
-      return;
-    }
-    const agent = name as AgentId;
-    const res = spray(room, agent, target.x, target.y, { radius: 1.8, amount: 0.24 });
-    addLog(res.lesson, res.misagent ? 'danger' : 'lesson');
-    renderTools();
+  if (name === 'water') {
+    runVerb('fire-water');
+    return;
+  }
+
+  if (name === 'dryPowder' || name === 'co2') {
+    runVerb('fire-powder');
     return;
   }
 
   if (name === 'wetBlanket') {
-    const target = nearestFire(g.x, g.y);
-    if (!target) {
-      addLog('没有火需要覆盖。', 'info');
-      return;
-    }
-    const res = useImprovised(room, 'wetBlanket', target.x, target.y);
-    addLog(res.lesson, res.ok ? 'lesson' : 'danger');
+    runVerb('fire-smother');
     return;
   }
 
@@ -221,8 +217,7 @@ function action(name: string): void {
   }
 
   if (name === 'closeDoor') {
-    const res = useImprovised(room, 'closeDoor', g.x, g.y);
-    addLog(res.lesson, 'lesson');
+    runVerb('fire-isolate');
     return;
   }
 
@@ -363,6 +358,7 @@ window.addEventListener('keydown', (event) => {
   if (k === 'q') action('measure');
   if (k === 'e') action('door');
   if (k === 'r') action('window');
+  if (k === 't') runVerb('thermal-scan');
   if (k === '1') action('water');
   if (k === '2') action('dryPowder');
   if (k === '3') action('co2');

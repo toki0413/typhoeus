@@ -95,36 +95,20 @@
         color: var(--ink);
         text-align: right;
       }
-      #tools {
-        top: 14px;
-        right: 14px;
-        width: 260px;
+      #wheel { top: 14px; right: 14px; width: 280px; }
+      #wheel h2 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.04em; font-weight: 600; }
+      .tool-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+      .tool-chip { font: 11px/1 var(--mono); color: var(--ok); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+      .tool-chip.bad { color: var(--danger); }
+      .wheel-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+      .wheel-tabs button, .wheel-verbs button {
+        border: 1px solid var(--line); background: rgba(255,255,255,0.05); color: var(--ink);
+        font: 12px/1 var(--sans); padding: 7px 9px; border-radius: 8px; cursor: pointer;
       }
-      #tools h2 {
-        margin: 0 0 8px;
-        font-size: 13px;
-        letter-spacing: 0.04em;
-        font-weight: 600;
-      }
-      .tool {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 6px;
-        padding: 5px 0;
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
-        font: 12px/1.4 var(--sans);
-      }
-      .tool small {
-        color: var(--muted);
-        font: 11px/1.3 var(--mono);
-      }
-      .tool .tag {
-        font: 11px/1.4 var(--mono);
-        color: var(--ok);
-      }
-      .tool .tag.bad {
-        color: var(--danger);
-      }
+      .wheel-tabs button.active { border-color: var(--accent); color: var(--accent); background: rgba(229,181,103,0.18); }
+      .wheel-verbs { display: flex; flex-wrap: wrap; gap: 6px; }
+      .wheel-verbs button:hover { border-color: rgba(229,181,103,0.5); }
+      .wheel-verbs button:focus-visible, .wheel-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       #actions {
         left: 50%;
         bottom: 16px;
@@ -248,7 +232,7 @@
         #hint {
           display: none;
         }
-        #tools {
+        #wheel {
           width: 190px;
         }
       }
@@ -292,30 +276,21 @@
       <div class="scene-link"><a href="./">教学关</a> · <a href="./building.html">建筑沙盒</a></div>
     </section>
 
-    <section class="panel" id="tools">
-      <h2>随身器材</h2>
-      <div id="tool-list"></div>
-    </section>
+    <section class="panel" id="wheel"></section>
 
     <section class="panel" id="log"></section>
 
     <section class="panel" id="hint">
       <div><kbd>W A S D</kbd> 移动 · <kbd>Shift</kbd> 低姿 · <kbd>C</kbd> 背人/撤离</div>
-      <div><kbd>E</kbd> 开门 · <kbd>R</kbd> 开窗 · <kbd>Q</kbd> 测温</div>
-      <div><kbd>1</kbd> 水 · <kbd>2</kbd> 干粉 · <kbd>3</kbd> CO₂ · <kbd>4</kbd> 湿棉被 · <kbd>5</kbd> 断电 · <kbd>6</kbd> 关门</div>
+      <div><kbd>E</kbd> 开门 · <kbd>R</kbd> 开窗 · <kbd>Q</kbd> 测温 · <kbd>T</kbd> 热像扫描</div>
+      <div>右侧按「门/窗/墙/火/居民」切换动词，工具耗尽后对应动作会消失。</div>
     </section>
 
     <section class="panel" id="actions">
       <button data-action="measure">测温 Q</button>
       <button data-action="door" class="primary">开门 E</button>
-      <button data-action="carry" class="primary">背人 / 撤离 C</button>
       <button data-action="window">开窗 R</button>
-      <button data-action="water" class="primary">水枪 1</button>
-      <button data-action="dryPowder">干粉 2</button>
-      <button data-action="co2">CO₂ 3</button>
-      <button data-action="wetBlanket">湿棉被 4</button>
-      <button data-action="powerCut">断电 5</button>
-      <button data-action="closeDoor">关门 6</button>
+      <button data-action="carry" class="primary">背人 / 撤离 C</button>
       <button data-action="reset">重开</button>
     </section>
 
