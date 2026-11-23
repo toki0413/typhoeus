@@ -2073,19 +2073,33 @@ git commit -m "feat(mvs): deterministic building camera shots"
 
 ### Phase 3 — 居民与压力
 
-**新文件：**
-- `src/sim/agents/resident.ts`：`ResidentState`（mood/panic/hidden/injury），`stepResident(resident, room, dt)`
-- `src/sim/agents/crowd.ts`：多人优先级、跟随、二次进入
-- `src/render/residents.ts`
-- `tests/resident.test.ts`、`tests/crowd.test.ts`
+**执行状态（2026-11-23）：核心完成。**
 
-**必须存在的测试：**
+| 任务 | 状态 | 提交 |
+| --- | --- | --- |
+| P3.1 居民 Agent | 完成 | `2a46490` |
+| P3.2 多人救援 | 完成 | `f45cf83` |
+| P3.3 入口接入与居民视图 | 完成 | `e17262a` |
+| P3.4 文档与门禁 | 完成 | 本文档提交 |
+
+**新文件：**
+- `src/sim/agents/resident.ts`：`ResidentState`（mood/panic/hidden/health/injury/downedFor/dead），`stepResident(resident, room, dt)`
+- `src/sim/agents/crowd.ts`：`CrowdState`、救援优先级、牵/背、种子确定性、获救/失去统计
+- `src/render/residents.ts`：居民状态 → 标记（纯数据，不碰 DOM）
+- `tests/resident.test.ts`、`tests/crowd.test.ts`、`tests/resident-markers.test.ts`
+
+**必须存在的测试（已全部落地）：**
 1. `恐慌居民会远离烟`：初始靠近火源，10 秒后与火源距离增大。
 2. `躲藏居民只在搜索半径内被发现`：距离 >2 m 时不可交互，靠近后可见。
-3. `失去意识后只能背`：`mood='unconscious'` 时 `lead` 失败、`carry` 成功。
-4. `伤情随时间恶化`：烟/热暴露下 `health` 单调下降。
+3. `失去意识后只能背`：`mood='unconscious'` 或 `health<=0` 时 `lead` 失败、`carry` 成功。
+4. `伤情随时间恶化`：烟/热暴露下 `health` 单调下降；归零后 3 秒宽限期结束即死亡。
 5. `救援顺序改变结果`：同种子、3 名居民，先救 A 与先救 B 产生不同的获救人数（0–3）。
-6. `失败由系统产生`：烟毒/热/坍塌/回燃导致失败，不依赖对话分支。
+6. `失败由系统产生`：烟毒/热致死与玩家倒地均由模拟状态触发，不依赖对话分支。
+
+**入口接入说明：**
+- `building.html` 的 202 房间放置 3 名居民，抵达后通过居民面板选择“牵”或“背”；每次救援消耗 4/5 秒，期间火场与其余居民继续演化。
+- 建筑入口按消防员佩戴空呼处理（`ActorState.masked`）：烟热仍累积，但足以支撑多次进出；居民没有保护，因此救援顺序与时间直接决定 0–3 的结果。
+- 入口按“同处一室即可施救”处理（`ROOM_REACH`），室内逐米位移与躲藏搜索留到后续阶段。
 
 **验收：** 同一次火场能救出 0–3 人，差异来自行动而非剧本。
 
