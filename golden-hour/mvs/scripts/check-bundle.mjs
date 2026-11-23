@@ -17,6 +17,10 @@ if (!existsSync(dist)) {
   process.exit(1);
 }
 
+const CSS_BUDGET = 24 * 1024;
+const HTML_BUDGET = 16 * 1024;
+const MEDIA_BUDGET = 2.6 * 1024 * 1024;
+
 const gzipSize = (path) => gzipSync(readFileSync(path)).length;
 const assetDir = join(dist, 'assets');
 
@@ -27,13 +31,21 @@ const files = jsFiles.map((name) => ({
 }));
 
 const entries = groupEntries(files);
+const knownEntries = new Set(Object.keys(ENTRY_BUDGETS));
+for (const entry of Object.keys(entries)) {
+  if (!knownEntries.has(entry)) {
+    console.warn(`未配置预算的入口：${entry}（已计入总计，未做分项检查）`);
+  }
+}
 const totalJs = Object.values(entries).reduce((sum, bytes) => sum + bytes, 0);
 
 const css = readdirSync(assetDir)
   .filter((name) => name.endsWith('.css'))
   .reduce((sum, name) => sum + gzipSize(join(assetDir, name)), 0);
 
-const html = gzipSize(join(dist, 'index.html'));
+const html = readdirSync(dist)
+  .filter((name) => name.endsWith('.html'))
+  .reduce((sum, name) => sum + gzipSize(join(dist, name)), 0);
 
 const media = readdirSync(assetDir)
   .filter((name) => /\.(glb|gltf|bin|ktx2)$/.test(name))
@@ -45,18 +57,18 @@ for (const [entry, bytes] of Object.entries(entries)) {
   console.log(`${entry}  JS gzip ${kb(bytes)}`);
 }
 console.log(`JS 总计 gzip ${kb(totalJs)} / ${kb(TOTAL_JS_BUDGET)}`);
-console.log(`CSS gzip ${kb(css)} / 24.0 KB`);
-console.log(`HTML gzip ${kb(html)} / 16.0 KB`);
-console.log(`3D 资产 ${kb(media)} / 2662.4 KB`);
+console.log(`CSS gzip ${kb(css)} / ${kb(CSS_BUDGET)}`);
+console.log(`HTML gzip ${kb(html)} / ${kb(HTML_BUDGET)}`);
+console.log(`3D 资产 ${kb(media)} / ${kb(MEDIA_BUDGET)}`);
 
 const failures = evaluateBudget(entries, ENTRY_BUDGETS);
 
 if (totalJs > TOTAL_JS_BUDGET) {
   failures.push(`JS 总计 ${kb(totalJs)} > ${kb(TOTAL_JS_BUDGET)}`);
 }
-if (css > 24 * 1024) failures.push(`CSS ${kb(css)} > 24.0 KB`);
-if (html > 16 * 1024) failures.push(`HTML ${kb(html)} > 16.0 KB`);
-if (media > 2.6 * 1024 * 1024) failures.push(`3D 资产 ${kb(media)} > 2662.4 KB`);
+if (css > CSS_BUDGET) failures.push(`CSS ${kb(css)} > ${kb(CSS_BUDGET)}`);
+if (html > HTML_BUDGET) failures.push(`HTML ${kb(html)} > ${kb(HTML_BUDGET)}`);
+if (media > MEDIA_BUDGET) failures.push(`3D 资产 ${kb(media)} > ${kb(MEDIA_BUDGET)}`);
 
 if (failures.length) {
   console.error('包体超预算：');

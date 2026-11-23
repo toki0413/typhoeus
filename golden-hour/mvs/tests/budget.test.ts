@@ -21,4 +21,25 @@ describe('包体预算', () => {
     expect(failures).toHaveLength(1);
     expect(failures[0]).toContain('main');
   });
+
+  it('恰好等于预算应通过', () => {
+    expect(evaluateBudget({ main: 1024 }, { main: 1024 })).toEqual([]);
+  });
+
+  it('未知入口不参与分项预算', () => {
+    expect(evaluateBudget({ vendor: 999999 }, { main: 1024 })).toEqual([]);
+  });
+
+  it('含连字符的产物按已知前缀分组', () => {
+    expect(
+      groupEntries([
+        { name: 'three.module-abc.js', gzip: 10 },
+        { name: 'admin-panel-a1.js', gzip: 5 },
+      ])
+    ).toEqual({ 'three.module': 10, admin: 5 });
+  });
+
+  it('空列表返回空对象', () => {
+    expect(groupEntries([])).toEqual({});
+  });
 });
