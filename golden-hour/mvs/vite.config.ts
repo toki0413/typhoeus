@@ -7,6 +7,7 @@ export default defineConfig({
       input: {
         main: 'index.html',
         room: 'room.html',
+        building: 'building.html',
       },
     },
   },
