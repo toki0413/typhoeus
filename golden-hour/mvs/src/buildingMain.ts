@@ -10,13 +10,27 @@ import {
   createCrowd,
   rescueResident,
   stepCrowd,
+  type CrowdState,
   type RescueReason,
   type RescueVerb,
 } from './sim/agents/crowd';
 import { gridToWorld } from './sim/spatial/coords';
-import { createScenarioForBuilding, snapshotScenario, stepScenario } from './sim/spatial/scene';
+import {
+  createScenarioForBuilding,
+  createZoneScenario,
+  snapshotScenario,
+  stepScenario,
+} from './sim/spatial/scene';
+import { stepLinkSmoke } from './sim/spatial/ventilation';
+import {
+  createHousehold,
+  householdSummary,
+  stepHousehold,
+  type HouseholdState,
+} from './sim/agents/household';
 import { LAYOUTS, layoutById, layoutFireProfile } from './content/layouts';
 import { buildingToolActions, type BuildingToolAction } from './app/buildingTools';
+import { zoneLabel, zoneStatuses, type ZoneStatus } from './app/zonePlan';
 import { isUnlocked, loadProgress, recordRun, saveProgress } from './app/progress';
 import {
   createSave,
@@ -67,6 +81,10 @@ const layout =
     : LAYOUTS.find((item) => isUnlocked(progress, layoutIds, item.id)) ?? LAYOUTS[0];
 /** 每日挑战用当天日期（YYYYMMDD）当种子；普通局用 seed 参数，非法则回退 1。 */
 const daily = params.get('daily') === '1';
+/** ?zones=multi 启用 3 区 6 人；默认单区域，保持原玩法与存档。 */
+const multi = params.get('zones') === 'multi';
+/** 存档与最佳记录按模式加后缀，避免单区域与多区域记录互相覆盖。 */
+const mode = multi ? 'multi' : 'single';
 /** ?perf=1 时显示帧率与固定步长耗时，便于桌面 60fps 实测。 */
 const perfMode = params.get('perf') === '1';
 const seedParam = Number(params.get('seed'));
@@ -75,14 +93,23 @@ const seed = daily
   : Number.isFinite(seedParam) && seedParam > 0
     ? Math.floor(seedParam)
     : 1;
-let def = createScenarioForBuilding(
-  layout.build(),
-  layout.entrance,
-  layout.target,
-  'layout-' + layout.id,
-  seed,
-  layoutFireProfile(layout)
-);
+/** 多区域场景只点燃声明了火源的区域；单区域保持原有目标房间起火。 */
+let def = multi
+  ? createZoneScenario(
+      layout.build(),
+      layout.entrance,
+      layout.zones,
+      'layout-' + layout.id,
+      seed
+    )
+  : createScenarioForBuilding(
+      layout.build(),
+      layout.entrance,
+      layout.target,
+      'layout-' + layout.id,
+      seed,
+      layoutFireProfile(layout)
+    );
 let actor = createActor();
 /** 随身器材；工具动作会消耗 charge，用空后按钮禁用。 */
 let loadout: CarryLoadout = createToolLoadout();
@@ -104,22 +131,30 @@ function residentAt(
   return resident;
 }
 
-/** 居民 C 初始就躲在下侧中段；血线略高，留给“发现 + 走过去”的窗口。 */
-const residentC = residentAt('C', 3, 6, 0.6, 0.3);
-residentC.hidden = true;
+/** 单区域用固定三名居民；多区域改由 createHousehold 按区域内容生成。 */
+let crowd: CrowdState | null = null;
+let household: HouseholdState | null = multi
+  ? createHousehold(layout.zones, seed)
+  : null;
 
-let crowd = createCrowd(
-  def.targetRoom,
-  [
-    residentAt('A', 2, 5, 1, 0),
-    residentAt('B', 2, 2, 0.45, 0.6),
-    residentC,
-  ],
-  seed
-);
+if (!multi) {
+  /** 居民 C 初始就躲在下侧中段；血线略高，留给“发现 + 走过去”的窗口。 */
+  const residentC = residentAt('C', 3, 6, 0.6, 0.3);
+  residentC.hidden = true;
 
-/** 存档键：与最佳记录一样按户型 + 种子隔离，只在同户型同种子下恢复。 */
-const SAVE_KEY = 'gh-save:' + layout.id + ':' + seed;
+  crowd = createCrowd(
+    def.targetRoom,
+    [
+      residentAt('A', 2, 5, 1, 0),
+      residentAt('B', 2, 2, 0.45, 0.6),
+      residentC,
+    ],
+    seed
+  );
+}
+
+/** 存档键：与最佳记录一样按户型 + 种子 + 模式隔离，只在同模式下恢复。 */
+const SAVE_KEY = 'gh-save:' + layout.id + ':' + seed + ':' + mode;
 
 let currentRoom = def.startRoom;
 let routes: Route[] = [];
@@ -137,6 +172,9 @@ const WIND_SCHEDULE = [
 ];
 let windCursor = 0;
 let seenEvents = 0;
+/** household.events 的读取游标与上一次目标区域，用于区域日志与面板刷新。 */
+let zoneEventCursor = 0;
+let zoneWatchRoom: string | null = household ? household.activeRoomId : null;
 /** 因果复盘用的动作记录；按发生顺序追加。 */
 const actions: ActionRecord[] = [];
 let actionSeq = 0;
@@ -167,6 +205,7 @@ const out = {
   wind: document.getElementById('hud-wind')!,
   perf: document.getElementById('perf')!,
   routes: document.getElementById('routes')!,
+  zones: document.getElementById('zones')!,
   residents: document.getElementById('residents')!,
   tools: document.getElementById('tools')!,
   log: document.getElementById('log')!,
@@ -214,6 +253,13 @@ const STATE_TEXT: Record<ResidentVisualState, string> = {
   rescued: '已救出',
 };
 
+/** 区域条的状态文案：待救 / 进行 / 完成。 */
+const ZONE_TEXT: Record<ZoneStatus, string> = {
+  pending: '待救',
+  active: '进行',
+  done: '完成',
+};
+
 /** 8 个中文方位：0° 指向东，每 45° 一档。 */
 const WIND_LABELS = ['东', '东北', '北', '西北', '西', '西南', '南', '东南'];
 
@@ -238,7 +284,22 @@ function roomOf(id: string) {
 }
 
 function targetRoom(): string {
+  if (household) {
+    return household.activeRoomId ?? household.zones[0]?.roomId ?? def.targetRoom;
+  }
   return def.targetRoom;
+}
+
+/** 当前区域的人群；单区域返回唯一人群，多区域按目标房间取。 */
+function activeCrowd(): CrowdState {
+  if (household) return household.crowds[targetRoom()];
+  return crowd as CrowdState;
+}
+
+/** 全部区域的人群；单区域只有一支，多区域按区域顺序返回。 */
+function allCrowds(): CrowdState[] {
+  if (household) return Object.values(household.crowds);
+  return crowd ? [crowd] : [];
 }
 
 /** 按模拟时间触发固定风向日程，每条只触发一次。 */
@@ -263,11 +324,35 @@ function flushDirectorEvents(): void {
 }
 
 /**
+ * 把区域完成事件写进日志；目标区域变化时同步路线、居民、工具与 HUD。
+ * 提前返回可避免单区域模式反复遍历无关状态。
+ */
+function flushZoneEvents(): void {
+  if (!household) return;
+
+  for (; zoneEventCursor < household.events.length; zoneEventCursor++) {
+    const event = household.events[zoneEventCursor];
+    addLog(event.detail, 'info');
+  }
+
+  if (household.activeRoomId === zoneWatchRoom) return;
+  zoneWatchRoom = household.activeRoomId;
+  renderZones();
+  recalcRoutes();
+  syncResidents();
+  refreshTools();
+  updateHud();
+  if (household.activeRoomId) {
+    addLog('前往 ' + zoneLabel(household, household.activeRoomId), 'info');
+  }
+}
+
+/**
  * 每 0.5 秒采样一次目标房间与玩家的烟热暴露；
  * 同时把到点的无线电写进日志，每条只触发一次。
  */
 function sampleRun(): void {
-  const target = roomOf(def.targetRoom);
+  const target = roomOf(targetRoom());
   const t = target.t;
   if (t - lastSampleT >= 0.5) {
     lastSampleT = t;
@@ -287,34 +372,47 @@ function sampleRun(): void {
 
 /**
  * 把新失去的居民写进因果复盘；每人只记一次。
- * 前后场取当前聚合值，损失本身不改变房间场，只记录发生时刻。
+ * 多区域遍历全部人群，日志与复盘条目仍归属各自房间。
  */
 function recordLosses(): void {
-  for (const resident of crowd.residents) {
-    if (!resident.dead || resident.rescued) continue;
-    if (lostIds.has(resident.id)) continue;
-    lostIds.add(resident.id);
-    const room = roomOf(def.targetRoom);
-    const current = sampleRoom(room);
-    actions.push({
-      id: 'lost-' + resident.id,
-      at: room.t,
-      action: 'lost:' + resident.id,
-      roomId: def.targetRoom,
-      before: current,
-      after: current,
-    });
+  for (const item of allCrowds()) {
+    for (const resident of item.residents) {
+      if (!resident.dead || resident.rescued) continue;
+      if (lostIds.has(resident.id)) continue;
+      lostIds.add(resident.id);
+      const room = roomOf(item.roomId);
+      const current = sampleRoom(room);
+      actions.push({
+        id: 'lost-' + resident.id,
+        at: room.t,
+        action: 'lost:' + resident.id,
+        roomId: item.roomId,
+        before: current,
+        after: current,
+      });
+    }
   }
 }
 
-/** 推进一个固定步长：风向日程 → 火场 → 人群 → 事件导演 → 采样。 */
+/**
+ * 推进一个固定步长。
+ * 多区域：风向日程 → 火场 → 串烟 → 人群 → 事件导演 → 区域/导演日志 → 采样。
+ * 单区域：保持原有顺序，不增加串烟与 household。
+ */
 function advanceWorld(dt: number, stepCrowdNow = true): void {
   applyWindSchedule();
   stepScenario(def, dt);
-  // 救援动作内部已按耗时推进过人群，外部补时间时不能重复推进。
-  if (stepCrowdNow) stepCrowd(crowd, roomOf(def.targetRoom), dt);
+  if (household) {
+    // 串烟是场景级过程，救援补时间时也要继续推进。
+    stepLinkSmoke(def.building, dt, director.wind);
+    // 救援动作内部已推进过人群，外部补时间时只补火场、烟流与导演。
+    stepHousehold(household, def.building, stepCrowdNow ? dt : 0);
+  } else if (stepCrowdNow && crowd) {
+    stepCrowd(crowd, roomOf(targetRoom()), dt);
+  }
   stepDirector(director, def.building, dt);
   flushDirectorEvents();
+  flushZoneEvents();
   sampleRun();
   recordLosses();
 }
@@ -367,19 +465,39 @@ function renderRoutes(): void {
     .join('');
 }
 
-/** 把 #residents 渲染成每个未获救居民一行，附牵/背按钮。 */
+/** 多区域模式下渲染区域条；单区域隐藏，保持原有布局。 */
+function renderZones(): void {
+  if (!household) {
+    out.zones.hidden = true;
+    return;
+  }
+
+  const statuses = zoneStatuses(household);
+  out.zones.hidden = false;
+  out.zones.innerHTML = household.zones
+    .map(
+      (zone) =>
+        `<span class="zone-chip ${statuses[zone.roomId]}" data-zone="${zone.roomId}">${
+          zone.label
+        }<small>${ZONE_TEXT[statuses[zone.roomId]]}</small></span>`
+    )
+    .join('');
+}
+
+/** 把 #residents 渲染成当前区域每个未获救居民一行，附牵/背按钮。 */
 function renderResidents(): void {
   residentsSig = residentSignature();
   if (ended) {
     out.residents.innerHTML = '<p class="hint">本轮已结束。</p>';
     return;
   }
-  if (currentRoom !== def.targetRoom) {
+  if (currentRoom !== targetRoom()) {
     out.residents.innerHTML = '<p class="hint">抵达目标房间后可选择牵出或背出。</p>';
     return;
   }
 
-  const rows = crowd.residents
+  const crowdNow = activeCrowd();
+  const rows = crowdNow.residents
     .filter((resident) => !resident.rescued)
     .filter((resident) => !resident.hidden || findResident(resident, actor))
     .map((resident) => {
@@ -403,20 +521,50 @@ function renderResidents(): void {
     })
     .join('');
 
-  out.residents.innerHTML =
-    rows || '<p class="hint">房间角落可能有居民，靠近搜索。</p>';
+  if (rows) {
+    out.residents.innerHTML = rows;
+    return;
+  }
+  const resolved = crowdNow.rescued + crowdNow.lost >= crowdNow.residents.length;
+  if (household && resolved) {
+    out.residents.innerHTML =
+      '<p class="hint">' +
+      (household.activeRoomId ? '当前区域已处理完，前往下一区域。' : '所有区域已处理完。') +
+      '</p>';
+    return;
+  }
+  out.residents.innerHTML = '<p class="hint">房间角落可能有居民，靠近搜索。</p>';
 }
 
 let residentsSig = '';
 
-/** 居民面板的内容指纹；只有状态变化时才重建，避免每帧替换按钮。 */
+/** 居民面板的内容指纹；多区域覆盖当前区域与全部人群，避免切区后漏刷新。 */
 function residentSignature(): string {
-  const parts = crowd.residents.map(
-    (resident) =>
-      `${resident.id}:${resident.rescued ? 1 : 0}:${resident.dead ? 1 : 0}:${
-        resident.mood
-      }:${Math.round(resident.health * 20)}:${findResident(resident, actor) ? 1 : 0}`
-  );
+  if (household) {
+    const hh = household;
+    const parts = hh.zones.map((zone) => {
+      const item = hh.crowds[zone.roomId];
+      const people = item.residents
+        .map(
+          (resident) =>
+            `${resident.id}:${resident.rescued ? 1 : 0}:${resident.dead ? 1 : 0}:${
+              resident.mood
+            }:${Math.round(resident.health * 20)}:${findResident(resident, actor) ? 1 : 0}`
+        )
+        .join(',');
+      return `${zone.roomId}=${people}`;
+    });
+    return `${currentRoom}|${ended ? 1 : 0}|${hh.activeRoomId ?? 'none'}|${parts.join(';')}`;
+  }
+
+  const parts = crowd
+    ? crowd.residents.map(
+        (resident) =>
+          `${resident.id}:${resident.rescued ? 1 : 0}:${resident.dead ? 1 : 0}:${
+            resident.mood
+          }:${Math.round(resident.health * 20)}:${findResident(resident, actor) ? 1 : 0}`
+      )
+    : [];
   return `${currentRoom}|${ended ? 1 : 0}|${parts.join(',')}`;
 }
 
@@ -437,8 +585,8 @@ function toolsSignature(actions: BuildingToolAction[], inactive: boolean): strin
 
 /** 渲染右侧工具面板；不在目标房间或已结束时全部禁用。 */
 function refreshTools(): void {
-  const inactive = ended || currentRoom !== def.targetRoom;
-  const actions = buildingToolActions(roomOf(def.targetRoom), loadout);
+  const inactive = ended || currentRoom !== targetRoom();
+  const actions = buildingToolActions(roomOf(targetRoom()), loadout);
   const sig = toolsSignature(actions, inactive);
   if (sig === toolsSig) return;
   toolsSig = sig;
@@ -456,9 +604,9 @@ function refreshTools(): void {
 
 /** 执行一次工具动作，并记录因果复盘与用错灭火剂的次数。 */
 function runToolAction(action: BuildingToolAction): void {
-  if (ended || currentRoom !== def.targetRoom) return;
+  if (ended || currentRoom !== targetRoom()) return;
 
-  const room = roomOf(def.targetRoom);
+  const room = roomOf(targetRoom());
   const before = sampleRoom(room);
   const at = room.t;
   // 是否“用错水”，取决于动作发生时正在燃烧的火类。
@@ -474,7 +622,7 @@ function runToolAction(action: BuildingToolAction): void {
     id: 'tool-' + action.verbId + '-' + ++actionSeq,
     at,
     action: 'tool:' + action.verbId,
-    roomId: def.targetRoom,
+    roomId: targetRoom(),
     before,
     after: sampleRoom(room),
   });
@@ -498,13 +646,13 @@ function takeRoute(index: number): void {
     return;
   }
 
-  // 行进前后各取一次 202 的聚合场，用于因果复盘。
-  const before = sampleRoom(roomOf(def.targetRoom));
-  const at = roomOf(def.targetRoom).t;
+  // 行进前后各取一次目标区域的聚合场，用于因果复盘。
+  const before = sampleRoom(roomOf(targetRoom()));
+  const at = roomOf(targetRoom()).t;
 
   currentRoom = travel.roomId;
-  // 到达 202 时落在门侧入口，避免玩家站在火源所在格上承受数倍暴露。
-  if (currentRoom === def.targetRoom) {
+  // 抵达目标区域时落在门侧入口，避免玩家站在火源所在格上承受数倍暴露。
+  if (currentRoom === targetRoom()) {
     actor.x = -2.4;
     actor.z = 0;
   } else {
@@ -522,9 +670,9 @@ function takeRoute(index: number): void {
     id: 'travel-' + ++actionSeq,
     at,
     action: 'travel:' + route.steps.map((step) => step.kind).join('→'),
-    roomId: def.targetRoom,
+    roomId: targetRoom(),
     before,
-    after: sampleRoom(roomOf(def.targetRoom)),
+    after: sampleRoom(roomOf(targetRoom())),
   });
 
   addLog(`通过 ${route.steps.map((step) => step.kind).join(' → ')}，到达 ${currentRoom}`, 'ok');
@@ -537,23 +685,19 @@ function takeRoute(index: number): void {
 
 function handleRescue(id: string, verb: RescueVerb): void {
   if (ended) return;
-  if (currentRoom !== def.targetRoom) {
+  if (currentRoom !== targetRoom()) {
     addLog('先到目标房间才能救人。', 'danger');
     return;
   }
 
-  // 救援前后各取一次 202 的聚合场，用于因果复盘。
-  const before = sampleRoom(roomOf(def.targetRoom));
-  const at = roomOf(def.targetRoom).t;
-  const t0 = crowd.t;
-  const result = rescueResident(
-    crowd,
-    id,
-    actor,
-    roomOf(def.targetRoom),
-    verb
-  );
-  const elapsed = crowd.t - t0;
+  // 救援前后各取一次当前区域的聚合场，用于因果复盘。
+  const crowdNow = activeCrowd();
+  const room = roomOf(targetRoom());
+  const before = sampleRoom(room);
+  const at = room.t;
+  const t0 = crowdNow.t;
+  const result = rescueResident(crowdNow, id, actor, room, verb);
+  const elapsed = crowdNow.t - t0;
 
   // 救援消耗的模拟时间同样推进火场与玩家暴露，让取舍有真实代价。
   const ticks = Math.max(0, Math.round(elapsed / FIXED_DT));
@@ -566,9 +710,9 @@ function handleRescue(id: string, verb: RescueVerb): void {
     id: 'rescue-' + id + '-' + ++actionSeq,
     at,
     action: verb === 'carry' ? 'carry' : 'lead',
-    roomId: def.targetRoom,
+    roomId: targetRoom(),
     before,
-    after: sampleRoom(roomOf(def.targetRoom)),
+    after: sampleRoom(room),
   });
 
   if (result.ok) {
@@ -587,7 +731,6 @@ function handleRescue(id: string, verb: RescueVerb): void {
 
 function updateHud(): void {
   const exposure = clamp01(actor.exposure.smoke + actor.exposure.heat);
-  const remaining = crowd.residents.length - crowd.rescued - crowd.lost;
   out.room.textContent = currentRoom;
   out.target.textContent = targetRoom();
   out.seed.textContent = daily ? `每日 #${seed}` : `种子 ${seed}`;
@@ -595,21 +738,42 @@ function updateHud(): void {
   out.air.textContent = `${Math.round(actor.air * 100)}%`;
   out.exposure.textContent = `${Math.round(exposure * 100)}%`;
   out.wind.textContent = windText();
-  out.resident.textContent = `${crowd.rescued} 救出 · ${crowd.lost} 失去 · ${remaining} 待救`;
-  out.time.textContent = `${roomOf(def.targetRoom).t.toFixed(1)}s`;
+  if (household) {
+    const summary = householdSummary(household);
+    out.resident.textContent = `救出 ${summary.rescued}/${summary.total} · 区域 ${summary.done}/${household.zones.length}`;
+  } else if (crowd) {
+    const remaining = crowd.residents.length - crowd.rescued - crowd.lost;
+    out.resident.textContent = `${crowd.rescued} 救出 · ${crowd.lost} 失去 · ${remaining} 待救`;
+  }
+  out.time.textContent = `${roomOf(targetRoom()).t.toFixed(1)}s`;
 }
 
 function checkOutcome(): void {
   if (ended) return;
-  const total = crowd.residents.length;
-  // 先结算“所有人都有了结果”，避免最后一救后被随后累积的暴露覆盖成绩。
-  if (crowd.rescued + crowd.lost >= total) {
-    const seconds = def.building.rooms[def.startRoom].room.t;
-    end(
-      `救出 ${crowd.rescued} / ${total}`,
-      `失去 ${crowd.lost} 人，用时 ${seconds.toFixed(1)} 秒。结果来自行动顺序与火场压力。`
-    );
-    return;
+  if (household) {
+    const summary = householdSummary(household);
+    const totalZones = household.zones.length;
+    if (summary.done >= totalZones || household.activeRoomId === null) {
+      const seconds = roomOf(targetRoom()).t;
+      end(
+        `救出 ${summary.rescued} / ${summary.total}`,
+        `完成 ${summary.done}/${totalZones} 区域，失去 ${summary.lost} 人，用时 ${seconds.toFixed(
+          1
+        )} 秒。结果来自区域顺序、搜索与火场压力。`
+      );
+      return;
+    }
+  } else if (crowd) {
+    const total = crowd.residents.length;
+    // 先结算“所有人都有了结果”，避免最后一救后被随后累积的暴露覆盖成绩。
+    if (crowd.rescued + crowd.lost >= total) {
+      const seconds = def.building.rooms[def.startRoom].room.t;
+      end(
+        `救出 ${crowd.rescued} / ${total}`,
+        `失去 ${crowd.lost} 人，用时 ${seconds.toFixed(1)} 秒。结果来自行动顺序与火场压力。`
+      );
+      return;
+    }
   }
   if (actor.downed) {
     end('你被烟和热压倒了', '路线不是免费的：烟层、体力都会改变可选路径。');
@@ -647,19 +811,34 @@ function renderCurve(bestCurve: CurveSample[]): void {
       <div class="curve-legend">${legend}</div>`;
 }
 
-/** 最佳记录按户型 + 种子隔离，避免每日挑战与普通局互相覆盖。 */
-const BEST_KEY = `gh-best:${layout.id}:${seed}`;
+/** 最佳记录按户型 + 种子 + 模式隔离，避免每日挑战与普通局互相覆盖。 */
+const BEST_KEY = `gh-best:${layout.id}:${seed}:${mode}`;
 
-/** 汇总本局结果：时间取起点房间时钟，峰值暴露取采样中烟+热的最大值。 */
+/** 汇总本局结果：时间取目标区域时钟，峰值暴露取采样中烟+热的最大值。 */
 function collectRun(): RunResult {
   let peak = 0;
   for (const sample of exposureSamples) {
     peak = Math.max(peak, sample.smoke + sample.heat);
   }
+
+  if (household) {
+    const summary = householdSummary(household);
+    return {
+      rescued: summary.rescued,
+      lost: summary.lost,
+      total: summary.total,
+      seconds: def.building.rooms[targetRoom()].room.t,
+      peakExposure: clamp01(peak),
+      wrongAgent,
+      airLeft: actor.air,
+    };
+  }
+
+  const crowdNow = crowd as CrowdState;
   return {
-    rescued: crowd.rescued,
-    lost: crowd.lost,
-    total: crowd.residents.length,
+    rescued: crowdNow.rescued,
+    lost: crowdNow.lost,
+    total: crowdNow.residents.length,
     seconds: def.building.rooms[def.startRoom].room.t,
     peakExposure: clamp01(peak),
     wrongAgent,
@@ -736,7 +915,9 @@ function restoreFromSave(save: GameSave): void {
   actor = save.actor;
   // 旧存档没有器材余量：保留当前新建的一套。
   if (save.loadout) loadout = save.loadout;
-  crowd = save.crowd;
+  // 多区域存档恢复 household；单区域存档恢复唯一人群。
+  household = save.households ?? null;
+  crowd = save.households ? null : save.crowd ?? null;
   director = save.director;
   currentRoom = save.currentRoom;
 
@@ -745,8 +926,10 @@ function restoreFromSave(save: GameSave): void {
   acc = 0;
   last = performance.now();
   seenEvents = director.events.length;
+  zoneEventCursor = household ? household.events.length : 0;
+  zoneWatchRoom = household ? household.activeRoomId : null;
   // 无线电按目标房间已走过的模拟时刻推进，恢复后不重播旧台词。
-  const t = roomOf(def.targetRoom).t;
+  const t = roomOf(targetRoom()).t;
   radioCursor = 0;
   while (radioCursor < RADIO_LINES.length && RADIO_LINES[radioCursor].at <= t) {
     radioCursor += 1;
@@ -760,6 +943,7 @@ function restoreFromSave(save: GameSave): void {
   residentsSig = '';
 
   out.outcome.classList.remove('show');
+  renderZones();
   recalcRoutes();
   syncResidents();
   refreshTools();
@@ -773,7 +957,11 @@ function saveCurrent(): void {
     addLog('本局已结束，无法保存。', 'danger');
     return;
   }
-  const save = createSave({ def, actor, crowd, director, currentRoom, loadout });
+  const save = createSave(
+    household
+      ? { def, actor, households: household, director, currentRoom, loadout }
+      : { def, actor, crowd: crowd ?? undefined, director, currentRoom, loadout }
+  );
   try {
     window.localStorage.setItem(SAVE_KEY, serializeSave(save));
   } catch {
@@ -834,6 +1022,7 @@ function end(title: string, body: string): void {
         .join('')
     : '<li>没有可复盘的动作。</li>';
   out.outcome.classList.add('show');
+  renderZones();
   renderResidents();
   refreshTools();
   // 结算弹层出现后把焦点交给“再来一次”，键盘用户不必重新寻路。
@@ -862,8 +1051,8 @@ function frame(now: number): void {
   last = now;
 
   if (!ended) {
-    // 只有进入目标房间后才能自由移动；移动方向由键盘/D-pad 合成。
-    const input = currentRoom === def.targetRoom ? moveInput() : null;
+    // 只有进入当前目标区域后才能自由移动；移动方向由键盘/D-pad 合成。
+    const input = currentRoom === targetRoom() ? moveInput() : null;
     const moving = input !== null;
     if (input) moveActor(actor, input.x, input.z, dt);
 
@@ -879,14 +1068,19 @@ function frame(now: number): void {
   }
 
   const snap = snapshotScenario(def, currentRoom, actor);
+  // 多区域合并所有区域的标记；单区域保持原来的唯一人群。
+  const hh = household;
+  const markers = hh
+    ? hh.zones.flatMap((zone) => residentMarkers(hh.crowds[zone.roomId].residents, actor))
+    : residentMarkers(crowd ? crowd.residents : [], actor);
   view.sync(
     def.building,
     snap,
     currentRoom,
     targetRoom(),
     routes[0]?.steps.map((step) => step.id) ?? [],
-    residentMarkers(crowd.residents, actor),
-    currentRoom === def.targetRoom ? { x: actor.x, z: actor.z } : undefined
+    markers,
+    currentRoom === targetRoom() ? { x: actor.x, z: actor.z } : undefined
   );
   view.render();
 
@@ -901,12 +1095,12 @@ function frame(now: number): void {
       addLog('空呼耗尽，防护下降。', 'danger');
       airWarned = true;
     }
-    if (computeBackdraftRisk(roomOf(def.targetRoom)) > 0.55 && !backdraftWarned) {
+    if (computeBackdraftRisk(roomOf(targetRoom())) > 0.55 && !backdraftWarned) {
       addLog('门缝在吸风，可能回燃。先冷却门板。', 'danger');
       backdraftWarned = true;
     }
     if (
-      (director.weakFor[def.targetRoom] ?? 0) >= COLLAPSE_SECONDS / 2 &&
+      (director.weakFor[targetRoom()] ?? 0) >= COLLAPSE_SECONDS / 2 &&
       !collapseWarned
     ) {
       addLog('结构在响，可能坍塌。', 'danger');
@@ -1008,7 +1202,7 @@ out.tools.addEventListener('click', (event) => {
   const verbId = button.dataset.verb;
   if (!verbId) return;
   // 每次点击都按当前场态重算目标格，避免火势移动后仍打旧位置。
-  const action = buildingToolActions(roomOf(def.targetRoom), loadout).find(
+  const action = buildingToolActions(roomOf(targetRoom()), loadout).find(
     (entry) => entry.verbId === verbId
   );
   if (action) runToolAction(action);
@@ -1052,8 +1246,9 @@ continueBtn?.addEventListener('click', () => {
   }
 });
 
-addLog(`到场：入口。目标 ${def.targetRoom}，楼梯、消防梯、破拆三条路线。`);
+addLog(`到场：入口。目标 ${targetRoom()}，楼梯、消防梯、破拆三条路线。`);
 for (const line of BRIEFING) addLog(`【${line.speaker}】${line.text}`);
+renderZones();
 recalcRoutes();
 syncResidents();
 refreshTools();

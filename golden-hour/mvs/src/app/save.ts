@@ -8,15 +8,19 @@
 import type { ScenarioDefinition } from '../sim/spatial/scene';
 import type { ActorState } from '../sim/spatial/actor';
 import type { CrowdState } from '../sim/agents/crowd';
+import type { HouseholdState } from '../sim/agents/household';
 import type { DirectorState } from '../sim/events/director';
 import type { CarryLoadout } from '../sim/interaction/tools';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export interface SaveInput {
   def: ScenarioDefinition;
   actor: ActorState;
-  crowd: CrowdState;
+  /** 单区域存档的人群；多区域存档改用 households。 */
+  crowd?: CrowdState;
+  /** 多区域存档的区域人群；与 crowd 至少提供一个。 */
+  households?: HouseholdState;
   director: DirectorState;
   currentRoom: string;
   /** 随身器材余量与状态；旧存档没有该字段，缺省时按新建器材处理。 */
@@ -57,17 +61,28 @@ export function deserializeSave(text: string): GameSave {
   }
 
   const record = parsed as Partial<GameSave>;
-  if (record.version !== SAVE_VERSION) {
+  // v1 只有单区域 crowd；v2 起允许 households，两者都接受。
+  if (record.version !== 1 && record.version !== SAVE_VERSION) {
     throw new Error(
-      `存档版本不兼容：期望 ${SAVE_VERSION}，实际 ${String(record.version)}`
+      `存档版本不兼容：期望 1 或 ${SAVE_VERSION}，实际 ${String(record.version)}`
     );
   }
 
-  for (const key of ['def', 'actor', 'crowd', 'director'] as const) {
+  for (const key of ['def', 'actor', 'director'] as const) {
     const value = record[key];
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error(`存档缺少字段：${key}`);
     }
+  }
+
+  const hasCrowd =
+    !!record.crowd && typeof record.crowd === 'object' && !Array.isArray(record.crowd);
+  const hasHouseholds =
+    !!record.households &&
+    typeof record.households === 'object' &&
+    !Array.isArray(record.households);
+  if (!hasCrowd && !hasHouseholds) {
+    throw new Error('存档缺少字段：crowd 或 households');
   }
 
   return record as GameSave;

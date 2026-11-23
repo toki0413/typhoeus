@@ -103,6 +103,47 @@
         letter-spacing: 0.04em;
         font-weight: 600;
       }
+      /* 多区域条：横向 chip，当前区域用强调色，完成用成功色。 */
+      #zones {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0 0 8px;
+      }
+      #zones[hidden] {
+        display: none;
+      }
+      #zones .zone-chip {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 4px;
+        padding: 3px 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font: 11px/1.2 var(--sans);
+      }
+      #zones .zone-chip small {
+        color: var(--muted);
+        font: 10px/1 var(--mono);
+      }
+      #zones .zone-chip.active {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      #zones .zone-chip.active small {
+        color: var(--accent);
+      }
+      #zones .zone-chip.done {
+        border-color: var(--ok);
+        color: var(--ok);
+      }
+      #zones .zone-chip.done small {
+        color: var(--ok);
+      }
+      #zones + h2 {
+        margin-top: 0;
+      }
       #routes button {
         display: block;
         width: 100%;
@@ -494,6 +535,7 @@
     </section>
 
     <section class="panel" id="routes-panel">
+      <div id="zones" aria-label="救援区域" hidden></div>
       <h2>可选路线</h2>
       <div id="routes"></div>
       <h2>居民</h2>

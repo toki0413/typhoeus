@@ -2,18 +2,26 @@ import { describe, it, expect } from 'vitest';
 import { roomSummary } from '../src/sim/spatial/fields';
 import {
   createBuildingScenario,
+  createZoneScenario,
   stepScenario,
   type ScenarioDefinition,
 } from '../src/sim/spatial/scene';
+import { layoutById } from '../src/content/layouts';
 import { createActor, type ActorState } from '../src/sim/spatial/actor';
 import { createResident } from '../src/sim/agents/resident';
 import { createCrowd, stepCrowd, type CrowdState } from '../src/sim/agents/crowd';
+import {
+  createHousehold,
+  stepHousehold,
+  type HouseholdState,
+} from '../src/sim/agents/household';
 import {
   createDirector,
   stepDirector,
   type DirectorState,
 } from '../src/sim/events/director';
 import { FIXED_DT } from '../src/sim/spatial/spread';
+import { stepLinkSmoke } from '../src/sim/spatial/ventilation';
 import { createToolLoadout } from '../src/sim/interaction/tools';
 import {
   SAVE_VERSION,
@@ -70,6 +78,41 @@ function buildState(seed = 7): Fixture {
   return { def, actor, crowd, director, currentRoom: TARGET };
 }
 
+interface MultiFixture {
+  def: ScenarioDefinition;
+  actor: ActorState;
+  households: HouseholdState;
+  director: DirectorState;
+  currentRoom: string;
+}
+
+/** 多区域状态：classic 三区，推进 5 秒让串烟与人群都有非零值。 */
+function buildMultiState(seed = 7): MultiFixture {
+  const layout = layoutById('classic')!;
+  const def = createZoneScenario(
+    layout.build(),
+    layout.entrance,
+    layout.zones,
+    'z-classic',
+    seed
+  );
+
+  const actor = createActor();
+  actor.masked = true;
+  const households = createHousehold(layout.zones, seed);
+  const director = createDirector(seed);
+
+  const steps = Math.round(5 / FIXED_DT);
+  for (let i = 0; i < steps; i++) {
+    stepScenario(def, FIXED_DT);
+    stepLinkSmoke(def.building, FIXED_DT, director.wind);
+    stepHousehold(households, def.building, FIXED_DT);
+    stepDirector(director, def.building, FIXED_DT);
+  }
+
+  return { def, actor, households, director, currentRoom: def.targetRoom };
+}
+
 describe('存档与恢复', () => {
   it('序列化往返后关键字段一致', () => {
     const save = createSave(buildState());
@@ -80,9 +123,9 @@ describe('存档与恢复', () => {
     expect(restored.currentRoom).toBe(save.currentRoom);
     expect(restored.actor).toEqual(save.actor);
 
-    expect(restored.crowd.rescued).toBe(save.crowd.rescued);
-    expect(restored.crowd.lost).toBe(save.crowd.lost);
-    expect(restored.crowd.residents).toEqual(save.crowd.residents);
+    expect(restored.crowd!.rescued).toBe(save.crowd!.rescued);
+    expect(restored.crowd!.lost).toBe(save.crowd!.lost);
+    expect(restored.crowd!.residents).toEqual(save.crowd!.residents);
 
     expect(restored.director.collapsed).toEqual(save.director.collapsed);
     expect(restored.director.events).toEqual(save.director.events);
@@ -105,7 +148,7 @@ describe('存档与恢复', () => {
     const restored = deserializeSave(serializeSave(createSave(buildState())));
 
     advance(live.def, live.crowd, live.director, 10);
-    advance(restored.def, restored.crowd, restored.director, 10);
+    advance(restored.def, restored.crowd!, restored.director, 10);
 
     for (const [id, node] of Object.entries(live.def.building.rooms)) {
       const other = restored.def.building.rooms[id];
@@ -119,15 +162,15 @@ describe('存档与恢复', () => {
     }
 
     expect(restored.actor).toEqual(live.actor);
-    expect(restored.crowd.rescued).toBe(live.crowd.rescued);
-    expect(restored.crowd.lost).toBe(live.crowd.lost);
-    expect(restored.crowd.t).toBeCloseTo(live.crowd.t, 6);
+    expect(restored.crowd!.rescued).toBe(live.crowd.rescued);
+    expect(restored.crowd!.lost).toBe(live.crowd.lost);
+    expect(restored.crowd!.t).toBeCloseTo(live.crowd.t, 6);
     expect(restored.director.collapsed).toEqual(live.director.collapsed);
     expect(restored.director.events).toEqual(live.director.events);
 
     for (let i = 0; i < live.crowd.residents.length; i++) {
       const a = live.crowd.residents[i];
-      const b = restored.crowd.residents[i];
+      const b = restored.crowd!.residents[i];
       expect(b.id).toBe(a.id);
       expect(b.mood).toBe(a.mood);
       expect(b.health).toBeCloseTo(a.health, 6);
@@ -136,6 +179,53 @@ describe('存档与恢复', () => {
       expect(b.x).toBeCloseTo(a.x, 6);
       expect(b.z).toBeCloseTo(a.z, 6);
     }
+  });
+
+  it('v2 多区域存档往返保留全部区域与居民', () => {
+    const state = buildMultiState();
+    const save = createSave(state);
+
+    expect(save.version).toBe(2);
+    expect(save.crowd).toBeUndefined();
+    expect(save.households?.zones).toHaveLength(3);
+
+    const restored = deserializeSave(serializeSave(save));
+    expect(restored.version).toBe(2);
+    expect(restored.crowd).toBeUndefined();
+    expect(restored.households?.activeRoomId).toBe(save.households?.activeRoomId);
+
+    for (const zone of save.households!.zones) {
+      const before = save.households!.crowds[zone.roomId];
+      const after = restored.households!.crowds[zone.roomId];
+      expect(after.residents).toEqual(before.residents);
+      expect(after.rescued).toBe(before.rescued);
+      expect(after.lost).toBe(before.lost);
+      expect(after.t).toBeCloseTo(before.t, 10);
+    }
+  });
+
+  it('v1 单区域旧档可读，不要求 households', () => {
+    const save = createSave(buildState());
+    const legacy = JSON.parse(serializeSave(save)) as Record<string, unknown>;
+    legacy.version = 1;
+    delete legacy.households;
+
+    const restored = deserializeSave(JSON.stringify(legacy));
+    expect(restored.version).toBe(1);
+    expect(restored.crowd?.rescued).toBe(save.crowd?.rescued);
+    expect(restored.households).toBeUndefined();
+  });
+
+  it('v2 坏版本与既无 crowd 也无 households 的存档都抛错', () => {
+    const save = createSave(buildMultiState());
+
+    const tampered = JSON.parse(serializeSave(save)) as Record<string, unknown>;
+    tampered.version = 999;
+    expect(() => deserializeSave(JSON.stringify(tampered))).toThrow(/版本/);
+
+    const empty = JSON.parse(serializeSave(save)) as Record<string, unknown>;
+    delete empty.households;
+    expect(() => deserializeSave(JSON.stringify(empty))).toThrow(/crowd|households/);
   });
 
   it('版本不符、坏 JSON 与缺字段都抛错', () => {
