@@ -2187,12 +2187,16 @@ git commit -m "feat(mvs): deterministic building camera shots"
 | C2 工具进入建筑与户型火类 | 完成 | `423437b` |
 | C3 空呼、灾害前兆与损失因果 | 完成 | `8fb48dc` |
 | C4 种子/每日挑战/评分对比 | 完成 | `682b491` |
-| C5 文档与完整门禁 | 完成 | 本文档提交 |
+| C5 解锁进度与最佳幽灵 | 完成 | `cbbb206` |
+| C6 存档/继续入口 | 完成 | `59b0d8a` |
+| C7 性能面板与用时 HUD | 完成 | `76042da` |
+| C8 文档与完整门禁 | 完成 | 本文档提交 |
 
 **新文件：**
 - `src/app/buildingTools.ts`：目标房间 5 个工具动作（门/中心/火点目标）
 - `src/eval/score.ts`：评分、星级、原因与本次 vs 最佳对比
-- `tests/building-tools.test.ts`、`tests/layout-fire.test.ts`、`tests/score.test.ts`
+- `src/app/progress.ts`：户型解锁进度（最高分 + 已通关）
+- `tests/building-tools.test.ts`、`tests/layout-fire.test.ts`、`tests/score.test.ts`、`tests/progress.test.ts`
 
 **行为变化：**
 1. 目标房间内 WASD/方向键/D-pad 自由移动；救援距离 2m；躲藏居民只有靠近 2m 才出现在列表与剖视图中。
@@ -2201,9 +2205,13 @@ git commit -m "feat(mvs): deterministic building camera shots"
 4. 空呼气瓶约 120 秒（移动消耗 1.5 倍），耗尽后 `masked=false`；回燃风险与坍塌计时提供一次性前兆。
 5. `?seed=` 与 `?daily=1` 决定种子；结算显示星级、分数、原因与本次 vs 最佳（localStorage 按户型+种子保存）。
 6. 居民死亡写入 `lost:<id>` 因果条目，复盘能指到具体时刻。
+7. 户型解锁：第一个户型始终可用，后续需前一户型得分 > 0；未解锁项在下拉中禁用。
+8. 最佳记录保存 `{ run, curve }`，结算叠加最佳烟热虚线（最多 150 个点）。
+9. 保存/继续：按户型+种子写入 localStorage，恢复玩家、居民、工具、导演与当前房间；`?perf=1` 显示 FPS 与模拟耗时（实测 60 FPS · 0.02ms/帧），HUD 增加用时。
 
 **验收：** 同一次火场能救出 0–3 人，差异来自移动、顺序与工具选择；复盘能指到具体动作。
-（模拟验证：主动追逐+搜索约 23 秒可 3/3；慢操作或错误顺序产生 0–3。）
+（模拟验证：主动追逐+搜索约 23 秒可 3/3；慢操作或错误顺序产生 0–3。
+5–8 分钟单局仍需多房间/多波居民内容扩展，当前未实现。）
 
 ---
 
