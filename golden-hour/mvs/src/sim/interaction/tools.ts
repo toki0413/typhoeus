@@ -1,4 +1,5 @@
 import type { AgentId } from '../spatial/agents';
+import type { ToolCondition } from '../spatial/fields';
 
 export type ToolId =
   | 'hose'
@@ -8,8 +9,6 @@ export type ToolId =
   | 'thermal'
   | 'ladder'
   | 'rope';
-
-export type CarryCondition = 'ok' | 'expired' | 'depressurized' | 'broken' | 'empty';
 
 export interface ToolSpec {
   id: ToolId;
@@ -40,14 +39,14 @@ export const TOOL_SPECS: Record<ToolId, ToolSpec> = {
 export interface CarryToolState {
   id: ToolId;
   charge: number;
-  condition: CarryCondition;
+  condition: ToolCondition;
 }
 
 export type CarryLoadout = Record<ToolId, CarryToolState>;
 
 export const MAX_CARRY_WEIGHT = 1.4;
 
-export const TOOL_CONDITION_FACTOR: Record<CarryCondition, number> = {
+export const CARRY_CONDITION_FACTOR: Record<ToolCondition, number> = {
   ok: 1,
   expired: 0.2,
   depressurized: 0.35,
@@ -69,23 +68,46 @@ export function createToolLoadout(): CarryLoadout {
 
 export function toolWeight(loadout: CarryLoadout): number {
   let total = 0;
-  for (const tool of Object.values(loadout)) {
-    if (tool.charge > 0) total += TOOL_SPECS[tool.id].weight;
+  for (const [id, tool] of Object.entries(loadout) as [ToolId, CarryToolState][]) {
+    if (tool.charge > 0 && TOOL_SPECS[id]) total += TOOL_SPECS[id].weight;
   }
   return total;
 }
 
+export function gearLoad(loadout: CarryLoadout): number {
+  const ratio = toolWeight(loadout) / MAX_CARRY_WEIGHT;
+  return Math.min(1, Math.max(0, ratio));
+}
+
 export function canCarry(loadout: CarryLoadout, id: ToolId): boolean {
-  if (loadout[id].charge > 0) return true;
-  return toolWeight(loadout) + TOOL_SPECS[id].weight <= MAX_CARRY_WEIGHT;
+  const tool = loadout[id];
+  if (!tool || !TOOL_SPECS[id]) return false;
+  if (tool.charge > 0) return true;
+  return toolWeight(loadout) + TOOL_SPECS[id].weight <= MAX_CARRY_WEIGHT + 1e-9;
+}
+
+/** 装上一件未携带的工具；超重或未知工具返回 false。 */
+export function equipTool(loadout: CarryLoadout, id: ToolId): boolean {
+  if (!canCarry(loadout, id)) return false;
+  const tool = loadout[id];
+  if (tool.charge > 0) return true;
+  tool.charge = 1;
+  tool.condition = 'ok';
+  return true;
+}
+
+/** 卸下工具，重量归零。 */
+export function unequipTool(loadout: CarryLoadout, id: ToolId): void {
+  const tool = loadout[id];
+  tool.charge = 0;
+  tool.condition = 'empty';
 }
 
 export function toolAvailable(loadout: CarryLoadout, id: ToolId): boolean {
   const tool = loadout[id];
-  return tool.charge > 0 && TOOL_CONDITION_FACTOR[tool.condition] > 0;
+  return !!tool && tool.charge > 0 && CARRY_CONDITION_FACTOR[tool.condition] > 0;
 }
 
-/** 消耗工具；不可用或余量不足时返回 false。 */
 export function consumeTool(
   loadout: CarryLoadout,
   id: ToolId,
@@ -93,7 +115,8 @@ export function consumeTool(
 ): boolean {
   if (!Number.isFinite(amount) || amount <= 0) return false;
   const tool = loadout[id];
-  if (!toolAvailable(loadout, id)) return false;
+  if (!tool || !toolAvailable(loadout, id)) return false;
+  if (amount > tool.charge + 1e-9) return false;
 
   tool.charge = Math.max(0, tool.charge - amount);
   if (tool.charge <= 0) {
