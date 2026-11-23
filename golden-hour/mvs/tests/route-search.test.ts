@@ -76,4 +76,14 @@ describe('路线搜索', () => {
     for (const link of graph.links) link.blocked = true;
     expect(findRoutes(graph, 'entrance', 'room-202-F1', createActor(), 3)).toEqual([]);
   });
+
+  it('不会因提前停止漏掉更便宜的路线', () => {
+    const graph = createBuilding();
+    const routes = findRoutes(graph, 'lobby-F0', 'room-202-F2', createActor(), 3);
+    expect(routes.length).toBeGreaterThan(0);
+    expect(routes[0].score).toBeLessThan(40);
+    for (let i = 1; i < routes.length; i++) {
+      expect(routes[i].score).toBeGreaterThanOrEqual(routes[i - 1].score);
+    }
+  });
 });

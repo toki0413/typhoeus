@@ -68,6 +68,7 @@ function dijkstra(
 }
 
 const MAX_BAN_SETS = 200;
+const MAX_CANDIDATES = 32;
 
 function banKey(banned: Set<string>): string {
   return [...banned].sort().join(',');
@@ -85,7 +86,7 @@ export function findRoutes(
   const seenBans = new Set<string>();
   const bans: Set<string>[] = [new Set()];
 
-  while (bans.length && found.length < limit && seenBans.size < MAX_BAN_SETS) {
+  while (bans.length && seenBans.size < MAX_BAN_SETS && found.length < MAX_CANDIDATES) {
     const banned = bans.shift()!;
     const key = banKey(banned);
     if (seenBans.has(key)) continue;
@@ -108,5 +109,5 @@ export function findRoutes(
   }
 
   found.sort((a, b) => a.score - b.score);
-  return found;
+  return found.slice(0, limit);
 }
