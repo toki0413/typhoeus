@@ -227,11 +227,19 @@ export interface OccupantState {
   rescued: boolean;
   /** 1..0 */
   health: number;
+  /** 背起时实际加到玩家身上的负重，用于精确回退 */
+  carryLoad: number;
 }
 
 export function createOccupant(x?: number, z?: number, id?: string): OccupantState;
 export function attachOccupant(actor: ActorState, occupant: OccupantState): boolean;
+export function syncCarriedOccupant(occupant: OccupantState, actor: ActorState): void;
 export function stepOccupant(occupant: OccupantState, room: RoomState, dt: number): void;
+export function nearestOpenExit(
+  room: RoomState,
+  x: number,
+  z: number
+): 'door' | 'window' | null;
 export function extractOccupant(
   occupant: OccupantState,
   actor: ActorState,
@@ -341,6 +349,17 @@ export interface ScenarioSnapshot {
 ---
 
 ## 7. Milestone A — Phase 0.5 可执行计划
+
+**执行状态（2026-11-23）：A1–A6 已完成，A7 随本文档一起收尾。**
+
+| 任务 | 状态 | 提交 |
+| --- | --- | --- |
+| A1 坐标模块 | 完成 | `4f693fe`、`d8a265d` |
+| A2 蒸汽与能见度 | 完成 | `eaf4bde`、`07fd4a9` |
+| A3 玩家状态与暴露 | 完成 | `c36954e`、`da866d5` |
+| A4 被困者与撤离 | 完成 | `ebfcd13`、`efd895c` |
+| A5 可玩切片整合 | 完成 | `88f41c5`、`cb89986` |
+| A6 按入口包体预算 | 完成 | `0920c21`、`8d24278` |
 
 **目标：** 单房间从「能灭火」变成「能救人」，并把玩家状态、暴露、胜负收进模拟层。
 
@@ -480,8 +499,8 @@ describe('蒸汽反馈', () => {
   it('水打到高温表面会产生蒸汽，能见度下降', () => {
     const room = createRoom();
     const source = cellAt(room, 5, 4);
-    source.heat = 0.95;
-    source.fire = 0.7;
+    source.heat = 1;
+    source.fire = 0.9;
 
     const before = roomSummary(room);
     spray(room, 'water', 5, 4, { radius: 1, amount: 0.3 });
@@ -490,6 +509,8 @@ describe('蒸汽反馈', () => {
 
     expect(after.steam).toBeGreaterThan(0.001);
     expect(after.visibility).toBeLessThan(before.visibility);
+    // 隔离蒸汽对能见度的贡献：visibility = 1 - smoke*0.6 - steam*0.4
+    expect(1 - after.smoke * 0.6 - after.visibility).toBeGreaterThan(0.0005);
   });
 
   it('蒸汽会随时间散开，不会永久糊住能见度', () => {
@@ -579,7 +600,16 @@ export function roomSummary(state: RoomState): {
 
 - [ ] **Step 4: 在扩散与施水中更新蒸汽**
 
-`src/sim/spatial/spread.ts` 的 `diffuse` 改为同时扩散 smoke/oxygen/heat/steam：
+`src/sim/spatial/spread.ts` 先加入具名常量：
+
+```ts
+const STEAM_DIFFUSION = 1.4;
+const STEAM_THRESHOLD = 0.1;
+const STEAM_GAIN = 1.8;
+const STEAM_DECAY = 0.12;
+```
+
+`diffuse` 改为同时扩散 smoke/oxygen/heat/steam：
 
 ```ts
 function diffuse(state: RoomState, dt: number): void {
@@ -643,20 +673,33 @@ function diffuse(state: RoomState, dt: number): void {
 ```ts
 function applyWater(state: RoomState, dt: number): void {
   for (const c of state.cells) {
-    if (c.water <= 0) continue;
+    if (c.water > 0) {
+      if (c.heat > STEAM_THRESHOLD) {
+        const vapor = c.water * (c.heat - STEAM_THRESHOLD) * STEAM_GAIN * dt;
+        c.steam = clamp01(c.steam + vapor);
+        c.heat = clamp01(c.heat - vapor * 0.6);
+      }
 
-    if (c.heat > 0.4) {
-      const vapor = c.water * (c.heat - 0.4) * 0.9 * dt;
-      c.steam = clamp01(c.steam + vapor);
-      c.heat = clamp01(c.heat - vapor * 0.6);
+      c.fire = clamp01(c.fire - c.water * 0.9 * dt);
+      c.heat = clamp01(c.heat - c.water * 0.5 * dt);
+      c.water = Math.max(0, c.water - 0.12 * dt);
     }
 
-    c.fire = clamp01(c.fire - c.water * 0.9 * dt);
-    c.heat = clamp01(c.heat - c.water * 0.5 * dt);
-    c.water = Math.max(0, c.water - 0.12 * dt);
-    c.steam = Math.max(0, c.steam - c.steam * 0.12 * dt);
+    // 蒸汽衰减必须在水分支外，否则水膜干后蒸汽会永远留在房里。
+    c.steam = clamp01(c.steam - c.steam * STEAM_DECAY * dt);
   }
 }
+```
+
+`fields.ts` 的能见度权重也提取常量：
+
+```ts
+const VISIBILITY_SMOKE_WEIGHT = 0.6;
+const VISIBILITY_STEAM_WEIGHT = 0.4;
+
+visibility: clamp01(
+  1 - avgSmoke * VISIBILITY_SMOKE_WEIGHT - avgSteam * VISIBILITY_STEAM_WEIGHT
+),
 ```
 
 - [ ] **Step 5: 运行，确认通过**
@@ -927,7 +970,7 @@ Expected: FAIL，模块不存在。
 ```ts
 // src/sim/spatial/rescue.ts
 import { cellAt, clamp01, type RoomState } from './fields';
-import { worldToGrid } from './coords';
+import { gridToWorld, worldToGrid } from './coords';
 import type { ActorState } from './actor';
 
 export type OccupantMood = 'calm' | 'panic' | 'unconscious';
@@ -940,14 +983,32 @@ export interface OccupantState {
   carried: boolean;
   rescued: boolean;
   health: number;
+  /** 背起时实际加到玩家身上的负重，用于精确回退 */
+  carryLoad: number;
 }
+
+const OCCUPANT_SMOKE_RATE = 0.05;
+const OCCUPANT_HEAT_RATE = 0.04;
+const CARRY_PROTECTION = 0.4;
+const ATTACH_RANGE = 0.9;
+const EXIT_RANGE = 1.2;
+const CARRY_LOAD = 0.55;
 
 export function createOccupant(
   x = 2.2,
   z = 2,
   id = 'resident-202'
 ): OccupantState {
-  return { id, x, z, mood: 'panic', carried: false, rescued: false, health: 1 };
+  return {
+    id,
+    x,
+    z,
+    mood: 'panic',
+    carried: false,
+    rescued: false,
+    health: 1,
+    carryLoad: 0,
+  };
 }
 
 export function distance(ax: number, az: number, bx: number, bz: number): number {
@@ -955,11 +1016,22 @@ export function distance(ax: number, az: number, bx: number, bz: number): number
 }
 
 export function attachOccupant(actor: ActorState, occupant: OccupantState): boolean {
+  if (actor.downed) return false;
   if (occupant.rescued || occupant.carried) return false;
-  if (distance(actor.x, actor.z, occupant.x, occupant.z) > 0.9) return false;
+  if (distance(actor.x, actor.z, occupant.x, occupant.z) > ATTACH_RANGE) return false;
+
+  const applied = Math.min(1 - actor.load, CARRY_LOAD);
+  actor.load = clamp01(actor.load + applied);
+  occupant.carryLoad = applied;
   occupant.carried = true;
-  actor.load = clamp01(actor.load + 0.55);
   return true;
+}
+
+/** 背起后让居民跟随玩家位置；每帧在 stepOccupant 前调用。 */
+export function syncCarriedOccupant(occupant: OccupantState, actor: ActorState): void {
+  if (!occupant.carried) return;
+  occupant.x = actor.x;
+  occupant.z = actor.z;
 }
 
 export function stepOccupant(
@@ -968,14 +1040,42 @@ export function stepOccupant(
   dt: number
 ): void {
   if (occupant.rescued) return;
+  if (!Number.isFinite(dt) || dt <= 0) return;
+
   const g = worldToGrid(occupant.x, occupant.z);
   const x = Math.min(room.config.cols - 1, Math.max(0, g.x));
   const y = Math.min(room.config.rows - 1, Math.max(0, g.y));
   const c = cellAt(room, x, y);
+  const protection = occupant.carried ? CARRY_PROTECTION : 1;
+
   occupant.health = clamp01(
-    occupant.health - (c.smoke * 0.05 + c.heat * 0.04) * dt
+    occupant.health -
+      (c.smoke * OCCUPANT_SMOKE_RATE + c.heat * OCCUPANT_HEAT_RATE) * protection * dt
   );
   if (occupant.health <= 0) occupant.mood = 'unconscious';
+}
+
+/** 返回离 (x,z) 最近的已打开/已破拆出口；没有可用出口时返回 null。 */
+export function nearestOpenExit(
+  room: RoomState,
+  x: number,
+  z: number
+): 'door' | 'window' | null {
+  let best: 'door' | 'window' | null = null;
+  let bestDist = Infinity;
+
+  for (const id of ['door', 'window'] as const) {
+    const opening = room.openings[id];
+    if (!opening.open && !opening.broken) continue;
+    const point = gridToWorld(opening.x, opening.y);
+    const d = distance(x, z, point.x, point.z);
+    if (d < bestDist) {
+      bestDist = d;
+      best = id;
+    }
+  }
+
+  return best;
 }
 
 export function extractOccupant(
@@ -984,21 +1084,29 @@ export function extractOccupant(
   room: RoomState,
   exit: 'door' | 'window'
 ): boolean {
+  if (actor.downed) return false;
   if (occupant.rescued) return false;
-
-  if (!occupant.carried) {
-    if (distance(actor.x, actor.z, occupant.x, occupant.z) > 0.9) return false;
-  }
 
   const opening = room.openings[exit];
   if (!opening.open && !opening.broken) return false;
 
-  const exitX = exit === 'door' ? -3 : 3;
-  if (distance(actor.x, actor.z, exitX, 0) > 1.2) return false;
+  const exitPoint = gridToWorld(opening.x, opening.y);
+  if (distance(actor.x, actor.z, exitPoint.x, exitPoint.z) > EXIT_RANGE) return false;
 
+  if (!occupant.carried) {
+    if (distance(actor.x, actor.z, occupant.x, occupant.z) > ATTACH_RANGE) return false;
+    if (distance(occupant.x, occupant.z, exitPoint.x, exitPoint.z) > EXIT_RANGE) {
+      return false;
+    }
+  }
+
+  const wasCarried = occupant.carried;
   occupant.rescued = true;
   occupant.carried = false;
-  actor.load = clamp01(actor.load - 0.55);
+  if (wasCarried) {
+    actor.load = Math.max(0, actor.load - occupant.carryLoad);
+    occupant.carryLoad = 0;
+  }
   return true;
 }
 ```
@@ -1006,7 +1114,7 @@ export function extractOccupant(
 - [ ] **Step 4: 运行，确认通过**
 
 Run: `npx vitest run tests/room-rescue.test.ts`
-Expected: 4 passed。
+Expected: 10 passed（执行时在原 5 项基础上补了：背负位置跟随、获救后冻结、引导撤离不掉负重、NaN dt、最近开启出口）。
 
 - [ ] **Step 5: 提交**
 
@@ -1081,8 +1189,10 @@ const moving = Math.hypot(speedInput.x, speedInput.z) > 0;
 if (moving) moveActor(actor, speedInput.x, speedInput.z, dt);
 
 stepActor(actor, room, dt, moving);
+syncCarriedOccupant(occupant, actor);
 stepOccupant(occupant, room, dt);
 ```
+（`syncCarriedOccupant` 必须在 `stepOccupant` 之前，否则会按背起点采样健康。）
 
 `playerGrid()` 改为围绕 `actor`：
 
@@ -1103,8 +1213,8 @@ function playerGrid(): { x: number; y: number } {
 ```ts
 if (name === 'carry') {
   if (occupant.carried) {
-    const exit = Math.abs(actor.x + 3) < Math.abs(actor.x - 3) ? 'door' : 'window';
-    const ok = extractOccupant(occupant, actor, room, exit);
+    const exit = nearestOpenExit(room, actor.x, actor.z);
+    const ok = exit !== null && extractOccupant(occupant, actor, room, exit);
     addLog(
       ok ? '把居民带出火场，任务完成。' : '先把人背到打开的门或窗边再撤。',
       ok ? 'lesson' : 'info'
