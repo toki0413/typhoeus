@@ -30,7 +30,14 @@ export interface ResidentState {
   carried: boolean;
   /** 已救出 */
   rescued: boolean;
+  /** 失去意识后累计时间；超过宽限期即死亡 */
+  downedFor: number;
+  /** 已死亡：不可再救，供视图/复盘使用 */
+  dead: boolean;
 }
+
+/** 失去意识后的宽限期（秒）；耗尽即死亡 */
+export const RESIDENT_LOSS_GRACE = 3;
 
 /** 每秒健康损失：烟与热各一项 */
 const SMOKE_DAMAGE_RATE = 0.05;
@@ -71,6 +78,8 @@ export function createResident(
     injury: 0,
     carried: false,
     rescued: false,
+    downedFor: 0,
+    dead: false,
   };
 }
 
@@ -103,8 +112,8 @@ function calmestNeighbour(
 }
 
 export function stepResident(resident: ResidentState, room: RoomState, dt: number): void {
-  // 被背起或已救出的居民受保护：轻伤不再累积，也不自行移动
-  if (resident.rescued || resident.carried) return;
+  // 被背起、已救出或已死亡的居民受保护：不再掉血，也不自行移动
+  if (resident.rescued || resident.carried || resident.dead) return;
   if (!Number.isFinite(dt) || dt <= 0) return;
 
   const g = worldToGrid(resident.x, resident.z);
@@ -127,8 +136,13 @@ export function stepResident(resident: ResidentState, room: RoomState, dt: numbe
   if (resident.health <= 0) {
     resident.mood = 'unconscious';
     resident.hidden = false;
+    resident.downedFor += dt;
+    if (resident.downedFor >= RESIDENT_LOSS_GRACE) resident.dead = true;
     return;
   }
+
+  // 恢复意识的那一瞬重新开始计死亡宽限期
+  resident.downedFor = 0;
 
   // 躲藏居民不移动，心情固定为 hidden
   if (resident.hidden) {
