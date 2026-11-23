@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0c0f" />
+    <title>Phase 0 · 单房间系统原型</title>
+    <style>
+      :root {
+        --bg: #0a0c0f;
+        --panel: rgba(13, 17, 22, 0.86);
+        --line: rgba(255, 255, 255, 0.1);
+        --ink: #f2efe9;
+        --muted: #9aa3ad;
+        --accent: #e5b567;
+        --danger: #e06a4a;
+        --ok: #6fbf9a;
+        --sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        --mono: ui-monospace, "SFMono-Regular", "Noto Sans Mono CJK SC", monospace;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        overflow: hidden;
+      }
+      #room-canvas {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+      .panel {
+        position: fixed;
+        z-index: 4;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px 14px;
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(10px) saturate(1.1);
+        font: 13px/1.6 var(--sans);
+      }
+      #meters {
+        top: 14px;
+        left: 14px;
+        width: 240px;
+      }
+      #meters h1 {
+        margin: 0 0 8px;
+        font-size: 14px;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+      }
+      .meter {
+        display: grid;
+        grid-template-columns: 58px 1fr 44px;
+        align-items: center;
+        gap: 8px;
+        margin: 5px 0;
+        font: 12px/1.2 var(--mono);
+        color: var(--muted);
+      }
+      .bar {
+        height: 6px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.09);
+        overflow: hidden;
+      }
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: 0;
+        border-radius: 4px;
+        transition: width 0.15s linear;
+      }
+      .bar.oxygen > i {
+        background: var(--ok);
+      }
+      .bar.smoke > i {
+        background: #9aa3ad;
+      }
+      .bar.heat > i {
+        background: var(--danger);
+      }
+      .bar.risk > i {
+        background: #e0903a;
+      }
+      .meter b {
+        font-weight: 500;
+        color: var(--ink);
+        text-align: right;
+      }
+      #tools {
+        top: 14px;
+        right: 14px;
+        width: 260px;
+      }
+      #tools h2 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+      }
+      .tool {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px;
+        padding: 5px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        font: 12px/1.4 var(--sans);
+      }
+      .tool small {
+        color: var(--muted);
+        font: 11px/1.3 var(--mono);
+      }
+      .tool .tag {
+        font: 11px/1.4 var(--mono);
+        color: var(--ok);
+      }
+      .tool .tag.bad {
+        color: var(--danger);
+      }
+      #actions {
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        max-width: min(760px, 94vw);
+        justify-content: center;
+      }
+      #actions button {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--ink);
+        font: 12px/1 var(--sans);
+        padding: 10px 12px;
+        border-radius: 9px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      #actions button:hover {
+        background: rgba(229, 181, 103, 0.16);
+        border-color: rgba(229, 181, 103, 0.5);
+      }
+      #actions button.primary {
+        border-color: rgba(229, 181, 103, 0.55);
+        color: var(--accent);
+      }
+      #actions button.active {
+        background: rgba(229, 181, 103, 0.24);
+        border-color: var(--accent);
+      }
+      #log {
+        left: 14px;
+        bottom: 16px;
+        width: 320px;
+        max-height: 190px;
+        overflow: hidden;
+        font: 12px/1.55 var(--sans);
+      }
+      #log p {
+        margin: 0 0 4px;
+        color: var(--muted);
+      }
+      #log p.lesson {
+        color: var(--accent);
+      }
+      #log p.danger {
+        color: var(--danger);
+      }
+      #hint {
+        right: 14px;
+        bottom: 16px;
+        width: 300px;
+        color: var(--muted);
+        font: 12px/1.5 var(--sans);
+      }
+      #hint kbd {
+        font: 11px/1 var(--mono);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 2px 5px;
+        color: var(--ink);
+        background: rgba(255, 255, 255, 0.05);
+      }
+      #outcome {
+        position: fixed;
+        inset: 0;
+        z-index: 9;
+        display: none;
+        place-items: center;
+        background: rgba(5, 7, 9, 0.72);
+        backdrop-filter: blur(6px);
+      }
+      #outcome.show {
+        display: grid;
+      }
+      #outcome .card {
+        width: min(460px, 88vw);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 22px 24px;
+        text-align: center;
+      }
+      #outcome h2 {
+        margin: 0 0 8px;
+        font-size: 20px;
+      }
+      #outcome p {
+        color: var(--muted);
+        font: 13px/1.65 var(--sans);
+        margin: 0 0 16px;
+      }
+      #outcome button {
+        border: 1px solid var(--accent);
+        background: rgba(229, 181, 103, 0.16);
+        color: var(--accent);
+        font: 13px/1 var(--sans);
+        padding: 11px 20px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      @media (max-width: 900px) {
+        #log,
+        #hint {
+          display: none;
+        }
+        #tools {
+          width: 190px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="room-canvas"></canvas>
+
+    <section class="panel" id="meters">
+      <h1>202 室 · 到场评估</h1>
+      <div class="meter">
+        <span>氧气</span>
+        <div class="bar oxygen"><i id="bar-oxygen"></i></div>
+        <b id="val-oxygen">--</b>
+      </div>
+      <div class="meter">
+        <span>可见度</span>
+        <div class="bar smoke"><i id="bar-smoke"></i></div>
+        <b id="val-smoke">--</b>
+      </div>
+      <div class="meter">
+        <span>室温</span>
+        <div class="bar heat"><i id="bar-heat"></i></div>
+        <b id="val-heat">--</b>
+      </div>
+      <div class="meter">
+        <span>回燃</span>
+        <div class="bar risk"><i id="bar-risk"></i></div>
+        <b id="val-risk">--</b>
+      </div>
+      <div class="meter">
+        <span>门温</span>
+        <div class="bar heat"><i id="bar-door"></i></div>
+        <b id="val-door">--</b>
+      </div>
+      <div class="meter">
+        <span>自身</span>
+        <div class="bar risk"><i id="bar-self"></i></div>
+        <b id="val-self">--</b>
+      </div>
+    </section>
+
+    <section class="panel" id="tools">
+      <h2>随身器材</h2>
+      <div id="tool-list"></div>
+    </section>
+
+    <section class="panel" id="log"></section>
+
+    <section class="panel" id="hint">
+      <div><kbd>W A S D</kbd> 移动 · <kbd>Shift</kbd> 低姿（慢但少吸烟）</div>
+      <div><kbd>E</kbd> 开门 · <kbd>R</kbd> 开窗 · <kbd>Q</kbd> 测温</div>
+      <div><kbd>1</kbd> 水 · <kbd>2</kbd> 干粉 · <kbd>3</kbd> CO₂ · <kbd>4</kbd> 湿棉被 · <kbd>5</kbd> 断电 · <kbd>6</kbd> 关门</div>
+    </section>
+
+    <section class="panel" id="actions">
+      <button data-action="measure">测温 Q</button>
+      <button data-action="door" class="primary">开门 E</button>
+      <button data-action="window">开窗 R</button>
+      <button data-action="water" class="primary">水枪 1</button>
+      <button data-action="dryPowder">干粉 2</button>
+      <button data-action="co2">CO₂ 3</button>
+      <button data-action="wetBlanket">湿棉被 4</button>
+      <button data-action="powerCut">断电 5</button>
+      <button data-action="closeDoor">关门 6</button>
+      <button data-action="reset">重开</button>
+    </section>
+
+    <section id="outcome">
+      <div class="card">
+        <h2 id="outcome-title"></h2>
+        <p id="outcome-body"></p>
+        <button id="outcome-reset">再来一次</button>
+      </div>
+    </section>
+
+    <script type="module" src="/src/roomMain.ts"></script>
+  </body>
+</html>

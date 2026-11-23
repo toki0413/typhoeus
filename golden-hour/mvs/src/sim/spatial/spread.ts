@@ -25,7 +25,7 @@ const HEAT_COOLING = 0.05;
 
 const BURN_RATE = 0.012;
 const OXY_CONSUME = 45;
-const HEAT_GAIN = 24;
+const HEAT_GAIN = 55;
 const SMOKE_GAIN = 40;
 
 const SPREAD_RATE = 0.06;
@@ -54,6 +54,19 @@ function applyVentilation(state: RoomState, dt: number): void {
     const removed = c.smoke * Math.min(1, vent * dt);
     c.smoke -= removed;
     state.stats.smokeVented += removed;
+
+    // 开口后整间房的缓慢换气：窗形成烟囱效应，排烟强、进氧慢；门进氧强、排烟弱。
+    const roomVent = id === 'window' ? 0.05 : 0.01;
+    const roomIntake = id === 'window' ? 0.02 : 0.06;
+    // 开窗排烟同时带走热量；关着门时门板温度随之下降。
+    const roomCooling = id === 'window' ? 0.03 : 0.005;
+    for (const cell of state.cells) {
+      const out = cell.smoke * Math.min(1, roomVent * dt);
+      cell.smoke -= out;
+      state.stats.smokeVented += out;
+      cell.oxygen = clamp01(cell.oxygen + (1 - cell.oxygen) * roomIntake * dt);
+      cell.heat = clamp01(cell.heat - cell.heat * roomCooling * dt);
+    }
   }
 }
 
@@ -186,13 +199,13 @@ function trackDoorTemp(state: RoomState, dt: number): void {
   const s = roomSummary(state);
   const door = state.openings.door;
   const contact = cellAt(state, door.x, door.y).heat;
-  const target = clamp01(contact * 0.5 + s.heat * 0.5 - door.wet * 0.3);
+  const target = clamp01(contact * 0.35 + s.heat * 0.85 - door.wet * 0.3);
   door.temp = clamp01(door.temp + (target - door.temp) * 0.6 * dt);
   door.wet = Math.max(0, door.wet - 0.05 * dt);
 
   const win = state.openings.window;
   const winContact = cellAt(state, win.x, win.y).heat;
-  const winTarget = clamp01(winContact * 0.8 + s.heat * 0.2 - win.wet * 0.3);
+  const winTarget = clamp01(winContact * 0.6 + s.heat * 0.4 - win.wet * 0.3);
   win.temp = clamp01(win.temp + (winTarget - win.temp) * 0.6 * dt);
   win.wet = Math.max(0, win.wet - 0.05 * dt);
 }
@@ -238,6 +251,7 @@ export function stepRoom(state: RoomState, dt = FIXED_DT): void {
   state.t += dt;
   applyVentilation(state, dt);
   diffuse(state, dt);
+  spreadFire(state, dt);
   burn(state, dt);
   applyWater(state, dt);
   applyStructure(state, dt);

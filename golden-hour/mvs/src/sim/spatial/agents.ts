@@ -86,7 +86,7 @@ export const AGENTS: Record<AgentId, AgentSpec> = {
   blanket: {
     id: 'blanket',
     label: '灭火毯 / 覆盖窒息',
-    effect: effects({ F: 1, B: 0.5, A: 0.2 }),
+    effect: effects({ F: 1, B: 0.5, A: 0.55 }),
     hazard: effects({ C: 0.2 }),
     cooling: 0,
     leavesWater: false,

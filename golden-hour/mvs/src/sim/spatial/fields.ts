@@ -72,15 +72,27 @@ export interface RoomEvent {
   detail: string;
 }
 
-/** 玩家携带的灭火剂余量 0..1；没带的就是 0。 */
-export interface ToolLoadout {
-  water: number;
-  dryPowder: number;
-  co2: number;
-  foam: number;
-  wetChemical: number;
-  sand: number;
+/**
+ * 灭火器材不是“永远满格”的：可能过期、压力不足、水带破损。
+ * 玩家要先检查，再决定用器材还是就地取材。
+ */
+export type ToolKey =
+  | 'water'
+  | 'dryPowder'
+  | 'co2'
+  | 'foam'
+  | 'wetChemical'
+  | 'sand';
+
+export type ToolCondition = 'ok' | 'expired' | 'depressurized' | 'broken' | 'empty';
+
+export interface ToolState {
+  /** 余量 0..1 */
+  charge: number;
+  condition: ToolCondition;
 }
+
+export type ToolLoadout = Record<ToolKey, ToolState>;
 
 export interface RoomStats {
   smokeVented: number;
@@ -201,12 +213,12 @@ export function createRoom(config: Partial<RoomConfig> = {}): RoomState {
     log: [],
     stats: { smokeVented: 0, oxygenIn: 0, waterUsed: 0, peakHeat: 0 },
     tools: {
-      water: 1,
-      dryPowder: 1,
-      co2: 1,
-      foam: 0,
-      wetChemical: 0,
-      sand: 0,
+      water: { charge: 1, condition: 'ok' },
+      dryPowder: { charge: 1, condition: 'ok' },
+      co2: { charge: 1, condition: 'ok' },
+      foam: { charge: 0, condition: 'empty' },
+      wetChemical: { charge: 0, condition: 'empty' },
+      sand: { charge: 0, condition: 'empty' },
     },
   };
 
@@ -224,8 +236,8 @@ export function createRoom(config: Partial<RoomConfig> = {}): RoomState {
   }
 
   // 门内侧一桶松香水（B 类液体火）：用水会飞溅扩散，必须先断源或用干粉/泡沫
-  Object.assign(cellAt(state, 2, 5), makeFuel(0.7, 0.95, 2.2, 'B'));
-  Object.assign(cellAt(state, 2, 5), { fire: 0.25, heat: 0.18 });
+  Object.assign(cellAt(state, 2, 5), makeFuel(0.5, 0.95, 2.2, 'B'));
+  Object.assign(cellAt(state, 2, 5), { fire: 0.15, heat: 0.16 });
 
   // 火源在沙发中间
   const source = cellAt(state, 5, 4);
