@@ -8,6 +8,7 @@ import {
   type ToolKey,
 } from './sim/spatial/fields';
 import { FIXED_DT, stepRoom } from './sim/spatial/spread';
+import { gridToWorld } from './sim/spatial/coords';
 import { inspectTool, measureOpening, openOpening, spray } from './sim/spatial/verbs';
 import { type AgentId } from './sim/spatial/agents';
 import { useImprovised } from './sim/spatial/improvised';
@@ -17,6 +18,7 @@ import {
   attachOccupant,
   createOccupant,
   extractOccupant,
+  nearestOpenExit,
   stepOccupant,
   syncCarriedOccupant,
 } from './sim/spatial/rescue';
@@ -130,6 +132,11 @@ function playerGrid(): { x: number; y: number } {
   };
 }
 
+function nearOpening(id: 'door' | 'window', range = 1.7): boolean {
+  const point = gridToWorld(room.openings[id].x, room.openings[id].y);
+  return Math.hypot(actor.x - point.x, actor.z - point.z) <= range;
+}
+
 function action(name: string): void {
   if (ended) return;
   const g = playerGrid();
@@ -148,7 +155,7 @@ function action(name: string): void {
   }
 
   if (name === 'door') {
-    if (Math.abs(actor.x + 3) > 1.7 || Math.abs(actor.z) > 1.3) {
+    if (!nearOpening('door')) {
       addLog('离门太远，先走到门边。', 'info');
       return;
     }
@@ -165,7 +172,7 @@ function action(name: string): void {
   }
 
   if (name === 'window') {
-    if (Math.abs(actor.x - 3) > 1.7 || Math.abs(actor.z) > 1.3) {
+    if (!nearOpening('window')) {
       addLog('离窗太远，先走到窗边。', 'info');
       return;
     }
@@ -221,8 +228,8 @@ function action(name: string): void {
 
   if (name === 'carry') {
     if (occupant.carried) {
-      const exit = Math.abs(actor.x + 3) < Math.abs(actor.x - 3) ? 'door' : 'window';
-      const ok = extractOccupant(occupant, actor, room, exit);
+      const exit = nearestOpenExit(room, actor.x, actor.z);
+      const ok = exit !== null && extractOccupant(occupant, actor, room, exit);
       addLog(
         ok ? '把居民带出火场，任务完成。' : '先把人背到打开的门或窗边再撤。',
         ok ? 'lesson' : 'info'

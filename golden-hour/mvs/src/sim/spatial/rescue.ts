@@ -44,6 +44,29 @@ export function distance(ax: number, az: number, bx: number, bz: number): number
   return Math.hypot(ax - bx, az - bz);
 }
 
+/** 返回离 (x,z) 最近的已打开/已破拆出口；没有可用出口时返回 null。 */
+export function nearestOpenExit(
+  room: RoomState,
+  x: number,
+  z: number
+): 'door' | 'window' | null {
+  let best: 'door' | 'window' | null = null;
+  let bestDist = Infinity;
+
+  for (const id of ['door', 'window'] as const) {
+    const opening = room.openings[id];
+    if (!opening.open && !opening.broken) continue;
+    const point = gridToWorld(opening.x, opening.y);
+    const d = distance(x, z, point.x, point.z);
+    if (d < bestDist) {
+      bestDist = d;
+      best = id;
+    }
+  }
+
+  return best;
+}
+
 export function attachOccupant(actor: ActorState, occupant: OccupantState): boolean {
   if (actor.downed) return false;
   if (occupant.rescued || occupant.carried) return false;

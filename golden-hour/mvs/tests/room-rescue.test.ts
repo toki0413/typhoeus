@@ -5,6 +5,7 @@ import {
   attachOccupant,
   createOccupant,
   extractOccupant,
+  nearestOpenExit,
   stepOccupant,
   syncCarriedOccupant,
 } from '../src/sim/spatial/rescue';
@@ -106,5 +107,19 @@ describe('被困者与撤离', () => {
     const before = occupant.health;
     stepOccupant(occupant, room, Number.NaN);
     expect(occupant.health).toBe(before);
+  });
+
+  it('返回最近的已打开出口', () => {
+    const room = createRoom();
+    room.openings.door.open = false;
+    room.openings.window.open = true;
+    expect(nearestOpenExit(room, -2.4, 0)).toBe('window');
+
+    room.openings.door.open = true;
+    expect(nearestOpenExit(room, -2.4, 0)).toBe('door');
+
+    room.openings.door.open = false;
+    room.openings.window.open = false;
+    expect(nearestOpenExit(room, 0, 0)).toBeNull();
   });
 });
