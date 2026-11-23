@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { clamp01, type RoomState } from '../sim/spatial/fields';
+import { CELL_SIZE, clamp01, type RoomState } from '../sim/spatial/fields';
 import { ROOM_SIZE_M, worldToGrid, gridToWorld } from '../sim/spatial/coords';
 
 /**
@@ -25,7 +25,7 @@ const COLORS = {
 
 export function createRoomView(canvas: HTMLCanvasElement): RoomView {
   const size = ROOM_SIZE_M;
-  const cellSize = ROOM_SIZE_M / 8;
+  const cellSize = CELL_SIZE;
 
   let renderer: THREE.WebGLRenderer;
   try {
@@ -165,9 +165,6 @@ export function createRoomView(canvas: HTMLCanvasElement): RoomView {
   helmet.castShadow = true;
   player.add(helmet);
   scene.add(player);
-
-  const clock = new THREE.Clock();
-  void clock;
 
   function sync(state: RoomState, p: { x: number; z: number }, _dt: number): void {
     for (let y = 0; y < rows; y++) {

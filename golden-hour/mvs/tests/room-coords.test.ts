@@ -23,4 +23,14 @@ describe('房间坐标', () => {
   it('把越界点夹回房间内', () => {
     expect(clampToRoom(99, -99)).toEqual({ x: 2.75, z: -2.75 });
   });
+
+  it('边界点归入最靠近的格子', () => {
+    expect(worldToGrid(3, 3)).toEqual({ x: 7, y: 7 });
+    expect(worldToGrid(-3, -3)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('clampToRoom 支持自定义 margin', () => {
+    expect(clampToRoom(0, 0)).toEqual({ x: 0, z: 0 });
+    expect(clampToRoom(99, 99, 1)).toEqual({ x: 2, z: 2 });
+  });
 });
