@@ -1,6 +1,7 @@
 import type { ActorState } from '../spatial/actor';
 import type { BuildingGraph, RoomLink } from '../spatial/rooms';
 
+/** score = time + risk * 20；findRoutes 返回结果按 score 非降排序。 */
 export interface Route {
   steps: RoomLink[];
   time: number;
@@ -62,8 +63,14 @@ function dijkstra(
   }
 
   const time = steps.reduce((sum, l) => sum + l.time, 0);
-  const risk = steps.reduce((sum, l) => sum + l.risk, 0) / Math.max(1, steps.length);
+  const risk = steps.reduce((sum, l) => sum + l.risk, 0);
   return { steps, time, risk, score: time + risk * 20 };
+}
+
+const MAX_BAN_SETS = 200;
+
+function banKey(banned: Set<string>): string {
+  return [...banned].sort().join(',');
 }
 
 export function findRoutes(
@@ -75,16 +82,21 @@ export function findRoutes(
 ): Route[] {
   const found: Route[] = [];
   const seen = new Set<string>();
+  const seenBans = new Set<string>();
   const bans: Set<string>[] = [new Set()];
 
-  while (bans.length && found.length < limit) {
+  while (bans.length && found.length < limit && seenBans.size < MAX_BAN_SETS) {
     const banned = bans.shift()!;
+    const key = banKey(banned);
+    if (seenBans.has(key)) continue;
+    seenBans.add(key);
+
     const route = dijkstra(graph, from, to, banned, actor);
     if (!route) continue;
 
-    const key = route.steps.map((s) => s.id).join('>');
-    if (!seen.has(key)) {
-      seen.add(key);
+    const routeKey = route.steps.map((step) => step.id).join('>');
+    if (!seen.has(routeKey)) {
+      seen.add(routeKey);
       found.push(route);
     }
 
@@ -95,5 +107,6 @@ export function findRoutes(
     }
   }
 
+  found.sort((a, b) => a.score - b.score);
   return found;
 }

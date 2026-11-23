@@ -9,6 +9,9 @@ describe('路线搜索', () => {
     const routes = findRoutes(graph, 'entrance', 'room-202-F1', createActor(), 3);
     expect(routes.length).toBe(3);
 
+    const keys = routes.map((r) => r.steps.map((s) => s.id).join('>'));
+    expect(new Set(keys).size).toBe(keys.length);
+
     const kinds = routes.map((r) => r.steps.map((s) => s.kind).join('>'));
     expect(kinds.some((k) => k.includes('stair'))).toBe(true);
     expect(kinds.some((k) => k.includes('ladder'))).toBe(true);
@@ -22,6 +25,7 @@ describe('路线搜索', () => {
     }
     const routes = findRoutes(graph, 'entrance', 'room-202-F1', createActor(), 3);
     expect(routes.length).toBeGreaterThanOrEqual(1);
+    expect(routes.length).toBeGreaterThan(0);
     expect(routes.every((r) => r.steps.every((s) => s.kind !== 'stair'))).toBe(true);
   });
 
@@ -30,6 +34,7 @@ describe('路线搜索', () => {
     const loaded = createActor();
     loaded.load = 0.9;
     const routes = findRoutes(graph, 'entrance', 'room-202-F1', loaded, 3);
+    expect(routes.length).toBeGreaterThan(0);
     expect(routes.every((r) => r.steps.every((s) => s.kind !== 'ladder'))).toBe(true);
   });
 
@@ -38,7 +43,37 @@ describe('路线搜索', () => {
     const ladder = graph.links.find((l) => l.kind === 'ladder')!;
     const actor = createActor();
     expect(canTraverse(ladder, actor)).toBe(true);
+
     actor.load = 0.9;
     expect(canTraverse(ladder, actor)).toBe(false);
+
+    actor.load = 0;
+    actor.stamina = 0.2;
+    expect(canTraverse(ladder, actor)).toBe(false);
+
+    actor.stamina = 0.3;
+    expect(canTraverse(ladder, actor)).toBe(true);
+  });
+
+  it('路线按分数非降返回', () => {
+    const graph = createBuilding();
+    const routes = findRoutes(graph, 'entrance', 'room-202-F1', createActor(), 3);
+    for (let i = 1; i < routes.length; i++) {
+      expect(routes[i].score).toBeGreaterThanOrEqual(routes[i - 1].score);
+    }
+  });
+
+  it('起点等于终点返回空路线', () => {
+    const graph = createBuilding();
+    const routes = findRoutes(graph, 'entrance', 'entrance', createActor(), 3);
+    expect(routes).toHaveLength(1);
+    expect(routes[0].steps).toEqual([]);
+    expect(routes[0].score).toBe(0);
+  });
+
+  it('不存在路线时返回空数组', () => {
+    const graph = createBuilding();
+    for (const link of graph.links) link.blocked = true;
+    expect(findRoutes(graph, 'entrance', 'room-202-F1', createActor(), 3)).toEqual([]);
   });
 });
