@@ -5,10 +5,11 @@
  * 不碰渲染、输入与随机数。房间场由 fields 层的 createRoom 初始化。
  */
 
-import { createRoom, type FireClass } from '../sim/spatial/fields';
+import { SOFA_CELLS, createRoom, type FireClass } from '../sim/spatial/fields';
 import type { BuildingGraph, LinkKind, RoomLink, RoomNode } from '../sim/spatial/rooms';
 import { materialsByClass, type Material } from './materials';
 import type { TargetFireProfile } from '../sim/spatial/scene';
+import { resident, zone, type ZoneFireSpec, type ZoneSpec } from './zones';
 
 export type { TargetFireProfile };
 
@@ -21,7 +22,36 @@ export interface LayoutDefinition {
   target: string;
   /** 该户型目标房间的火灾类别，决定用哪种灭火剂 */
   targetFireClass: FireClass;
+  /** 救援区域列表；第一个区域即 target，后续为串烟区 */
+  zones: ZoneSpec[];
   build(): BuildingGraph;
+}
+
+/** 首火区统一用沙发格起火，强度和最热源格按户型微调。 */
+function sofaFire(intensity: number, sourceIntensity: number): ZoneFireSpec {
+  return { cells: SOFA_CELLS, intensity, source: [5, 4], sourceIntensity };
+}
+
+/** 每区固定 2 人：可见者靠近门口，躲藏者靠在里侧。 */
+function zoneResidents(roomId: string, primary: boolean): ZoneSpec['residents'] {
+  return [
+    resident({
+      id: `${roomId}-a`,
+      x: 2,
+      y: 2,
+      health: primary ? 1.0 : 0.9,
+      panic: primary ? 0.6 : 0.2,
+      hidden: false,
+    }),
+    resident({
+      id: `${roomId}-b`,
+      x: 3,
+      y: 6,
+      health: primary ? 0.6 : 0.65,
+      panic: primary ? 0.3 : 0.15,
+      hidden: true,
+    }),
+  ];
 }
 
 interface RoomSpec {
@@ -78,6 +108,27 @@ const classic: LayoutDefinition = {
   entrance: 'entrance',
   target: 'room-202-F1',
   targetFireClass: 'A',
+  zones: [
+    zone({
+      roomId: 'room-202-F1',
+      label: '202 客厅',
+      fireClass: 'A',
+      fire: sofaFire(0.2, 0.45),
+      residents: zoneResidents('room-202-F1', true),
+    }),
+    zone({
+      roomId: 'room-201-F1',
+      label: '201 卧室',
+      fireClass: 'A',
+      residents: zoneResidents('room-201-F1', false),
+    }),
+    zone({
+      roomId: 'room-203-F1',
+      label: '203 厨房',
+      fireClass: 'F',
+      residents: zoneResidents('room-203-F1', false),
+    }),
+  ],
   build: () =>
     buildGraph({
       rooms: [
@@ -86,6 +137,8 @@ const classic: LayoutDefinition = {
         { id: 'stair-F0', floor: 0, x: 4, z: 8 },
         { id: 'stair-F1', floor: 1, x: 4, z: 8 },
         { id: 'room-202-F1', floor: 1, x: 4, z: 2 },
+        { id: 'room-201-F1', floor: 1, x: -2, z: 2 },
+        { id: 'room-203-F1', floor: 1, x: 10, z: 8 },
         { id: 'escape-F1', floor: 1, x: 10, z: 2 },
         { id: 'roof', floor: 2, x: 10, z: -4 },
       ],
@@ -94,6 +147,8 @@ const classic: LayoutDefinition = {
         { a: 'lobby-F0', b: 'stair-F0', kind: 'door', time: 3, risk: 0.03 },
         { a: 'stair-F0', b: 'stair-F1', kind: 'stair', time: 8, risk: 0.08 },
         { a: 'stair-F1', b: 'room-202-F1', kind: 'door', time: 4, risk: 0.25 },
+        { a: 'stair-F1', b: 'room-201-F1', kind: 'door', time: 3, risk: 0.2 },
+        { a: 'stair-F1', b: 'room-203-F1', kind: 'door', time: 3, risk: 0.24 },
         { a: 'room-202-F1', b: 'escape-F1', kind: 'window', time: 2, risk: 0.3 },
         { a: 'escape-F1', b: 'roof', kind: 'ladder', time: 6, risk: 0.35 },
       ],
@@ -106,6 +161,27 @@ const narrow: LayoutDefinition = {
   entrance: 'entrance',
   target: 'room-202-F1',
   targetFireClass: 'F',
+  zones: [
+    zone({
+      roomId: 'room-202-F1',
+      label: '202 厨房',
+      fireClass: 'F',
+      fire: sofaFire(0.18, 0.4),
+      residents: zoneResidents('room-202-F1', true),
+    }),
+    zone({
+      roomId: 'room-201-F1',
+      label: '201 卧室',
+      fireClass: 'A',
+      residents: zoneResidents('room-201-F1', false),
+    }),
+    zone({
+      roomId: 'room-203-F1',
+      label: '203 储物间',
+      fireClass: 'A',
+      residents: zoneResidents('room-203-F1', false),
+    }),
+  ],
   build: () =>
     buildGraph({
       rooms: [
@@ -114,6 +190,8 @@ const narrow: LayoutDefinition = {
         { id: 'stair-narrow-F0', floor: 0, x: 4, z: 8 },
         { id: 'stair-narrow-F1', floor: 1, x: 4, z: 8 },
         { id: 'room-202-F1', floor: 1, x: 4, z: 2 },
+        { id: 'room-201-F1', floor: 1, x: -2, z: 2 },
+        { id: 'room-203-F1', floor: 1, x: 10, z: 8 },
         { id: 'escape-narrow-F1', floor: 1, x: 10, z: 2 },
       ],
       links: [
@@ -121,6 +199,8 @@ const narrow: LayoutDefinition = {
         { a: 'hall-F0', b: 'stair-narrow-F0', kind: 'door', time: 2, risk: 0.03 },
         { a: 'stair-narrow-F0', b: 'stair-narrow-F1', kind: 'stair', time: 7, risk: 0.1 },
         { a: 'stair-narrow-F1', b: 'room-202-F1', kind: 'door', time: 3, risk: 0.2 },
+        { a: 'stair-narrow-F1', b: 'room-201-F1', kind: 'door', time: 3, risk: 0.18 },
+        { a: 'stair-narrow-F1', b: 'room-203-F1', kind: 'door', time: 3, risk: 0.24 },
         { a: 'room-202-F1', b: 'escape-narrow-F1', kind: 'window', time: 2, risk: 0.3 },
       ],
     }),
@@ -132,6 +212,27 @@ const courtyard: LayoutDefinition = {
   entrance: 'entrance',
   target: 'room-202-F1',
   targetFireClass: 'B',
+  zones: [
+    zone({
+      roomId: 'room-202-F1',
+      label: '202 车库',
+      fireClass: 'B',
+      fire: sofaFire(0.22, 0.45),
+      residents: zoneResidents('room-202-F1', true),
+    }),
+    zone({
+      roomId: 'room-201-F1',
+      label: '201 住户',
+      fireClass: 'A',
+      residents: zoneResidents('room-201-F1', false),
+    }),
+    zone({
+      roomId: 'room-203-F1',
+      label: '203 阁楼',
+      fireClass: 'A',
+      residents: zoneResidents('room-203-F1', false),
+    }),
+  ],
   build: () =>
     buildGraph({
       rooms: [
@@ -142,6 +243,8 @@ const courtyard: LayoutDefinition = {
         { id: 'stairB-F0', floor: 0, x: 4, z: 2 },
         { id: 'stairB-F1', floor: 1, x: 4, z: 2 },
         { id: 'room-202-F1', floor: 1, x: 10, z: 4 },
+        { id: 'room-201-F1', floor: 1, x: 10, z: -2 },
+        { id: 'room-203-F1', floor: 1, x: -2, z: 2 },
         { id: 'balcony-F1', floor: 1, x: 16, z: 4 },
         { id: 'courtyard-roof', floor: 2, x: 16, z: 4 },
       ],
@@ -153,6 +256,8 @@ const courtyard: LayoutDefinition = {
         { a: 'stairB-F0', b: 'stairB-F1', kind: 'stair', time: 8, risk: 0.1 },
         { a: 'stairA-F1', b: 'room-202-F1', kind: 'door', time: 4, risk: 0.2 },
         { a: 'stairB-F1', b: 'room-202-F1', kind: 'door', time: 4, risk: 0.22 },
+        { a: 'stairB-F1', b: 'room-201-F1', kind: 'door', time: 3, risk: 0.24 },
+        { a: 'stairA-F1', b: 'room-203-F1', kind: 'door', time: 3, risk: 0.26 },
         { a: 'room-202-F1', b: 'balcony-F1', kind: 'window', time: 2, risk: 0.3 },
         { a: 'balcony-F1', b: 'courtyard-roof', kind: 'ladder', time: 6, risk: 0.35 },
       ],
@@ -165,6 +270,27 @@ const duplex: LayoutDefinition = {
   entrance: 'entrance',
   target: 'room-202-F2',
   targetFireClass: 'E',
+  zones: [
+    zone({
+      roomId: 'room-202-F2',
+      label: '202-F2 配电',
+      fireClass: 'E',
+      fire: sofaFire(0.2, 0.45),
+      residents: zoneResidents('room-202-F2', true),
+    }),
+    zone({
+      roomId: 'room-202-F1',
+      label: '202-F1 客厅',
+      fireClass: 'A',
+      residents: zoneResidents('room-202-F1', false),
+    }),
+    zone({
+      roomId: 'garden-F1',
+      label: 'garden-F1 花园房',
+      fireClass: 'A',
+      residents: zoneResidents('garden-F1', false),
+    }),
+  ],
   build: () =>
     buildGraph({
       rooms: [
