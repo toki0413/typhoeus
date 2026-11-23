@@ -94,6 +94,8 @@
         top: 14px;
         right: 14px;
         width: 274px;
+        max-height: calc(100vh - 28px);
+        overflow-y: auto;
       }
       #routes-panel h2 {
         margin: 0 0 8px;
@@ -259,6 +261,8 @@
       }
       #outcome .card {
         width: min(460px, 88vw);
+        max-height: 88vh;
+        overflow-y: auto;
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 16px;
@@ -308,6 +312,38 @@
         color: var(--muted);
         font: 11px/1.5 var(--sans);
       }
+      #outcome-curve svg {
+        width: 100%;
+        height: auto;
+        display: block;
+        margin: 4px 0 10px;
+      }
+      #outcome-curve path {
+        fill: none;
+        stroke-width: 2;
+        vector-effect: non-scaling-stroke;
+      }
+      #outcome-curve path.smoke {
+        stroke: #9aa3ad;
+      }
+      #outcome-curve path.heat {
+        stroke: #e06a4a;
+      }
+      #outcome-curve path.fire {
+        stroke: #e5b567;
+      }
+      #outcome-curve .curve-legend {
+        color: var(--muted);
+        font: 11px/1.4 var(--mono);
+      }
+      @media (pointer: coarse) {
+        .panel button,
+        #routes button,
+        #residents button,
+        #outcome button {
+          min-height: 44px;
+        }
+      }
       @media (max-width: 900px) {
         #log,
         #hint {
@@ -315,6 +351,20 @@
         }
         #routes-panel {
           width: 210px;
+        }
+      }
+      /* 窄屏把仪表与路线上下堆叠，避免两块浮层互相遮挡。 */
+      @media (max-width: 640px) {
+        #meters {
+          width: calc(100vw - 28px);
+          max-height: 38vh;
+          overflow-y: auto;
+        }
+        #routes-panel {
+          top: auto;
+          bottom: 14px;
+          width: calc(100vw - 28px);
+          max-height: 46vh;
         }
       }
     </style>
@@ -344,17 +394,18 @@
       </div>
     </section>
 
-    <section class="panel" id="log"></section>
+    <section class="panel" id="log" aria-live="polite"></section>
 
     <section class="panel" id="hint">
       <div><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> 选择路线 · <kbd>R</kbd> 重算 · 点击居民牵出/背出</div>
       <div>风向会改变烟路。</div>
     </section>
 
-    <section id="outcome">
+    <section id="outcome" role="dialog" aria-modal="true" aria-labelledby="outcome-title">
       <div class="card">
         <h2 id="outcome-title"></h2>
         <p id="outcome-body"></p>
+        <div id="outcome-curve"></div>
         <ul id="outcome-debrief" class="debrief"></ul>
         <button id="outcome-reset">再来一次</button>
       </div>

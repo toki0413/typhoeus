@@ -1,4 +1,4 @@
-import { clamp01 } from './sim/spatial/fields';
+import { clamp01, roomSummary } from './sim/spatial/fields';
 import { FIXED_DT } from './sim/spatial/spread';
 import { createActor, stepActor } from './sim/spatial/actor';
 import { createResident, type ResidentState } from './sim/agents/resident';
@@ -19,6 +19,8 @@ import {
   type DirectorEvent,
 } from './sim/events/director';
 import { sampleRoom, buildDebrief, type ActionRecord } from './eval/causal';
+import { buildCurvePaths, type CurveSample } from './eval/curves';
+import { BRIEFING, RADIO_LINES } from './content/narrative';
 import { findRoutes, type Route } from './sim/nav/graph';
 import { travelRoute } from './sim/nav/travel';
 import { createBuildingView } from './render/buildingView';
@@ -88,6 +90,10 @@ let seenEvents = 0;
 /** 因果复盘用的动作记录；按发生顺序追加。 */
 const actions: ActionRecord[] = [];
 let actionSeq = 0;
+/** 结算暴露曲线的采样；每 0.5 秒一条。 */
+const exposureSamples: CurveSample[] = [];
+let lastSampleT = -1;
+let radioCursor = 0;
 
 const out = {
   room: document.getElementById('hud-room')!,
@@ -102,6 +108,7 @@ const out = {
   outcome: document.getElementById('outcome')!,
   outcomeTitle: document.getElementById('outcome-title')!,
   outcomeBody: document.getElementById('outcome-body')!,
+  curve: document.getElementById('outcome-curve')!,
   debrief: document.getElementById('outcome-debrief')!,
 };
 
@@ -176,7 +183,30 @@ function flushDirectorEvents(): void {
   }
 }
 
-/** 推进一个固定步长：风向日程 → 火场 → 人群 → 事件导演。 */
+/**
+ * 每 0.5 秒采样一次目标房间与玩家的烟热暴露；
+ * 同时把到点的无线电写进日志，每条只触发一次。
+ */
+function sampleRun(): void {
+  const target = roomOf(def.targetRoom);
+  const t = target.t;
+  if (t - lastSampleT >= 0.5) {
+    lastSampleT = t;
+    exposureSamples.push({
+      t,
+      smoke: actor.exposure.smoke,
+      heat: actor.exposure.heat,
+      fire: roomSummary(target).fire,
+    });
+  }
+  while (radioCursor < RADIO_LINES.length && RADIO_LINES[radioCursor].at <= t) {
+    const line = RADIO_LINES[radioCursor];
+    radioCursor += 1;
+    addLog(`【${line.speaker}】${line.text}`);
+  }
+}
+
+/** 推进一个固定步长：风向日程 → 火场 → 人群 → 事件导演 → 采样。 */
 function advanceWorld(dt: number, stepCrowdNow = true): void {
   applyWindSchedule();
   stepScenario(def, dt);
@@ -184,6 +214,7 @@ function advanceWorld(dt: number, stepCrowdNow = true): void {
   if (stepCrowdNow) stepCrowd(crowd, roomOf(def.targetRoom), dt);
   stepDirector(director, def.building, dt);
   flushDirectorEvents();
+  sampleRun();
 }
 
 function reasonText(reason: RescueReason): string {
@@ -226,7 +257,7 @@ function renderRoutes(): void {
   out.routes.innerHTML = routes
     .map((route, index) => {
       const kinds = route.steps.map((step) => step.kind).join(' → ');
-      return `<button data-route="${index}">
+      return `<button data-route="${index}" aria-label="选择路线 ${index + 1}：${kinds}">
         <b>${index + 1}. ${kinds}</b>
         <small>${route.time.toFixed(0)}s · 累计风险 ${route.risk.toFixed(2)}</small>
       </button>`;
@@ -258,10 +289,10 @@ function renderResidents(): void {
           STATE_TEXT[state]
         }</span>
         <span class="resident-actions">
-          <button data-rescue="${resident.id}:lead"${
+          <button data-rescue="${resident.id}:lead" aria-label="牵出居民 ${resident.id}"${
             canLead ? '' : ' disabled'
           }>牵</button>
-          <button data-rescue="${resident.id}:carry"${
+          <button data-rescue="${resident.id}:carry" aria-label="背出居民 ${resident.id}"${
             isDead ? ' disabled' : ''
           }>背</button>
         </span>
@@ -417,10 +448,24 @@ function checkOutcome(): void {
   }
 }
 
+/** 结算时把采样折成三条 SVG 曲线；没有采样就给出提示。 */
+function renderCurve(): void {
+  const curve = buildCurvePaths(exposureSamples);
+  out.curve.innerHTML = curve.hasData
+    ? `<svg viewBox="0 0 ${curve.width} ${curve.height}" role="img" aria-label="烟热暴露曲线">
+        <path class="smoke" d="${curve.smoke}" />
+        <path class="heat" d="${curve.heat}" />
+        <path class="fire" d="${curve.fire}" />
+      </svg>
+      <div class="curve-legend">烟 / 热 / 火（0–1）</div>`
+    : '<p class="hint">没有采样到暴露曲线。</p>';
+}
+
 function end(title: string, body: string): void {
   ended = true;
   out.outcomeTitle.textContent = title;
   out.outcomeBody.textContent = body;
+  renderCurve();
   // 取最近 6 条动作，逐条给出前后场差异与中文因果解释。
   const debrief = buildDebrief(actions).slice(-6);
   out.debrief.innerHTML = debrief.length
@@ -433,6 +478,8 @@ function end(title: string, body: string): void {
     : '<li>没有可复盘的动作。</li>';
   out.outcome.classList.add('show');
   renderResidents();
+  // 结算弹层出现后把焦点交给“再来一次”，键盘用户不必重新寻路。
+  (document.getElementById('outcome-reset') as HTMLButtonElement | null)?.focus();
 }
 
 let last = performance.now();
@@ -500,6 +547,7 @@ document.getElementById('reset-btn')!.addEventListener('click', () => window.loc
 document.getElementById('outcome-reset')!.addEventListener('click', () => window.location.reload());
 
 addLog(`到场：入口。目标 ${def.targetRoom}，楼梯、消防梯、破拆三条路线。`);
+for (const line of BRIEFING) addLog(`【${line.speaker}】${line.text}`);
 recalcRoutes();
 syncResidents();
 updateHud();

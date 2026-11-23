@@ -166,6 +166,14 @@
         gap: 6px;
         margin-bottom: 10px;
       }
+      /* 触屏上扩大点击目标，避免小按钮误触。 */
+      @media (pointer: coarse) {
+        #drill-list button,
+        #drill-actions button,
+        #drill-reset {
+          min-height: 44px;
+        }
+      }
       #drill-actions button {
         flex: 1 1 120px;
       }
@@ -210,7 +218,7 @@
       <aside class="panel" id="drill-info">
         <h2 id="drill-title"></h2>
         <p id="drill-hint"></p>
-        <p id="drill-status">按提示完成演练动作。</p>
+        <p id="drill-status" role="status" aria-live="polite">按提示完成演练动作。</p>
         <div id="drill-actions"></div>
         <button id="drill-reset" type="button">重试</button>
       </aside>
