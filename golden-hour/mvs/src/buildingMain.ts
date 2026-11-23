@@ -86,8 +86,8 @@ const layout =
     : LAYOUTS.find((item) => isUnlocked(progress, layoutIds, item.id)) ?? LAYOUTS[0];
 /** 每日挑战用当天日期（YYYYMMDD）当种子；普通局用 seed 参数，非法则回退 1。 */
 const daily = params.get('daily') === '1';
-/** ?zones=multi 启用 3 区 6 人；默认单区域，保持原玩法与存档。 */
-const multi = params.get('zones') === 'multi';
+/** 默认 3 区 6 人；?zones=single 回退单区域旧玩法。 */
+const multi = params.get('zones') !== 'single';
 /** 存档与最佳记录按模式加后缀，避免单区域与多区域记录互相覆盖。 */
 const mode = multi ? 'multi' : 'single';
 /** ?perf=1 时显示帧率与固定步长耗时，便于桌面 60fps 实测。 */
@@ -247,6 +247,17 @@ if (dailyLink) {
   url.searchParams.set('daily', '1');
   url.searchParams.set('layout', layout.id);
   dailyLink.href = url.toString();
+}
+
+const singleLink = document.getElementById('single-link') as HTMLAnchorElement | null;
+if (singleLink) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.searchParams.set('layout', layout.id);
+  url.searchParams.set('zones', 'single');
+  if (daily) url.searchParams.set('daily', '1');
+  else url.searchParams.set('seed', String(seed));
+  singleLink.href = url.toString();
 }
 
 const STATE_TEXT: Record<ResidentVisualState, string> = {

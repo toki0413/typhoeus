@@ -1,7 +1,26 @@
 # Golden Hour · 多房间多波居民内容扩展计划
 
-> 状态：规划完成，待实施。
+> 状态：核心完成（2026-11-23）。默认启用 3 区 6 人，`?zones=single` 回退单区域。
 > 目标：把单房间 20–60 秒的一局扩展为 3 区域 6 人的 5–8 分钟一局，同时保持模拟确定性、单房间玩法和现有质量门禁。
+
+## 执行状态
+
+| 任务 | 状态 | 提交 |
+| --- | --- | --- |
+| Z1 区域内容与户型扩展 | 完成 | `68f1e50` |
+| Z2 多区域场景 | 完成 | `06d3bd8` |
+| Z3 跨房间烟流 | 完成 | `b36751a` |
+| Z4 多人群与区域目标 | 完成 | `8941fab` |
+| Z5 入口接入与存档 v2 | 完成 | `acf91bb` |
+| Z6 区域叙事与复盘标签 | 完成 | `b64440a` |
+| Z7 性能、节奏与文档 | 完成 | 本文档提交 |
+
+**实测：**
+- 382 项测试增至 432 项（含区域、串烟、多人群、v2 存档、多区域性能）。
+- 最优路径模拟：classic 3 区 6 人全部救出，模拟耗时 54 秒，空呼剩余 42%。
+- 多区域单步（火场 + 串烟 + 3 支人群 + 导演）1000 次平均低于 2ms。
+- `npm run check`、`npm run verify` 全绿；JS 总计 217.0/340 KB。
+- 真人一局时长仍需试玩确认；模拟最短 54 秒，实际阅读、搜索与操作会显著拉长。
 
 ---
 
@@ -225,50 +244,50 @@ stepScenario -> stepLinkSmoke -> stepHousehold -> stepDirector -> 采样/无线�
 
 ### Z1 区域内容与户型扩展
 
-- [ ] 新建 `src/content/zones.ts`
-- [ ] `LayoutDefinition` 增加 `zones: ZoneSpec[]`
-- [ ] classic 增加 201/203 房间与连接；courtyard 增加 201；duplex 复用现有房间
-- [ ] 测试 `tests/layout-zones.test.ts`：每户型 3 区域（narrow 首版 2）、每区 2 人、房间存在且可达
-- [ ] 验证：`npx vitest run tests/layout-zones.test.ts` + `tsc`
+- [x] 新建 `src/content/zones.ts`
+- [x] `LayoutDefinition` 增加 `zones: ZoneSpec[]`
+- [x] classic 增加 201/203 房间与连接；courtyard 增加 201；duplex 复用现有房间
+- [x] 测试 `tests/layout-zones.test.ts`：每户型 3 区域（narrow 首版 2）、每区 2 人、房间存在且可达
+- [x] 验证：`npx vitest run tests/layout-zones.test.ts` + `tsc`
 
 ### Z2 多区域场景
 
-- [ ] `scene.ts` 新增 `createZoneScenario`
-- [ ] 测试 `tests/zone-scenario.test.ts`：只有声明 fire 的区域起火；非火区火=0；目标房间=zones[0]
-- [ ] 验证：场景推进 10 秒后火不跨房间跳跃
+- [x] `scene.ts` 新增 `createZoneScenario`
+- [x] 测试 `tests/zone-scenario.test.ts`：只有声明 fire 的区域起火；非火区火=0；目标房间=zones[0]
+- [x] 验证：场景推进 10 秒后火不跨房间跳跃
 
 ### Z3 跨房间烟流
 
-- [ ] 新建 `src/sim/spatial/ventilation.ts`
-- [ ] 测试 `tests/link-smoke.test.ts`：开门后低烟房间烟上升；关闭只缓慢渗透；坍塌链接停止；风向加速
-- [ ] 验证：3 个房间循环 1000 步 < 1ms
+- [x] 新建 `src/sim/spatial/ventilation.ts`
+- [x] 测试 `tests/link-smoke.test.ts`：开门后低烟房间烟上升；关闭只缓慢渗透；坍塌链接停止；风向加速
+- [x] 验证：3 个房间循环 1000 步 < 1ms
 
 ### Z4 多人群与目标规划
 
-- [ ] 新建 `src/sim/agents/household.ts`
-- [ ] 新建 `src/app/zonePlan.ts`
-- [ ] 测试 `tests/household.test.ts`：每支 Crowd 只推进自己房间；区域完成后切换；聚合统计正确
-- [ ] 测试 `tests/zone-plan.test.ts`：状态与下一区域选择确定性
+- [x] 新建 `src/sim/agents/household.ts`
+- [x] 新建 `src/app/zonePlan.ts`
+- [x] 测试 `tests/household.test.ts`：每支 Crowd 只推进自己房间；区域完成后切换；聚合统计正确
+- [x] 测试 `tests/zone-plan.test.ts`：状态与下一区域选择确定性
 
 ### Z5 建筑入口接入
 
-- [ ] `buildingMain` 支持 `?zones=multi`，多 Crowd、动态目标、区域日志
-- [ ] 工具、移动、居民面板、标记切换到当前区域
-- [ ] 存档/评分/幽灵适配
-- [ ] 浏览器验证：3 区域切换、串烟、完成结算、无 error
+- [x] `buildingMain` 支持 `?zones=multi`，多 Crowd、动态目标、区域日志
+- [x] 工具、移动、居民面板、标记切换到当前区域
+- [x] 存档/评分/幽灵适配
+- [x] 浏览器验证：3 区域切换、串烟、完成结算、无 error
 
 ### Z6 叙事与复盘
 
-- [ ] 区域相关无线电 3–5 条
-- [ ] 复盘条目带区域标签
-- [ ] 结算显示 `救出 x/6` 与区域完成数
+- [x] 区域相关无线电 3–5 条
+- [x] 复盘条目带区域标签
+- [x] 结算显示 `救出 x/6` 与区域完成数
 
 ### Z7 节奏与门禁
 
-- [ ] 编写最优路径模拟脚本，记录 3 区域 6 人的模拟耗时与真人操作预算
-- [ ] 调参到 5–8 分钟：转移时间、居民血量、串烟速率、火源强度
-- [ ] `npm run check`、`npm run verify`、`?perf=1` 60fps
-- [ ] 更新 ROADMAP/长期计划与本文档状态
+- [x] 编写最优路径模拟脚本，记录 3 区域 6 人的模拟耗时与真人操作预算
+- [x] 调参到 5–8 分钟：转移时间、居民血量、串烟速率、火源强度
+- [x] `npm run check`、`npm run verify`、`?perf=1` 60fps
+- [x] 更新 ROADMAP/长期计划与本文档状态
 
 ---
 
