@@ -62,10 +62,11 @@ export async function startServer(port = 5199) {
   throw new Error('Vite 开发服务器启动超时');
 }
 
-export async function launchBrowser({ width = 1440, height = 900 } = {}) {
+export async function launchBrowser({ width = 1080, height = 675 } = {}) {
   const browser = await puppeteer.launch({
     executablePath: findChrome(),
     headless: true,
+    protocolTimeout: 180000,
     args: [
       '--no-sandbox',
       '--disable-gpu-sandbox',
@@ -75,11 +76,16 @@ export async function launchBrowser({ width = 1440, height = 900 } = {}) {
       '--ignore-gpu-blocklist',
       '--autoplay-policy=no-user-gesture-required',
       '--mute-audio=false',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-features=CalculateNativeWinOcclusion',
     ],
   });
 
   const page = await browser.newPage();
   await page.setViewport({ width, height, deviceScaleFactor: 1 });
+  await page.bringToFront();
 
   const errors = [];
   page.on('pageerror', (error) => errors.push(String(error)));

@@ -261,6 +261,11 @@
         .settings { position: static; }
         .volume { margin-left: 0; }
       }
+      #hud, #actions, #incidents { transition: opacity 0.35s ease; }
+      body[data-hero="on"] #hud,
+      body[data-hero="on"] #actions,
+      body[data-hero="on"] #incidents { opacity: 0.18; }
+      body[data-hero="on"] #radio { opacity: 0.92; }
     </style>
   </head>
   <body data-run="title">

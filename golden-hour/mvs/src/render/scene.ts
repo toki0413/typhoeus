@@ -35,16 +35,30 @@ export function createScene(): {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
+  heroLights: { key: THREE.PointLight; rim: THREE.PointLight };
 } {
   const lowPower =
     typeof navigator !== 'undefined' && (navigator.hardwareConcurrency ?? 8) <= 4;
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  const buildRenderer = (antialias: boolean): THREE.WebGLRenderer =>
+    new THREE.WebGLRenderer({ antialias, powerPreference: 'high-performance' });
+
+  let renderer = buildRenderer(true);
+  let gl = renderer.getContext();
+  let debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+  let gpuName = debugInfo ? String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)) : '';
+  const softwareGL = /swiftshader|llvmpipe|software|basic render/i.test(gpuName);
+  // SwiftShader pays dearly for MSAA; drop it there and keep the frame alive.
+  if (softwareGL) {
+    renderer.dispose();
+    renderer = buildRenderer(false);
+    gl = renderer.getContext();
+  }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowPower ? 1.25 : 1.75));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.3;
-  renderer.shadowMap.enabled = !lowPower;
+  renderer.shadowMap.enabled = !lowPower && !softwareGL;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
@@ -69,14 +83,15 @@ export function createScene(): {
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environment = envTexture;
-  scene.environmentIntensity = 0.16;
+  scene.environmentIntensity = 0.24;
   pmrem.dispose();
 
   const key = new THREE.DirectionalLight(0xffc894, 3.1);
   key.position.set(18, 30, 12);
   if (!lowPower) {
     key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
+    const shadowSize = softwareGL ? 1024 : 2048;
+    key.shadow.mapSize.set(shadowSize, shadowSize);
     key.shadow.camera.left = -18;
     key.shadow.camera.right = 18;
     key.shadow.camera.top = 16;
@@ -114,5 +129,19 @@ export function createScene(): {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  return { scene, camera, renderer };
+  // Door work light (set dressing) plus two hero lights that fade in with the
+  // camera push, staged around the 202 landing.
+  const doorGlow = new THREE.PointLight(0xffc27a, 2.2, 4.5, 2);
+  doorGlow.position.set(-0.7, 4.85, 2.15);
+  scene.add(doorGlow);
+
+  const heroKey = new THREE.PointLight(0xffd6ad, 0, 6.5, 2);
+  heroKey.position.set(1.9, 5.4, 2.9);
+  scene.add(heroKey);
+
+  const heroRim = new THREE.PointLight(0x8ab7ff, 0, 6.0, 2);
+  heroRim.position.set(-2.6, 5.0, -0.4);
+  scene.add(heroRim);
+
+  return { scene, camera, renderer, heroLights: { key: heroKey, rim: heroRim } };
 }

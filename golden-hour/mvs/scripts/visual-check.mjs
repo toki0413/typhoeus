@@ -51,6 +51,16 @@ try {
     clips.join(', ')
   );
   await new Promise((resolve) => setTimeout(resolve, 1600));
+  const hudReady = await page
+    .waitForFunction(
+      () => {
+        const text = document.getElementById('hud')?.textContent ?? '';
+        return text.includes('烟') && text.includes('体力');
+      },
+      { timeout: 60000 }
+    )
+    .then(() => true)
+    .catch(() => false);
   await screenshot(page, '02-gameplay');
 
   const renderState = await page.evaluate(() => {
@@ -60,12 +70,11 @@ try {
       width: canvas?.width ?? 0,
       height: canvas?.height ?? 0,
       renderer: gl ? gl.getParameter(gl.RENDERER) : null,
-      hud: document.getElementById('hud')?.textContent ?? '',
     };
   });
   check('3D 画布已渲染', renderState.width > 0 && renderState.height > 0, `${renderState.width}x${renderState.height}`);
   check('软件 WebGL 上下文', Boolean(renderState.renderer), renderState.renderer ?? '无');
-  check('HUD 显示现场数据', renderState.hud.includes('烟') && renderState.hud.includes('体力'));
+  check('HUD 显示现场数据', hudReady);
 
   await page.keyboard.press('t');
   // 无头环境会节流 rAF，强制推进若干帧让班组走到门口再截图。
@@ -75,13 +84,43 @@ try {
         let frames = 0;
         const step = () => {
           frames += 1;
-          if (frames > 45) resolve();
+          if (frames > 24) resolve();
           else requestAnimationFrame(step);
         };
         requestAnimationFrame(step);
       })
   );
   await new Promise((resolve) => setTimeout(resolve, 300));
+
+  const heroAuto = await page
+    .waitForFunction(() => (window.__gh?.hero?.autoRuns?.() ?? 0) >= 1, {
+      timeout: 25000,
+    })
+    .then(() => true)
+    .catch(() => false);
+  check('门口英雄镜头自动触发', heroAuto);
+
+  // 快进帧可能已经放完整段镜头；为截图重放一次，保证取到推满的画面。
+  await page.evaluate(() => window.__gh?.hero?.start?.());
+  const heroSeen = await page
+    .waitForFunction(() => window.__gh?.hero?.active?.() === true, { timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  check('门口英雄镜头推近', heroSeen);
+  if (heroSeen) {
+    await page
+      .waitForFunction(() => (window.__gh?.hero?.strength?.() ?? 0) > 0.92, {
+        timeout: 25000,
+      })
+      .catch(() => undefined);
+  }
+  await screenshot(page, '03-hero');
+
+  const heroReturned = await page
+    .waitForFunction(() => window.__gh?.hero?.active?.() === false, { timeout: 25000 })
+    .then(() => true)
+    .catch(() => false);
+  check('英雄镜头回到战术视角', heroReturned);
   await screenshot(page, '03-door');
 
   const doorVisible = await page.evaluate(() => {
@@ -93,7 +132,7 @@ try {
 
   if (doorVisible) {
     await page.click('[data-act="open"]');
-    await page.waitForFunction(() => document.body.dataset.run === 'debrief', { timeout: 10000 });
+    await page.waitForFunction(() => document.body.dataset.run === 'debrief', { timeout: 20000 });
     await new Promise((resolve) => setTimeout(resolve, 400));
     const debrief = await page.evaluate(() => {
       const panel = document.getElementById('debrief');

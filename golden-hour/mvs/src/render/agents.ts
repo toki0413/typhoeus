@@ -45,13 +45,36 @@ function box(
   return mesh;
 }
 
+let shadowTexture: THREE.DataTexture | null = null;
+
+function softShadowTexture(): THREE.DataTexture {
+  if (shadowTexture) return shadowTexture;
+  const size = 64;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = ((x + 0.5) / size) * 2 - 1;
+      const dy = ((y + 0.5) / size) * 2 - 1;
+      const r = Math.min(1, Math.hypot(dx, dy));
+      const alpha = Math.pow(1 - r, 1.7);
+      const i = (y * size + x) * 4;
+      data[i + 3] = Math.round(210 * alpha);
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.needsUpdate = true;
+  shadowTexture = tex;
+  return tex;
+}
+
 function shadowMesh(radius: number): THREE.Mesh {
   const mesh = new THREE.Mesh(
-    new THREE.CircleGeometry(radius, 24),
+    new THREE.PlaneGeometry(radius * 2.6, radius * 2.6),
     new THREE.MeshBasicMaterial({
       color: 0x000000,
+      map: softShadowTexture(),
       transparent: true,
-      opacity: 0.34,
+      opacity: 0.55,
       depthWrite: false,
     })
   );
@@ -330,14 +353,16 @@ export function createAgents(scene: THREE.Scene): {
   useCrewModel: (model: CrewModel) => void;
   usingGLB: () => boolean;
   clipNames: () => string[];
+  crewFocus: () => THREE.Vector3;
   update: (s: SimState) => void;
 } {
   const group = new THREE.Group();
   scene.add(group);
+  const focusPoint = new THREE.Vector3();
 
   const crew = buildFirefighter();
   const victim = buildCivilian();
-  crew.group.position.set(-8.8, 0, 1.65);
+  crew.group.position.set(-6.8, 0, 1.65);
   victim.group.position.set(0.9, FLOOR_H, 0.1);
   victim.group.rotation.y = -0.3;
   group.add(crew.group, victim.group);
@@ -370,7 +395,7 @@ export function createAgents(scene: THREE.Scene): {
     crew.group.visible = false;
     modelShadow = shadowMesh(0.4);
     loaded.root.add(modelShadow);
-    loaded.root.position.set(-8.8, 0, 1.65);
+    loaded.root.position.set(-6.8, 0, 1.65);
     group.add(loaded.root);
     model = loaded;
     lastT = 0;
@@ -384,6 +409,10 @@ export function createAgents(scene: THREE.Scene): {
     useCrewModel,
     usingGLB: () => Boolean(model),
     clipNames: () => model?.clipNames ?? [],
+    crewFocus: () => {
+      const root = model ? model.root : rig.group;
+      return focusPoint.set(root.position.x, root.position.y + 1.0, root.position.z);
+    },
     update(s: SimState) {
       const target = s.crew.order
         ? Math.min(s.crew.order.floor, s.smoke.length - 1)
@@ -404,7 +433,7 @@ export function createAgents(scene: THREE.Scene): {
         model.mixer.update(dt);
 
         actorRoot.position.set(
-          damp(actorRoot.position.x, reach ? 0 : -8.8, 0.22),
+          damp(actorRoot.position.x, reach ? 0 : -6.8, 0.22),
           base,
           1.65
         );
@@ -436,7 +465,7 @@ export function createAgents(scene: THREE.Scene): {
 
         const bob = moving ? Math.abs(Math.sin(phase)) * 0.035 : 0;
         rig.group.position.set(
-          damp(rig.group.position.x, reach ? 0 : -8.8, 0.22),
+          damp(rig.group.position.x, reach ? 0 : -6.8, 0.22),
           base + bob,
           1.65
         );

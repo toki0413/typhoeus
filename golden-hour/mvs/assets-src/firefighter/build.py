@@ -72,19 +72,19 @@ PALETTE = {
 
 # kind drives the procedural surface pattern
 TEXTURE_SPEC = {
-    "coat": ("weave", 512, 0.32, 0.05),
-    "coat_dark": ("weave", 512, 0.32, 0.05),
-    "trousers": ("twill", 512, 0.36, 0.05),
-    "trousers_dark": ("twill", 512, 0.36, 0.05),
-    "webbing": ("weave", 256, 0.3, 0.05),
-    "boot": ("leather", 256, 0.55, 0.07),
-    "glove": ("leather", 256, 0.5, 0.06),
-    "leather": ("leather", 256, 0.55, 0.06),
-    "helmet": ("speckle", 256, 0.22, 0.04),
+    "coat": ("weave", 768, 0.5, 0.07),
+    "coat_dark": ("weave", 768, 0.5, 0.07),
+    "trousers": ("twill", 768, 0.55, 0.055),
+    "trousers_dark": ("twill", 768, 0.55, 0.055),
+    "webbing": ("weave", 512, 0.45, 0.06),
+    "boot": ("leather", 512, 0.7, 0.08),
+    "glove": ("leather", 512, 0.65, 0.07),
+    "leather": ("leather", 512, 0.7, 0.07),
+    "helmet": ("speckle", 512, 0.3, 0.045),
     "reflective": ("micro", 256, 0.9, 0.03),
-    "rubber": ("rubber", 256, 0.35, 0.04),
+    "rubber": ("rubber", 256, 0.4, 0.045),
     "steel": ("brushed", 256, 0.4, 0.03),
-    "nomex": ("weave", 256, 0.3, 0.05),
+    "nomex": ("weave", 256, 0.4, 0.05),
 }
 
 
@@ -1211,6 +1211,48 @@ body = bpy.context.active_object
 body.name = "FirefighterMesh"
 apply_xform(body)
 
+
+# ---------------------------------------------------------------------------
+# baked vertex ambient occlusion (ships inside the GLB as COLOR_0)
+# ---------------------------------------------------------------------------
+
+def bake_vertex_ao(obj):
+    try:
+        if SCENE.world is None:
+            world = bpy.data.worlds.new("BakeWorld")
+            world.use_nodes = True
+            world.node_tree.nodes["Background"].inputs["Strength"].default_value = 1.0
+            SCENE.world = world
+        activate(obj)
+        mesh = obj.data
+        attr = mesh.color_attributes.get("AO")
+        if attr is None:
+            attr = mesh.color_attributes.new(name="AO", type="BYTE_COLOR", domain="POINT")
+        mesh.color_attributes.active_color = attr
+        SCENE.render.engine = "CYCLES"
+        SCENE.cycles.samples = 24
+        SCENE.cycles.max_bounces = 3
+        SCENE.render.bake.target = "VERTEX_COLORS"
+        SCENE.render.bake.use_pass_direct = False
+        SCENE.render.bake.use_pass_indirect = False
+        bpy.ops.object.bake(type="AO")
+        values = [item.color[0] for item in attr.data]
+        # Keep the bake as contact shading rather than grime.
+        for item in attr.data:
+            value = 0.62 + 0.38 * max(0.0, min(1.0, item.color[0]))
+            item.color = (value, value, value, 1.0)
+        print(
+            "AO BAKED verts=%d min=%.3f max=%.3f mean=%.3f"
+            % (len(values), min(values), max(values), sum(values) / max(1, len(values)))
+        )
+        return True
+    except Exception as exc:
+        print("AO BAKE FAILED:", exc)
+        return False
+
+
+bake_vertex_ao(body)
+
 # ---------------------------------------------------------------------------
 # armature
 # ---------------------------------------------------------------------------
@@ -1528,6 +1570,7 @@ bpy.ops.export_scene.gltf(
     export_anim_single_armature=True,
     export_skins=True,
     export_optimize_animation_size=True,
+    export_colors=True,
     export_cameras=False,
     export_lights=False,
     export_image_format="WEBP",

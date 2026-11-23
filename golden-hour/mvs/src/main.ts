@@ -7,6 +7,7 @@ import { createDoor } from './render/door';
 import { createFireGlow } from './render/fire';
 import { createCorridorDetails } from './render/corridor';
 import { createSpatialAudio } from './render/spatial';
+import { createHeroCam } from './render/heroCam';
 import { loadCrewModel } from './render/glbCrew';
 import { createHud } from './ui/hud';
 import { createDoorUi } from './ui/door';
@@ -89,7 +90,7 @@ shell.setStats(records);
 shell.showTitle();
 
 function createApp(kit: ReturnType<typeof createScene>): App {
-  const { scene, camera, renderer } = kit;
+  const { scene, camera, renderer, heroLights } = kit;
   renderer.setSize(window.innerWidth, window.innerHeight);
   canvas.replaceWith(renderer.domElement);
   renderer.domElement.id = 'app';
@@ -98,6 +99,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
 
   const sim = createWorld(records.lastSeed || SCENARIOS[0].seed);
   const spatial = createSpatialAudio(camera);
+  const heroCam = createHeroCam({ reducedMotion: () => settings.reducedMotion });
   const agents = createAgents(scene);
   const smoke = createSmoke(scene);
   const doorMesh = createDoor(scene);
@@ -117,6 +119,12 @@ function createApp(kit: ReturnType<typeof createScene>): App {
         agents: typeof agents;
         doorMesh: typeof doorMesh;
         crewClips: () => string[];
+        hero: {
+          active: () => boolean;
+          strength: () => number;
+          autoRuns: () => number;
+          start: () => void;
+        };
       };
     };
     debugWindow.__gh = {
@@ -125,6 +133,12 @@ function createApp(kit: ReturnType<typeof createScene>): App {
       agents,
       doorMesh,
       crewClips: () => agents.clipNames(),
+      hero: {
+        active: () => heroCam.active(),
+        strength: () => heroCam.strength,
+        autoRuns: () => heroAutoRuns,
+        start: () => heroCam.trigger(agents.crewFocus()),
+      },
     };
   }
 
@@ -147,6 +161,9 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   let acc = 0;
   let last = performance.now();
   let hudTimer = 0;
+  let heroArmed = false;
+  let heroAutoRuns = 0;
+  let heroUiOn = false;
 
   function startRun(): void {
     if (sim.phase !== 'plan') return;
@@ -163,6 +180,9 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     prevDoorAngle = doorMesh.getAngle();
     debriefScheduled = false;
     debriefAt = 0;
+    heroArmed = false;
+    heroAutoRuns = 0;
+    heroCam.cancel();
   }
 
   function retry(): void {
@@ -198,6 +218,8 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     prevDoorAngle = 0;
     paused = false;
     audio.setActive(false);
+    heroArmed = false;
+    heroCam.cancel();
     document.body.dataset.run = 'title';
     shell.showTitle();
   }
@@ -287,6 +309,27 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     }
 
     agents.update(sim);
+
+    // Once the crew settles at the door, push in for a hero beat; releasing
+    // the shot (open, retry, pause-to-debrief) eases back to the diorama view.
+    if (running && sim.crew.atDoor && !sim.door.opened && !heroArmed) {
+      const focus = agents.crewFocus();
+      if (Math.abs(focus.x) < 0.45) {
+        heroArmed = true;
+        heroAutoRuns += 1;
+        heroCam.trigger(focus);
+      }
+    }
+    if (sim.door.opened || sim.phase !== 'execute') heroCam.release();
+    heroCam.update(paused ? 0 : Math.min(raw, 0.25));
+    heroLights.key.intensity = 12 * heroCam.strength;
+    heroLights.rim.intensity = 7 * heroCam.strength;
+    const heroOn = heroCam.strength > 0.12;
+    if (heroOn !== heroUiOn) {
+      heroUiOn = heroOn;
+      document.body.dataset.hero = heroOn ? 'on' : 'off';
+    }
+
     smoke.update(sim);
     doorMesh.update(sim);
     fireGlow.update(sim);
@@ -309,13 +352,14 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     const shake = running && !settings.reducedMotion
       ? Math.min(0.14, sim.exposure.smoke * 0.22)
       : 0;
-    camera.position.x = CAMERA_HOME.x + Math.sin(now * 0.009) * shake;
-    camera.position.y = CAMERA_HOME.y + Math.cos(now * 0.012) * shake * 0.6;
+    camera.position.x = CAMERA_HOME.x + Math.sin(now * 0.009) * shake + heroCam.offset.x;
+    camera.position.y = CAMERA_HOME.y + Math.cos(now * 0.012) * shake * 0.6 + heroCam.offset.y;
+    camera.position.z = CAMERA_HOME.z + heroCam.offset.z;
 
     // 开始训练时轻微推近，建立镜头感；减少动态时直接停在最终视角。
     const intro = settings.reducedMotion ? 1 : Math.min(1, (now - introAt) / 1400);
     const eased = 1 - Math.pow(1 - intro, 3);
-    camera.zoom = 1.02 + 0.06 * eased;
+    camera.zoom = (1.02 + 0.06 * eased) * heroCam.zoom;
     camera.updateProjectionMatrix();
     vignette.style.opacity = running
       ? String(Math.min(0.5, sim.exposure.smoke * 0.75))
