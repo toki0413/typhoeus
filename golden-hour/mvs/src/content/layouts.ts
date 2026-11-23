@@ -27,9 +27,27 @@ export interface LayoutDefinition {
   build(): BuildingGraph;
 }
 
+/** 取该火类中产烟最高材料的理化属性；与 layoutFireProfile 同规则。 */
+function fireProfileFor(cls: FireClass): { combustibility: number; smokeYield: number } {
+  const candidates = materialsByClass(cls);
+  // 平手时按 MATERIALS 顺序取先出现者，保证确定性。
+  let material: Material | undefined;
+  for (const item of candidates) {
+    if (!material || item.smokeYield > material.smokeYield) material = item;
+  }
+  if (!material) return { combustibility: 0.8, smokeYield: 1.4 };
+  return { combustibility: material.combustibility, smokeYield: material.smokeYield };
+}
+
 /** 首火区统一用沙发格起火，强度和最热源格按户型微调。 */
-function sofaFire(intensity: number, sourceIntensity: number): ZoneFireSpec {
-  return { cells: SOFA_CELLS, intensity, source: [5, 4], sourceIntensity };
+function sofaFire(cls: FireClass, intensity: number, sourceIntensity: number): ZoneFireSpec {
+  return {
+    cells: SOFA_CELLS,
+    intensity,
+    source: [5, 4],
+    sourceIntensity,
+    ...fireProfileFor(cls),
+  };
 }
 
 /** 每区固定 2 人：可见者靠近门口，躲藏者靠在里侧。 */
@@ -113,7 +131,7 @@ const classic: LayoutDefinition = {
       roomId: 'room-202-F1',
       label: '202 客厅',
       fireClass: 'A',
-      fire: sofaFire(0.2, 0.45),
+      fire: sofaFire('A', 0.2, 0.45),
       residents: zoneResidents('room-202-F1', true),
     }),
     zone({
@@ -166,7 +184,7 @@ const narrow: LayoutDefinition = {
       roomId: 'room-202-F1',
       label: '202 厨房',
       fireClass: 'F',
-      fire: sofaFire(0.18, 0.4),
+      fire: sofaFire('F', 0.18, 0.4),
       residents: zoneResidents('room-202-F1', true),
     }),
     zone({
@@ -217,7 +235,7 @@ const courtyard: LayoutDefinition = {
       roomId: 'room-202-F1',
       label: '202 车库',
       fireClass: 'B',
-      fire: sofaFire(0.22, 0.45),
+      fire: sofaFire('B', 0.22, 0.45),
       residents: zoneResidents('room-202-F1', true),
     }),
     zone({
@@ -275,7 +293,7 @@ const duplex: LayoutDefinition = {
       roomId: 'room-202-F2',
       label: '202-F2 配电',
       fireClass: 'E',
-      fire: sofaFire(0.2, 0.45),
+      fire: sofaFire('E', 0.2, 0.45),
       residents: zoneResidents('room-202-F2', true),
     }),
     zone({
@@ -321,21 +339,8 @@ export const LAYOUTS: LayoutDefinition[] = [classic, narrow, courtyard, duplex];
  * 某类目暂无材料时回退 A 类默认值，保证场景仍能初始化。
  */
 export function layoutFireProfile(layout: LayoutDefinition): TargetFireProfile {
-  const candidates = materialsByClass(layout.targetFireClass);
-  // 同一火类可能对应多种材料：取产烟最高的一种，保留火场压迫感；
-  // 平手时按 MATERIALS 顺序取先出现者，保证确定性。
-  let material: Material | undefined;
-  for (const item of candidates) {
-    if (!material || item.smokeYield > material.smokeYield) material = item;
-  }
-  if (!material) {
-    return { fireClass: 'A', combustibility: 0.8, smokeYield: 1.4 };
-  }
-  return {
-    fireClass: material.fireClass,
-    combustibility: material.combustibility,
-    smokeYield: material.smokeYield,
-  };
+  const { combustibility, smokeYield } = fireProfileFor(layout.targetFireClass);
+  return { fireClass: layout.targetFireClass, combustibility, smokeYield };
 }
 
 export function layoutById(id: string): LayoutDefinition | undefined {

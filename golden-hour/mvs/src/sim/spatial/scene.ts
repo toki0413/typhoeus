@@ -4,6 +4,7 @@ import { createBuilding } from './rooms';
 import { FIXED_DT, stepRoom } from './spread';
 import type { ActorState } from './actor';
 import { createOccupant, type OccupantState } from './rescue';
+import type { ZoneSpec } from '../../content/zones';
 
 export interface ScenarioDefinition {
   id: string;
@@ -12,6 +13,11 @@ export interface ScenarioDefinition {
   startRoom: string;
   targetRoom: string;
   objectives: string[];
+}
+
+/** 多区域场景：在单区域场景之上附带区域声明。 */
+export interface ZoneScenario extends ScenarioDefinition {
+  zones: ZoneSpec[];
 }
 
 /** 目标房间的火场剖面：火类与燃料属性由内容层按户型给出。 */
@@ -91,6 +97,62 @@ export function createScenarioForBuilding(
     startRoom,
     targetRoom,
     objectives: [`进入 ${targetRoom}`, '救出居民'],
+  };
+}
+
+/**
+ * 多区域场景：整栋楼先清空，只对声明了火源的区域写入燃料与火。
+ * 无火区域保持安静，等待后续跨房间烟流；目标房间沿用 zones[0]。
+ */
+export function createZoneScenario(
+  building: BuildingGraph,
+  startRoom: string,
+  zones: ZoneSpec[],
+  id: string,
+  seed: number
+): ZoneScenario {
+  if (zones.length === 0) {
+    // 空区域回退到现有单区域逻辑，目标房间取起点，保证可玩。
+    return {
+      ...createScenarioForBuilding(building, startRoom, startRoom, id, seed),
+      zones: [],
+    };
+  }
+
+  for (const node of Object.values(building.rooms)) {
+    quietRoom(node.room.cells);
+  }
+
+  for (const zone of zones) {
+    const fire = zone.fire;
+    if (!fire) continue;
+
+    const room = building.rooms[zone.roomId].room;
+    for (const [x, y] of fire.cells) {
+      const cell = cellAt(room, x, y);
+      cell.fuel = 1;
+      cell.combustibility = fire.combustibility ?? 0.8;
+      cell.smokeYield = fire.smokeYield ?? 1.4;
+      cell.fireClass = zone.fireClass;
+      cell.fire = fire.intensity;
+    }
+
+    if (fire.source) {
+      const [x, y] = fire.source;
+      const sourceCell = cellAt(room, x, y);
+      sourceCell.fire = Math.max(sourceCell.fire, fire.sourceIntensity ?? fire.intensity + 0.2);
+      sourceCell.heat = 0.2;
+    }
+  }
+
+  return {
+    id,
+    seed,
+    building,
+    startRoom,
+    targetRoom: zones[0].roomId,
+    objectives: [...zones.map((zone) => '搜救 ' + zone.label), '救出居民'],
+    zones,
   };
 }
 

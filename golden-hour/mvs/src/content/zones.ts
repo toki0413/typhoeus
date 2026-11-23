@@ -24,6 +24,10 @@ export interface ZoneFireSpec {
   /** 可选最热源格，写入更高强度 */
   source?: [number, number];
   sourceIntensity?: number;
+  /** 可燃性；缺省 0.8 */
+  combustibility?: number;
+  /** 产烟；缺省 1.4 */
+  smokeYield?: number;
 }
 
 export interface ZoneSpec {
