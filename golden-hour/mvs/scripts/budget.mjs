@@ -43,6 +43,8 @@ export const ENTRY_BUDGETS = {
   modulepreload: 8 * 1024,
   // Phase 3 共享 chunk：居民/Director 共用的种子随机。
   rng: 4 * 1024,
+  // Phase 5 共享 chunk：多入口复用的固定步长场更新。
+  spread: 8 * 1024,
   'three.module': 170 * 1024,
 };
 
