@@ -2213,6 +2213,22 @@ git commit -m "feat(mvs): deterministic building camera shots"
 （模拟验证：主动追逐+搜索约 23 秒可 3/3；慢操作或错误顺序产生 0–3。
 5–8 分钟单局仍需多房间/多波居民内容扩展，当前未实现。）
 
+### Phase 7 — 多房间多波居民（规划完成，待实施）
+
+**已锁定范围：** 3 区域 6 人、全部居民开局存在（搜索分层，不做定时刷怪）、保持原地救出。
+
+**详细计划：** [多房间多波居民内容扩展计划](./2026-11-23-multi-room-rescue.md)
+
+**核心改动：**
+- `src/content/zones.ts` + `LayoutDefinition.zones`：区域与居民规格
+- `createZoneScenario`：多区域初始火
+- `src/sim/spatial/ventilation.ts`：沿连接的跨房间烟流
+- `src/sim/agents/household.ts`：多支 Crowd 与区域完成判定
+- `src/app/zonePlan.ts`：区域状态与下一目标
+- 存档 v2、评分总数 6、区域条与区域复盘
+
+**验收：** 0–6 人结果、区域切换、串烟、存档迁移、实测 5–8 分钟、完整门禁绿。
+
 ---
 
 ## 10. 质量门禁与预算
