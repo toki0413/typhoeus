@@ -25,10 +25,14 @@ export function createActor(x = -2.35, z = 0): ActorState {
   };
 }
 
+const STANCE: Record<Stance, { smoke: number; heat: number; move: number; drain: number }> = {
+  upright: { smoke: 0.45, heat: 0.22, move: 1, drain: 0.06 },
+  low: { smoke: 0.22, heat: 0.22, move: 0.6, drain: 0.03 },
+  crawl: { smoke: 0.12, heat: 0.1, move: 0.4, drain: 0.03 },
+};
+
 export function stanceFactor(stance: Stance): number {
-  if (stance === 'crawl') return 0.12;
-  if (stance === 'low') return 0.22;
-  return 0.45;
+  return STANCE[stance].smoke;
 }
 
 export function exposureAt(
@@ -48,14 +52,16 @@ export function stepActor(
   dt: number,
   moving: boolean
 ): void {
+  if (!Number.isFinite(dt) || dt <= 0) return;
   if (actor.downed) return;
 
+  const profile = STANCE[actor.stance];
   const env = exposureAt(actor, room);
-  actor.exposure.smoke += env.smoke * stanceFactor(actor.stance) * dt;
-  actor.exposure.heat += env.heat * (actor.stance === 'crawl' ? 0.1 : 0.22) * dt;
+  actor.exposure.smoke = clamp01(actor.exposure.smoke + env.smoke * profile.smoke * dt);
+  actor.exposure.heat = clamp01(actor.exposure.heat + env.heat * profile.heat * dt);
 
   if (moving) {
-    const drain = (actor.stance === 'upright' ? 0.06 : 0.03) * (1 + actor.load);
+    const drain = profile.drain * (1 + actor.load);
     actor.stamina = clamp01(actor.stamina - drain * dt);
   } else {
     actor.stamina = clamp01(actor.stamina + 0.04 * dt);
@@ -74,13 +80,13 @@ export function moveActor(
   speedBase = 1.6
 ): void {
   if (actor.downed) return;
+  if (!Number.isFinite(dx) || !Number.isFinite(dz) || !Number.isFinite(dt)) return;
   const len = Math.hypot(dx, dz);
   if (len <= 0) return;
 
-  const stancePenalty = actor.stance === 'crawl' ? 0.4 : actor.stance === 'low' ? 0.6 : 1;
   const loadPenalty = 1 - Math.min(0.45, actor.load * 0.45);
   const staminaPenalty = 0.6 + actor.stamina * 0.4;
-  const speed = speedBase * stancePenalty * loadPenalty * staminaPenalty;
+  const speed = speedBase * STANCE[actor.stance].move * loadPenalty * staminaPenalty;
   const next = clampToRoom(
     actor.x + (dx / len) * speed * dt,
     actor.z + (dz / len) * speed * dt

@@ -54,4 +54,54 @@ describe('玩家状态', () => {
     moveActor(actor, 1, 0, 10);
     expect(actor.x).toBe(2.75);
   });
+
+  it('爬行比低姿吸入更少', () => {
+    const room = createRoom();
+    for (const c of room.cells) {
+      c.smoke = 0.8;
+      c.steam = 0;
+      c.heat = 0;
+    }
+    const low = createActor(0, 0);
+    low.stance = 'low';
+    const crawl = createActor(0, 0);
+    crawl.stance = 'crawl';
+
+    for (let i = 0; i < 20; i++) {
+      stepActor(low, room, 0.1, false);
+      stepActor(crawl, room, 0.1, false);
+    }
+
+    expect(crawl.exposure.smoke).toBeLessThan(low.exposure.smoke);
+  });
+
+  it('移动消耗体力，静止恢复', () => {
+    const room = createRoom();
+    const actor = createActor(0, 0);
+    stepActor(actor, room, 1, true);
+    const afterMove = actor.stamina;
+    expect(afterMove).toBeLessThan(1);
+
+    stepActor(actor, room, 1, false);
+    expect(actor.stamina).toBeGreaterThan(afterMove);
+  });
+
+  it('蒸汽会计入吸入暴露', () => {
+    const room = createRoom();
+    for (const c of room.cells) {
+      c.smoke = 0;
+      c.steam = 0.5;
+      c.heat = 0;
+    }
+    const actor = createActor(0, 0);
+    stepActor(actor, room, 0.1, false);
+    expect(actor.exposure.smoke).toBeGreaterThan(0);
+  });
+
+  it('倒地后不能移动', () => {
+    const actor = createActor(0, 0);
+    actor.downed = true;
+    moveActor(actor, 1, 0, 1);
+    expect(actor.x).toBe(0);
+  });
 });
