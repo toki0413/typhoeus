@@ -82,6 +82,8 @@ import {
   renderDebrief,
   renderScore,
 } from './app/buildingOutcome';
+import { createHudView, updateHud as paintHud } from './app/buildingHud';
+import { startBuildingFrame, type FrameHandle } from './app/buildingFrame';
 
 /** 版本、全局错误与匿名运行摘要；只写本地环形缓冲。 */
 const diag = installDiagnostics(window);
@@ -184,7 +186,8 @@ let currentRoom = def.startRoom;
 let routes: Route[] = [];
 let ended = false;
 let acc = 0;
-let lastHud = 0;
+/** 主循环句柄；读档后用它重置计时基准。 */
+let loop: FrameHandle | null = null;
 let logs: { text: string; kind: 'info' | 'ok' | 'danger' }[] = [];
 
 /** 事件导演：风向、窗户失效与坍塌都由它决定，完全确定性。 */
@@ -217,30 +220,7 @@ let collapseWarned = false;
 /** 已写入因果复盘的失去居民 id，防止同一人重复记录。 */
 const lostIds = new Set<string>();
 
-const out = {
-  room: document.getElementById('hud-room')!,
-  target: document.getElementById('hud-target')!,
-  phase: document.getElementById('hud-phase')!,
-  seed: document.getElementById('hud-seed')!,
-  stamina: document.getElementById('hud-stamina')!,
-  exposure: document.getElementById('hud-exposure')!,
-  air: document.getElementById('hud-air')!,
-  resident: document.getElementById('hud-resident')!,
-  time: document.getElementById('hud-time')!,
-  wind: document.getElementById('hud-wind')!,
-  perf: document.getElementById('perf')!,
-  routes: document.getElementById('routes')!,
-  zones: document.getElementById('zones')!,
-  residents: document.getElementById('residents')!,
-  tools: document.getElementById('tools')!,
-  log: document.getElementById('log')!,
-  outcome: document.getElementById('outcome')!,
-  outcomeTitle: document.getElementById('outcome-title')!,
-  outcomeBody: document.getElementById('outcome-body')!,
-  outcomeScore: document.getElementById('outcome-score')!,
-  curve: document.getElementById('outcome-curve')!,
-  debrief: document.getElementById('outcome-debrief')!,
-};
+const out = createHudView(document);
 
 /** 户型下拉：选项来自 LAYOUTS，切换后带查询串重新载入入口。 */
 const layoutSelect = document.getElementById('layout-select') as HTMLSelectElement | null;
@@ -816,28 +796,31 @@ function handleConfirm(id: string): void {
 
 function updateHud(): void {
   const exposure = clamp01(actor.exposure.smoke + actor.exposure.heat);
-  out.room.textContent = currentRoom;
-  out.target.textContent = targetRoom();
+  let phase = '搜救';
   if (household) {
-    const phase = runPhase(allZonesDone(), currentRoom === def.startRoom);
-    out.phase.textContent =
-      phase === 'rescue' ? '搜救' : phase === 'evacuate' ? '返回入口' : '撤离完成';
-  } else {
-    out.phase.textContent = '搜救';
+    const current = runPhase(allZonesDone(), currentRoom === def.startRoom);
+    phase = current === 'rescue' ? '搜救' : current === 'evacuate' ? '返回入口' : '撤离完成';
   }
-  out.seed.textContent = daily ? `每日 #${seed}` : `种子 ${seed}`;
-  out.stamina.textContent = `${Math.round(actor.stamina * 100)}%`;
-  out.air.textContent = `${Math.round(actor.air * 100)}%`;
-  out.exposure.textContent = `${Math.round(exposure * 100)}%`;
-  out.wind.textContent = windText(director.wind);
+  let residentLabel = '';
   if (household) {
     const summary = householdSummary(household);
-    out.resident.textContent = `救出 ${summary.rescued}/${summary.total} · 区域 ${summary.done}/${household.zones.length}`;
+    residentLabel = `救出 ${summary.rescued}/${summary.total} · 区域 ${summary.done}/${household.zones.length}`;
   } else if (crowd) {
     const remaining = crowd.residents.length - crowd.rescued - crowd.lost;
-    out.resident.textContent = `${crowd.rescued} 救出 · ${crowd.lost} 失去 · ${remaining} 待救`;
+    residentLabel = `${crowd.rescued} 救出 · ${crowd.lost} 失去 · ${remaining} 待救`;
   }
-  out.time.textContent = `${roomOf(targetRoom()).t.toFixed(1)}s`;
+  paintHud(out, {
+    room: currentRoom,
+    target: targetRoom(),
+    phase,
+    seedLabel: daily ? `每日 #${seed}` : `种子 ${seed}`,
+    staminaPct: Math.round(actor.stamina * 100),
+    airPct: Math.round(actor.air * 100),
+    exposurePct: Math.round(exposure * 100),
+    windLabel: windText(director.wind),
+    residentLabel,
+    timeSeconds: roomOf(targetRoom()).t,
+  });
 }
 
 function checkOutcome(): void {
@@ -932,7 +915,7 @@ function restoreFromSave(save: GameSave): void {
   // 重置运行期状态，避免把上一局的时间轴与面板指纹带进来。
   ended = false;
   acc = 0;
-  last = performance.now();
+  loop?.reset();
   seenEvents = director.events.length;
   zoneEventCursor = household ? household.events.length : 0;
   zoneWatchRoom = household ? household.activeRoomId : null;
@@ -1029,34 +1012,32 @@ function end(title: string, body: string): void {
   (document.getElementById('outcome-reset') as HTMLButtonElement | null)?.focus();
 }
 
-let last = performance.now();
 /** ?perf=1 的统计窗口：每秒刷新一次 FPS 与固定步长耗时。 */
 let perfFrames = 0;
 let perfElapsed = 0;
 let perfStepMs = 0;
 
-/** 把当前按下的移动键合成 -1/0/1 的方向；没有输入时返回 null。 */
-function frame(now: number): void {
-  const dt = Math.min(0.05, (now - last) / 1000);
-  last = now;
+/** 可变步长更新：移动输入、固定步推进与结算判定。 */
+function updateWorld(dt: number): void {
+  if (ended) return;
+  // 只有进入当前目标区域后才能自由移动；移动方向由键盘/D-pad 合成。
+  const input = currentRoom === targetRoom() ? movement.vector() : null;
+  const moving = input !== null;
+  if (input) moveActor(actor, input.x, input.z, dt);
 
-  if (!ended) {
-    // 只有进入当前目标区域后才能自由移动；移动方向由键盘/D-pad 合成。
-    const input = currentRoom === targetRoom() ? movement.vector() : null;
-    const moving = input !== null;
-    if (input) moveActor(actor, input.x, input.z, dt);
-
-    const stepStart = perfMode ? performance.now() : 0;
-    acc += dt;
-    while (acc >= FIXED_DT) {
-      advanceWorld(FIXED_DT);
-      stepActor(actor, roomOf(currentRoom), FIXED_DT, moving);
-      acc -= FIXED_DT;
-    }
-    if (perfMode) perfStepMs += performance.now() - stepStart;
-    checkOutcome();
+  const stepStart = perfMode ? performance.now() : 0;
+  acc += dt;
+  while (acc >= FIXED_DT) {
+    advanceWorld(FIXED_DT);
+    stepActor(actor, roomOf(currentRoom), FIXED_DT, moving);
+    acc -= FIXED_DT;
   }
+  if (perfMode) perfStepMs += performance.now() - stepStart;
+  checkOutcome();
+}
 
+/** 每帧渲染：场景、居民标记与性能面板。 */
+function renderWorld(dt: number): void {
   const snap = snapshotScenario(def, currentRoom, actor);
   // 多区域合并所有区域的标记；单区域保持原来的唯一人群。
   const hh = household;
@@ -1074,30 +1055,6 @@ function frame(now: number): void {
   );
   view.render();
 
-  if (now - lastHud > 100) {
-    lastHud = now;
-    updateHud();
-    syncResidents();
-    refreshTools();
-
-    // 三类前兆只在首次满足条件时提示，避免节流循环刷屏。
-    if (actor.air <= 0 && !airWarned) {
-      addLog('空呼耗尽，防护下降。', 'danger');
-      airWarned = true;
-    }
-    if (computeBackdraftRisk(roomOf(targetRoom())) > 0.55 && !backdraftWarned) {
-      addLog('门缝在吸风，可能回燃。先冷却门板。', 'danger');
-      backdraftWarned = true;
-    }
-    if (
-      (director.weakFor[targetRoom()] ?? 0) >= COLLAPSE_SECONDS / 2 &&
-      !collapseWarned
-    ) {
-      addLog('结构在响，可能坍塌。', 'danger');
-      collapseWarned = true;
-    }
-  }
-
   // 性能面板：只在 ?perf=1 时显示，避免影响正常 HUD。
   perfFrames += 1;
   perfElapsed += dt;
@@ -1110,8 +1067,30 @@ function frame(now: number): void {
     perfElapsed = 0;
     perfStepMs = 0;
   }
+}
 
-  requestAnimationFrame(frame);
+/** 节流 HUD：面板、居民、工具与一次性前兆提示。 */
+function hudTick(): void {
+  updateHud();
+  syncResidents();
+  refreshTools();
+
+  // 三类前兆只在首次满足条件时提示，避免节流循环刷屏。
+  if (actor.air <= 0 && !airWarned) {
+    addLog('空呼耗尽，防护下降。', 'danger');
+    airWarned = true;
+  }
+  if (computeBackdraftRisk(roomOf(targetRoom())) > 0.55 && !backdraftWarned) {
+    addLog('门缝在吸风，可能回燃。先冷却门板。', 'danger');
+    backdraftWarned = true;
+  }
+  if (
+    (director.weakFor[targetRoom()] ?? 0) >= COLLAPSE_SECONDS / 2 &&
+    !collapseWarned
+  ) {
+    addLog('结构在响，可能坍塌。', 'danger');
+    collapseWarned = true;
+  }
 }
 
 document.getElementById('routes')!.addEventListener('click', (event) => {
@@ -1193,4 +1172,4 @@ recalcRoutes();
 syncResidents();
 refreshTools();
 updateHud();
-requestAnimationFrame(frame);
+loop = startBuildingFrame({ update: updateWorld, render: renderWorld, hud: hudTick });
