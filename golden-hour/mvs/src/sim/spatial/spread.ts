@@ -23,6 +23,11 @@ const OXYGEN_DIFFUSION = 2.4;
 const HEAT_DIFFUSION = 1.0;
 const HEAT_COOLING = 0.05;
 
+const STEAM_DIFFUSION = 1.4;
+const STEAM_THRESHOLD = 0.1;
+const STEAM_GAIN = 1.8;
+const STEAM_DECAY = 0.12;
+
 const BURN_RATE = 0.012;
 const OXY_CONSUME = 45;
 const HEAT_GAIN = 55;
@@ -81,7 +86,7 @@ function diffuse(state: RoomState, dt: number): void {
   const kSmoke = Math.min(0.9, SMOKE_DIFFUSION * dt);
   const kOxy = Math.min(0.9, OXYGEN_DIFFUSION * dt);
   const kHeat = Math.min(0.9, HEAT_DIFFUSION * dt);
-  const kSteam = Math.min(0.9, 1.4 * dt);
+  const kSteam = Math.min(0.9, STEAM_DIFFUSION * dt);
 
   for (let y = 0; y < config.rows; y++) {
     for (let x = 0; x < config.cols; x++) {
@@ -190,8 +195,8 @@ function burn(state: RoomState, dt: number): void {
 function applyWater(state: RoomState, dt: number): void {
   for (const c of state.cells) {
     if (c.water > 0) {
-      if (c.heat > 0.1) {
-        const vapor = c.water * (c.heat - 0.1) * 1.8 * dt;
+      if (c.heat > STEAM_THRESHOLD) {
+        const vapor = c.water * (c.heat - STEAM_THRESHOLD) * STEAM_GAIN * dt;
         c.steam = clamp01(c.steam + vapor);
         c.heat = clamp01(c.heat - vapor * 0.6);
       }
@@ -201,7 +206,7 @@ function applyWater(state: RoomState, dt: number): void {
       c.water = Math.max(0, c.water - 0.12 * dt);
     }
 
-    c.steam = Math.max(0, c.steam - c.steam * 0.12 * dt);
+    c.steam = clamp01(c.steam - c.steam * STEAM_DECAY * dt);
   }
 }
 

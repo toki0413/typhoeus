@@ -126,6 +126,9 @@ export const ROOM_COLS = 8;
 export const ROOM_ROWS = 8;
 export const CELL_SIZE = 0.75;
 
+const VISIBILITY_SMOKE_WEIGHT = 0.6;
+const VISIBILITY_STEAM_WEIGHT = 0.4;
+
 export function index(config: RoomConfig, x: number, y: number): number {
   return y * config.cols + x;
 }
@@ -289,7 +292,9 @@ export function roomSummary(state: RoomState): {
     heat: heat / n,
     smoke: avgSmoke,
     steam: avgSteam,
-    visibility: clamp01(1 - avgSmoke * 0.6 - avgSteam * 0.4),
+    visibility: clamp01(
+      1 - avgSmoke * VISIBILITY_SMOKE_WEIGHT - avgSteam * VISIBILITY_STEAM_WEIGHT
+    ),
     oxygen: oxygen / n,
     fuel: fuel / n,
     structure: structure / n,

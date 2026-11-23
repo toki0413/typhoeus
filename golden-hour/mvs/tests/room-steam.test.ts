@@ -7,8 +7,8 @@ describe('蒸汽反馈', () => {
   it('水打到高温表面会产生蒸汽，能见度下降', () => {
     const room = createRoom();
     const source = cellAt(room, 5, 4);
-    source.heat = 0.95;
-    source.fire = 0.7;
+    source.heat = 1;
+    source.fire = 0.9;
 
     const before = roomSummary(room);
     spray(room, 'water', 5, 4, { radius: 1, amount: 0.3 });
@@ -17,6 +17,8 @@ describe('蒸汽反馈', () => {
 
     expect(after.steam).toBeGreaterThan(0.001);
     expect(after.visibility).toBeLessThan(before.visibility);
+    // 隔离蒸汽对能见度的贡献：visibility = 1 - smoke*0.6 - steam*0.4
+    expect(1 - after.smoke * 0.6 - after.visibility).toBeGreaterThan(0.0005);
   });
 
   it('蒸汽会随时间散开，不会永久糊住能见度', () => {
