@@ -6,6 +6,7 @@ import {
   createOccupant,
   extractOccupant,
   stepOccupant,
+  syncCarriedOccupant,
 } from '../src/sim/spatial/rescue';
 
 describe('被困者与撤离', () => {
@@ -35,6 +36,7 @@ describe('被困者与撤离', () => {
     room.openings.door.open = true;
     expect(extractOccupant(occupant, actor, room, 'door')).toBe(true);
     expect(occupant.rescued).toBe(true);
+    expect(actor.load).toBe(0);
   });
 
   it('浓烟中健康下降，归零后失去意识', () => {
@@ -60,5 +62,49 @@ describe('被困者与撤离', () => {
     }
 
     expect(carried.health).toBeGreaterThan(walked.health);
+  });
+
+  it('背起后居民跟随玩家位置', () => {
+    const actor = createActor(0, 0);
+    const occupant = createOccupant(0, 0);
+    attachOccupant(actor, occupant);
+    actor.x = 1.5;
+    actor.z = -1;
+    syncCarriedOccupant(occupant, actor);
+    expect(occupant.x).toBe(1.5);
+    expect(occupant.z).toBe(-1);
+  });
+
+  it('获救后不再衰减，也不能再次背起', () => {
+    const room = createRoom();
+    room.openings.door.open = true;
+    const actor = createActor(-2.4, 0);
+    const occupant = createOccupant(-2.2, 0);
+    attachOccupant(actor, occupant);
+    expect(extractOccupant(occupant, actor, room, 'door')).toBe(true);
+
+    const health = occupant.health;
+    for (const c of room.cells) c.smoke = 1;
+    stepOccupant(occupant, room, 10);
+    expect(occupant.health).toBe(health);
+    expect(attachOccupant(actor, occupant)).toBe(false);
+  });
+
+  it('引导撤离不改变负重', () => {
+    const room = createRoom();
+    room.openings.door.open = true;
+    const actor = createActor(-2.4, 0);
+    const occupant = createOccupant(-2.2, 0);
+    const before = actor.load;
+    expect(extractOccupant(occupant, actor, room, 'door')).toBe(true);
+    expect(actor.load).toBe(before);
+  });
+
+  it('NaN dt 不改变居民状态', () => {
+    const room = createRoom();
+    const occupant = createOccupant(0, 0);
+    const before = occupant.health;
+    stepOccupant(occupant, room, Number.NaN);
+    expect(occupant.health).toBe(before);
   });
 });
