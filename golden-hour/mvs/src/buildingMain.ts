@@ -83,7 +83,7 @@ function renderRoutes(): void {
       const kinds = route.steps.map((step) => step.kind).join(' → ');
       return `<button data-route="${index}">
         <b>${index + 1}. ${kinds}</b>
-        <small>${route.time.toFixed(0)}s · 风险 ${route.risk.toFixed(2)}</small>
+        <small>${route.time.toFixed(0)}s · 累计风险 ${route.risk.toFixed(2)}</small>
       </button>`;
     })
     .join('');

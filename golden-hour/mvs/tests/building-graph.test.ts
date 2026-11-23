@@ -34,9 +34,4 @@ describe('建筑房间图', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(b.links.map((l) => l.id)).toEqual(ids);
   });
-
-  it('所有连接默认关闭且未破拆', () => {
-    const graph = createBuilding();
-    expect(graph.links.every((l) => !l.opening.open && !l.opening.broken)).toBe(true);
-  });
 });

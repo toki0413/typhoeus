@@ -1,4 +1,4 @@
-import { createRoom, type Opening, type RoomState } from './fields';
+import { createRoom, type RoomState } from './fields';
 
 export interface RoomBounds {
   x: number;
@@ -21,7 +21,6 @@ export interface RoomLink {
   a: string;
   b: string;
   kind: LinkKind;
-  opening: Opening;
   /** 通过耗时（秒） */
   time: number;
   /** 风险 0..1，用于路线评分 */
@@ -36,19 +35,6 @@ export interface BuildingGraph {
   links: RoomLink[];
 }
 
-function opening(id: 'door' | 'window', open = false): Opening {
-  return {
-    id,
-    x: id === 'door' ? 0 : 7,
-    y: 4,
-    open,
-    broken: false,
-    temp: 0.12,
-    wet: 0,
-    backdraftTrigger: id === 'door',
-  };
-}
-
 let seq = 0;
 
 function link(
@@ -56,8 +42,7 @@ function link(
   b: string,
   kind: LinkKind,
   time: number,
-  risk: number,
-  band: 'door' | 'window' = 'door'
+  risk: number
 ): RoomLink {
   seq += 1;
   return {
@@ -65,8 +50,6 @@ function link(
     a,
     b,
     kind,
-    // TODO(B5): 与 RoomState.openings 同步，避免双份真值。
-    opening: opening(band),
     time,
     risk,
     blocked: false,
@@ -109,7 +92,7 @@ export function createBuilding(): BuildingGraph {
   links.push(link('stair-F1', 'room-201-F1', 'door', 3, 0.15));
   links.push(link('stair-F1', 'room-202-F1', 'door', 4, 0.25));
   links.push(link('stair-F2', 'room-202-F2', 'door', 3, 0.2));
-  links.push(link('room-202-F1', 'escape-F1', 'window', 2, 0.3, 'window'));
+  links.push(link('room-202-F1', 'escape-F1', 'window', 2, 0.3));
   links.push(link('escape-F1', 'escape-F2', 'ladder', 6, 0.35));
   links.push(link('escape-F2', 'roof', 'ladder', 4, 0.3));
   links.push(link('room-202-F2', 'room-202-F1', 'breach', 5, 0.5));
