@@ -19,29 +19,29 @@ function rescueZone(household: HouseholdState, roomId: string): void {
 describe('区域目标规划', () => {
   it('初始：首个区域进行中，其余待处理', () => {
     const household = setup();
-    const [first, second, third] = household.zones;
+    const [first] = household.zones;
 
-    expect(zoneStatuses(household)).toEqual({
-      [first.roomId]: 'active',
-      [second.roomId]: 'pending',
-      [third.roomId]: 'pending',
-    });
+    expect(zoneStatuses(household)).toEqual(
+      Object.fromEntries(
+        household.zones.map((zone, index) => [zone.roomId, index === 0 ? 'active' : 'pending'])
+      )
+    );
     expect(nextZoneId(household)).toBe(first.roomId);
   });
 
   it('完成首区后切换到第二区，状态同步更新', () => {
     const household = setup();
     const graph = layout.build();
-    const [first, second, third] = household.zones;
+    const [first, second] = household.zones;
 
     rescueZone(household, first.roomId);
     stepHousehold(household, graph, 0.5);
 
-    expect(zoneStatuses(household)).toEqual({
-      [first.roomId]: 'done',
-      [second.roomId]: 'active',
-      [third.roomId]: 'pending',
-    });
+    expect(zoneStatuses(household)).toEqual(
+      Object.fromEntries(
+        household.zones.map((zone, index) => [zone.roomId, index <= 0 ? 'done' : index === 1 ? 'active' : 'pending'])
+      )
+    );
     expect(nextZoneId(household)).toBe(second.roomId);
   });
 

@@ -187,7 +187,7 @@ describe('存档与恢复', () => {
 
     expect(save.version).toBe(2);
     expect(save.crowd).toBeUndefined();
-    expect(save.households?.zones).toHaveLength(3);
+    expect(save.households?.zones).toHaveLength(4);
 
     const restored = deserializeSave(serializeSave(save));
     expect(restored.version).toBe(2);

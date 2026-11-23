@@ -86,10 +86,10 @@ const layout =
     : LAYOUTS.find((item) => isUnlocked(progress, layoutIds, item.id)) ?? LAYOUTS[0];
 /** 每日挑战用当天日期（YYYYMMDD）当种子；普通局用 seed 参数，非法则回退 1。 */
 const daily = params.get('daily') === '1';
-/** 默认 3 区 6 人；?zones=single 回退单区域旧玩法。 */
+/** 默认 4 区 8 人；?zones=single 回退单区域旧玩法。 */
 const multi = params.get('zones') !== 'single';
-/** 存档与最佳记录按模式加后缀，避免单区域与多区域记录互相覆盖。 */
-const mode = multi ? 'multi' : 'single';
+/** 存档与最佳记录按模式加后缀；multi4 表示 4 区 8 人，避免与旧 6 人记录混用。 */
+const mode = multi ? 'multi4' : 'single';
 /** ?perf=1 时显示帧率与固定步长耗时，便于桌面 60fps 实测。 */
 const perfMode = params.get('perf') === '1';
 const seedParam = Number(params.get('seed'));

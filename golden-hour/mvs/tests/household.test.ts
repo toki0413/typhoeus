@@ -10,7 +10,7 @@ import {
 
 const layout = layoutById('classic')!;
 
-/** 户型的三个区域；用例只读使用。 */
+/** 户型的全部区域；用例只读使用。 */
 function classicZones() {
   return layout.zones;
 }
@@ -42,7 +42,7 @@ describe('多区域人群', () => {
     const zones = classicZones();
     const household = createHousehold(zones, 5);
 
-    expect(Object.keys(household.crowds)).toHaveLength(3);
+    expect(Object.keys(household.crowds)).toHaveLength(4);
     expect(household.activeRoomId).toBe(zones[0].roomId);
     expect(household.events).toEqual([]);
 
@@ -97,7 +97,7 @@ describe('多区域人群', () => {
     expect(householdSummary(household).done).toBe(1);
   });
 
-  it('全部完成：active 归空，统计 6 人全获救', () => {
+  it('全部完成：active 归空，统计 8 人全获救', () => {
     const household = createHousehold(classicZones(), 9);
     const graph = clearBuilding();
 
@@ -105,7 +105,7 @@ describe('多区域人群', () => {
     stepHousehold(household, graph, 0.5);
 
     expect(household.activeRoomId).toBeNull();
-    expect(householdSummary(household)).toEqual({ rescued: 6, lost: 0, total: 6, done: 3 });
+    expect(householdSummary(household)).toEqual({ rescued: 8, lost: 0, total: 8, done: 4 });
   });
 
   it('同种子同推进序列得到完全一致的健康值', () => {
