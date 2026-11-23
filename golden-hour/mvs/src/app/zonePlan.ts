@@ -38,3 +38,11 @@ export function nextZoneId(household: HouseholdState): string | null {
 export function zoneLabel(household: HouseholdState, roomId: string): string {
   return household.zones.find((zone) => zone.roomId === roomId)?.label ?? roomId;
 }
+
+export type RunPhase = 'rescue' | 'evacuate' | 'done';
+
+/** allDone=false → rescue；allDone 且未到出口 → evacuate；到出口 → done。 */
+export function runPhase(allDone: boolean, atExit: boolean): RunPhase {
+  if (!allDone) return 'rescue';
+  return atExit ? 'done' : 'evacuate';
+}

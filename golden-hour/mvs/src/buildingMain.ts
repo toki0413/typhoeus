@@ -30,7 +30,7 @@ import {
 } from './sim/agents/household';
 import { LAYOUTS, layoutById, layoutFireProfile } from './content/layouts';
 import { buildingToolActions, type BuildingToolAction } from './app/buildingTools';
-import { zoneLabel, zoneStatuses, type ZoneStatus } from './app/zonePlan';
+import { runPhase, zoneLabel, zoneStatuses, type ZoneStatus } from './app/zonePlan';
 import { isUnlocked, loadProgress, recordRun, saveProgress } from './app/progress';
 import {
   createSave,
@@ -142,6 +142,10 @@ let household: HouseholdState | null = multi
   ? createHousehold(layout.zones, seed)
   : null;
 
+/** 多区域是否全部处理完；单区域恒为 false。 */
+const allZonesDone = () =>
+  !!household && householdSummary(household).done === household.zones.length;
+
 if (!multi) {
   /** 居民 C 初始就躲在下侧中段；血线略高，留给“发现 + 走过去”的窗口。 */
   const residentC = residentAt('C', 3, 6, 0.6, 0.3);
@@ -180,6 +184,8 @@ let seenEvents = 0;
 /** household.events 的读取游标与上一次目标区域，用于区域日志与面板刷新。 */
 let zoneEventCursor = 0;
 let zoneWatchRoom: string | null = household ? household.activeRoomId : null;
+/** 撤离阶段只播报一次，避免每帧重复写日志与刷新。 */
+let evacAnnounced = false;
 /** 因果复盘用的动作记录；按发生顺序追加。 */
 const actions: ActionRecord[] = [];
 let actionSeq = 0;
@@ -201,6 +207,7 @@ const lostIds = new Set<string>();
 const out = {
   room: document.getElementById('hud-room')!,
   target: document.getElementById('hud-target')!,
+  phase: document.getElementById('hud-phase')!,
   seed: document.getElementById('hud-seed')!,
   stamina: document.getElementById('hud-stamina')!,
   exposure: document.getElementById('hud-exposure')!,
@@ -301,15 +308,20 @@ function roomOf(id: string) {
 
 function targetRoom(): string {
   if (household) {
+    // 全部区域处理完后，目标改为返回入口撤离。
+    if (allZonesDone()) return def.startRoom;
     return household.activeRoomId ?? household.zones[0]?.roomId ?? def.targetRoom;
   }
   return def.targetRoom;
 }
 
-/** 当前区域的人群；单区域返回唯一人群，多区域按目标房间取。 */
-function activeCrowd(): CrowdState {
-  if (household) return household.crowds[targetRoom()];
-  return crowd as CrowdState;
+/** 当前区域的人群；单区域返回唯一人群，多区域按目标房间取，撤离阶段为空。 */
+function activeCrowd(): CrowdState | null {
+  if (household) {
+    if (allZonesDone()) return null;
+    return household.crowds[targetRoom()] ?? null;
+  }
+  return crowd;
 }
 
 /** 全部区域的人群；单区域只有一支，多区域按区域顺序返回。 */
@@ -465,6 +477,10 @@ function recalcRoutes(): void {
 }
 
 function renderRoutes(): void {
+  if (allZonesDone() && currentRoom === def.startRoom) {
+    out.routes.innerHTML = '<p class="hint">已到入口，撤离完成。</p>';
+    return;
+  }
   if (currentRoom === targetRoom()) {
     out.routes.innerHTML =
       '<p class="hint">在目标房间：WASD/方向键移动，靠近居民后牵出或背出；角落可能有躲藏者。工具在右侧面板。</p>';
@@ -494,7 +510,7 @@ function renderZones(): void {
 
   const statuses = zoneStatuses(household);
   out.zones.hidden = false;
-  out.zones.innerHTML = household.zones
+  const chips = household.zones
     .map(
       (zone) =>
         `<span class="zone-chip ${statuses[zone.roomId]}" data-zone="${zone.roomId}">${
@@ -502,6 +518,13 @@ function renderZones(): void {
         }<small>${ZONE_TEXT[statuses[zone.roomId]]}</small></span>`
     )
     .join('');
+  // 撤离阶段在区域条末尾追加一个目标 chip，提示返回入口。
+  const evac = allZonesDone()
+    ? `<span class="zone-chip active">${
+        currentRoom === def.startRoom ? '撤离完成' : '返回入口撤离'
+      }</span>`
+    : '';
+  out.zones.innerHTML = chips + evac;
 }
 
 /** 把 #residents 渲染成当前区域每个未获救居民一行，附牵/背按钮。 */
@@ -511,12 +534,21 @@ function renderResidents(): void {
     out.residents.innerHTML = '<p class="hint">本轮已结束。</p>';
     return;
   }
+  if (allZonesDone()) {
+    out.residents.innerHTML =
+      '<p class="hint">所有区域已处理完，返回入口撤离。</p>';
+    return;
+  }
   if (currentRoom !== targetRoom()) {
     out.residents.innerHTML = '<p class="hint">抵达目标房间后可选择牵出或背出。</p>';
     return;
   }
 
   const crowdNow = activeCrowd();
+  if (!crowdNow) {
+    out.residents.innerHTML = '<p class="hint">当前没有可救援的居民。</p>';
+    return;
+  }
   const rows = crowdNow.residents
     .filter((resident) => !resident.rescued)
     .filter((resident) => !resident.hidden || findResident(resident, actor))
@@ -574,7 +606,9 @@ function residentSignature(): string {
         .join(',');
       return `${zone.roomId}=${people}`;
     });
-    return `${currentRoom}|${ended ? 1 : 0}|${hh.activeRoomId ?? 'none'}|${parts.join(';')}`;
+    return `${currentRoom}|${allZonesDone() ? 1 : 0}|${ended ? 1 : 0}|${
+      hh.activeRoomId ?? 'none'
+    }|${parts.join(';')}`;
   }
 
   const parts = crowd
@@ -603,9 +637,9 @@ function toolsSignature(actions: BuildingToolAction[], inactive: boolean): strin
   return `${inactive ? 1 : 0}|${parts.join(',')}`;
 }
 
-/** 渲染右侧工具面板；不在目标房间或已结束时全部禁用。 */
+/** 渲染右侧工具面板；不在目标房间、撤离阶段或已结束时全部禁用。 */
 function refreshTools(): void {
-  const inactive = ended || currentRoom !== targetRoom();
+  const inactive = ended || allZonesDone() || currentRoom !== targetRoom();
   const actions = buildingToolActions(roomOf(targetRoom()), loadout);
   const sig = toolsSignature(actions, inactive);
   if (sig === toolsSig) return;
@@ -671,8 +705,11 @@ function takeRoute(index: number): void {
   const at = roomOf(targetRoom()).t;
 
   currentRoom = travel.roomId;
-  // 抵达目标区域时落在门侧入口，避免玩家站在火源所在格上承受数倍暴露。
-  if (currentRoom === targetRoom()) {
+  // 抵达目标区域或撤离入口时落在门侧，避免站在火源所在格上承受数倍暴露。
+  if (
+    currentRoom === targetRoom() ||
+    (allZonesDone() && currentRoom === def.startRoom)
+  ) {
     actor.x = -2.4;
     actor.z = 0;
   } else {
@@ -705,6 +742,7 @@ function takeRoute(index: number): void {
 
 function handleRescue(id: string, verb: RescueVerb): void {
   if (ended) return;
+  if (allZonesDone()) return;
   if (currentRoom !== targetRoom()) {
     addLog('先到目标房间才能救人。', 'danger');
     return;
@@ -712,6 +750,7 @@ function handleRescue(id: string, verb: RescueVerb): void {
 
   // 救援前后各取一次当前区域的聚合场，用于因果复盘。
   const crowdNow = activeCrowd();
+  if (!crowdNow) return;
   const room = roomOf(targetRoom());
   const before = sampleRoom(room);
   const at = room.t;
@@ -753,6 +792,13 @@ function updateHud(): void {
   const exposure = clamp01(actor.exposure.smoke + actor.exposure.heat);
   out.room.textContent = currentRoom;
   out.target.textContent = targetRoom();
+  if (household) {
+    const phase = runPhase(allZonesDone(), currentRoom === def.startRoom);
+    out.phase.textContent =
+      phase === 'rescue' ? '搜救' : phase === 'evacuate' ? '返回入口' : '撤离完成';
+  } else {
+    out.phase.textContent = '搜救';
+  }
   out.seed.textContent = daily ? `每日 #${seed}` : `种子 ${seed}`;
   out.stamina.textContent = `${Math.round(actor.stamina * 100)}%`;
   out.air.textContent = `${Math.round(actor.air * 100)}%`;
@@ -771,16 +817,24 @@ function updateHud(): void {
 function checkOutcome(): void {
   if (ended) return;
   if (household) {
-    const summary = householdSummary(household);
-    const totalZones = household.zones.length;
-    if (summary.done >= totalZones || household.activeRoomId === null) {
-      const seconds = roomOf(targetRoom()).t;
-      end(
-        `救出 ${summary.rescued} / ${summary.total}`,
-        `完成 ${summary.done}/${totalZones} 区域，失去 ${summary.lost} 人，用时 ${seconds.toFixed(
-          1
-        )} 秒。结果来自区域顺序、搜索与火场压力。`
-      );
+    if (allZonesDone()) {
+      const summary = householdSummary(household);
+      if (currentRoom === def.startRoom) {
+        const seconds = roomOf(def.startRoom).t;
+        end(
+          `救出 ${summary.rescued}/${summary.total} · 已撤离`,
+          `所有区域已处理完，已返回入口撤离。用时 ${seconds.toFixed(1)} 秒。`
+        );
+      } else if (actor.downed) {
+        // 撤离路上烟热仍在累积；倒地同样按失败结算。
+        end('你被烟和热压倒了', '撤离路上烟热仍在累积，没能回到入口。');
+      } else if (!evacAnnounced) {
+        evacAnnounced = true;
+        addLog('所有区域已处理完，返回入口撤离。', 'ok');
+        recalcRoutes();
+        renderZones();
+        updateHud();
+      }
       return;
     }
   } else if (crowd) {
@@ -950,6 +1004,7 @@ function restoreFromSave(save: GameSave): void {
   seenEvents = director.events.length;
   zoneEventCursor = household ? household.events.length : 0;
   zoneWatchRoom = household ? household.activeRoomId : null;
+  evacAnnounced = false;
   // 无线电按目标房间已走过的模拟时刻推进，恢复后不重播旧台词。
   const t = roomOf(targetRoom()).t;
   radioCursor = 0;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { layoutById } from '../src/content/layouts';
 import { createHousehold, stepHousehold, type HouseholdState } from '../src/sim/agents/household';
-import { nextZoneId, zoneLabel, zoneStatuses } from '../src/app/zonePlan';
+import { nextZoneId, runPhase, zoneLabel, zoneStatuses } from '../src/app/zonePlan';
 
 const layout = layoutById('classic')!;
 
@@ -65,5 +65,11 @@ describe('区域目标规划', () => {
 
     expect(zoneLabel(household, first.roomId)).toBe(first.label);
     expect(zoneLabel(household, 'room-not-exist')).toBe('room-not-exist');
+  });
+
+  it('runPhase：未完成始终搜救；完成后按是否到出口区分', () => {
+    expect(runPhase(false, false)).toBe('rescue');
+    expect(runPhase(true, false)).toBe('evacuate');
+    expect(runPhase(true, true)).toBe('done');
   });
 });
