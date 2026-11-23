@@ -2138,22 +2138,37 @@ git commit -m "feat(mvs): deterministic building camera shots"
 
 ### Phase 5 — 内容与打磨
 
-**新文件：**
-- `src/content/layouts/*.ts`：3–5 个户型
-- `src/content/materials.ts`：材料表（可燃性、导热、强度、烟产率）
-- `src/content/drills.ts`：测温、回燃、低姿、破拆演练
-- `src/app/save.ts`：存档/中断续玩
-- `tests/content.test.ts`、`tests/performance.test.ts`、`tests/save.test.ts`
+**执行状态（2026-11-23）：核心完成，时长/移动端打磨留待后续。**
 
-**必须存在的测试：**
+| 任务 | 状态 | 提交 |
+| --- | --- | --- |
+| P5.1 材料表 | 完成 | `a5c3ee3` |
+| P5.2 户型 | 完成 | `caf0e1a` |
+| P5.3 演练 | 完成 | `87f6a48` |
+| P5.4 存档/恢复 | 完成 | `6798aee` |
+| P5.5 性能门禁与户型接入 | 完成 | `7ca7b5a` |
+| P5.6 文档与完整门禁 | 完成 | 本文档提交 |
+
+**新文件：**
+- `src/content/layouts.ts`：4 个户型（经典两层、窄楼梯、内院双梯、跃层）与 `validateLayout`
+- `src/content/materials.ts`：10 种材料，覆盖 A–F 全部火类
+- `src/content/drills.ts`：测温、回燃、低姿三个可测演练
+- `src/app/save.ts`：存档序列化、版本校验与恢复
+- `tests/materials.test.ts`、`tests/layouts.test.ts`、`tests/drills.test.ts`、`tests/save.test.ts`、`tests/performance.test.ts`、`tests/layout-scenario.test.ts`
+
+**必须存在的测试（已全部落地）：**
 1. `每种户型都能生成合法房间图`：连接两端存在、无孤立房间。
 2. `材料表覆盖所有 FireClass`：每个火类至少一种材料。
 3. `演练关有明确成功条件`：测温/回燃/低姿各一个可测条件。
-4. `单房间 stepRoom 在 8×8 下 < 1ms`：跑 1000 步取平均。
+4. `单房间 stepRoom 在 8×8 下 < 1ms`：1000 步平均（实测约 0.04ms）。
 5. `存档可恢复`：序列化 → 反序列化 → 继续推进 10 秒结果一致。
 6. `门禁全绿`：`npm run check`、`npm run verify`。
 
-**验收：** 一局 5–8 分钟，桌面稳定 60fps，移动端降级可玩。
+**入口接入说明：**
+- `building.html` 顶部“户型”下拉可在 4 个户型间切换（写入 `?layout=` 并刷新），场景只在目标房间点燃沙发与火源。
+- 演练目前是可测数据与测试，独立演练入口、暴露曲线对比与叙事（无线电/邻居）留待后续内容阶段。
+
+**验收：** 一局 5–8 分钟，桌面稳定 60fps，移动端降级可玩。（时长与移动端尚未验收；性能门禁与构建门禁已通过。）
 
 ---
 
