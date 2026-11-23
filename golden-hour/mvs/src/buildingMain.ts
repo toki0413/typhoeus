@@ -19,6 +19,12 @@ import { LAYOUTS, layoutById, layoutFireProfile } from './content/layouts';
 import { buildingToolActions, type BuildingToolAction } from './app/buildingTools';
 import { isUnlocked, loadProgress, recordRun, saveProgress } from './app/progress';
 import {
+  createSave,
+  deserializeSave,
+  serializeSave,
+  type GameSave,
+} from './app/save';
+import {
   compareRuns,
   scoreRun,
   type RunComparison,
@@ -67,7 +73,7 @@ const seed = daily
   : Number.isFinite(seedParam) && seedParam > 0
     ? Math.floor(seedParam)
     : 1;
-const def = createScenarioForBuilding(
+let def = createScenarioForBuilding(
   layout.build(),
   layout.entrance,
   layout.target,
@@ -75,9 +81,9 @@ const def = createScenarioForBuilding(
   seed,
   layoutFireProfile(layout)
 );
-const actor = createActor();
+let actor = createActor();
 /** 随身器材；工具动作会消耗 charge，用空后按钮禁用。 */
-const loadout: CarryLoadout = createToolLoadout();
+let loadout: CarryLoadout = createToolLoadout();
 // 建筑入口按消防员佩戴空呼处理：烟热仍会累积，但足以支撑多次进出救援。
 actor.masked = true;
 
@@ -100,7 +106,7 @@ function residentAt(
 const residentC = residentAt('C', 3, 6, 0.6, 0.3);
 residentC.hidden = true;
 
-const crowd = createCrowd(
+let crowd = createCrowd(
   def.targetRoom,
   [
     residentAt('A', 2, 5, 1, 0),
@@ -110,6 +116,9 @@ const crowd = createCrowd(
   seed
 );
 
+/** 存档键：与最佳记录一样按户型 + 种子隔离，只在同户型同种子下恢复。 */
+const SAVE_KEY = 'gh-save:' + layout.id + ':' + seed;
+
 let currentRoom = def.startRoom;
 let routes: Route[] = [];
 let ended = false;
@@ -118,7 +127,7 @@ let lastHud = 0;
 let logs: { text: string; kind: 'info' | 'ok' | 'danger' }[] = [];
 
 /** 事件导演：风向、窗户失效与坍塌都由它决定，完全确定性。 */
-const director = createDirector(seed);
+let director = createDirector(seed);
 /** 固定风向日程：按模拟时间触发，每条只生效一次。 */
 const WIND_SCHEDULE = [
   { at: 15, x: 1, y: 0, speed: 0.7 },
@@ -716,6 +725,59 @@ function saveBest(record: BestRecord): void {
   }
 }
 
+/** 把存档写回运行期状态；只刷新入口面板，不改动模拟层。 */
+function restoreFromSave(save: GameSave): void {
+  def = save.def;
+  actor = save.actor;
+  // 旧存档没有器材余量：保留当前新建的一套。
+  if (save.loadout) loadout = save.loadout;
+  crowd = save.crowd;
+  director = save.director;
+  currentRoom = save.currentRoom;
+
+  // 重置运行期状态，避免把上一局的时间轴与面板指纹带进来。
+  ended = false;
+  acc = 0;
+  last = performance.now();
+  seenEvents = director.events.length;
+  // 无线电按目标房间已走过的模拟时刻推进，恢复后不重播旧台词。
+  const t = roomOf(def.targetRoom).t;
+  radioCursor = 0;
+  while (radioCursor < RADIO_LINES.length && RADIO_LINES[radioCursor].at <= t) {
+    radioCursor += 1;
+  }
+  lastSampleT = -1;
+  exposureSamples.length = 0;
+  actions.length = 0;
+  actionSeq = 0;
+  wrongAgent = 0;
+  lostIds.clear();
+  residentsSig = '';
+
+  out.outcome.classList.remove('show');
+  recalcRoutes();
+  syncResidents();
+  refreshTools();
+  updateHud();
+  addLog('已恢复上一局。', 'ok');
+}
+
+/** 保存当前进度；已经结束的局没有恢复价值，直接拒绝。 */
+function saveCurrent(): void {
+  if (ended) {
+    addLog('本局已结束，无法保存。', 'danger');
+    return;
+  }
+  const save = createSave({ def, actor, crowd, director, currentRoom, loadout });
+  try {
+    window.localStorage.setItem(SAVE_KEY, serializeSave(save));
+  } catch {
+    addLog('保存失败：浏览器存储不可用。', 'danger');
+    return;
+  }
+  addLog('已保存当前进度。', 'ok');
+}
+
 /** 渲染星级、分数、原因列表、本次/最佳对比与该户型最佳分。 */
 function renderScore(
   breakdown: ScoreBreakdown,
@@ -930,6 +992,41 @@ out.tools.addEventListener('click', (event) => {
 
 document.getElementById('reset-btn')!.addEventListener('click', () => window.location.reload());
 document.getElementById('outcome-reset')!.addEventListener('click', () => window.location.reload());
+
+const saveBtn = document.getElementById('save-btn');
+saveBtn?.addEventListener('click', saveCurrent);
+
+/** 启动时若存在可解析的存档，就放出“继续上一局”入口。 */
+const continueBtn = document.getElementById('continue-btn') as HTMLButtonElement | null;
+try {
+  const raw = window.localStorage.getItem(SAVE_KEY);
+  if (raw) {
+    deserializeSave(raw);
+    if (continueBtn) continueBtn.hidden = false;
+  }
+} catch {
+  // 存档损坏或不可读：保持隐藏，不影响新开一局。
+}
+
+continueBtn?.addEventListener('click', () => {
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(SAVE_KEY);
+  } catch {
+    raw = null;
+  }
+  if (!raw) {
+    addLog('没有可恢复的存档。', 'danger');
+    continueBtn.hidden = true;
+    return;
+  }
+  try {
+    restoreFromSave(deserializeSave(raw));
+  } catch {
+    addLog('存档已损坏，无法恢复。', 'danger');
+    continueBtn.hidden = true;
+  }
+});
 
 addLog(`到场：入口。目标 ${def.targetRoom}，楼梯、消防梯、破拆三条路线。`);
 for (const line of BRIEFING) addLog(`【${line.speaker}】${line.text}`);

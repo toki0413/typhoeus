@@ -9,6 +9,7 @@ import type { ScenarioDefinition } from '../sim/spatial/scene';
 import type { ActorState } from '../sim/spatial/actor';
 import type { CrowdState } from '../sim/agents/crowd';
 import type { DirectorState } from '../sim/events/director';
+import type { CarryLoadout } from '../sim/interaction/tools';
 
 export const SAVE_VERSION = 1;
 
@@ -18,6 +19,8 @@ export interface SaveInput {
   crowd: CrowdState;
   director: DirectorState;
   currentRoom: string;
+  /** 随身器材余量与状态；旧存档没有该字段，缺省时按新建器材处理。 */
+  loadout?: CarryLoadout;
 }
 
 export interface GameSave extends SaveInput {

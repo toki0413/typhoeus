@@ -14,6 +14,7 @@ import {
   type DirectorState,
 } from '../src/sim/events/director';
 import { FIXED_DT } from '../src/sim/spatial/spread';
+import { createToolLoadout } from '../src/sim/interaction/tools';
 import {
   SAVE_VERSION,
   createSave,
@@ -174,5 +175,27 @@ describe('存档与恢复', () => {
       fixture.def.building.rooms[fixture.def.targetRoom].room.t
     );
     expect(save.simTime).toBeGreaterThan(0);
+  });
+
+  it('带 loadout 的存档往返后余量与状态一致，旧格式仍能反序列化', () => {
+    const loadout = createToolLoadout();
+    loadout.hose.charge = 0.4;
+    loadout.hose.condition = 'depressurized';
+    loadout.extinguisher.charge = 0;
+    loadout.extinguisher.condition = 'empty';
+
+    const save = createSave({ ...buildState(), loadout });
+    const restored = deserializeSave(serializeSave(save));
+
+    expect(restored.loadout).toEqual(loadout);
+    expect(restored.loadout?.hose.charge).toBeCloseTo(0.4, 10);
+    expect(restored.loadout?.hose.condition).toBe('depressurized');
+
+    // 旧格式没有 loadout 字段：反序列化不报错，该字段保持缺省。
+    const legacy = JSON.parse(serializeSave(save)) as Record<string, unknown>;
+    delete legacy.loadout;
+    const restoredLegacy = deserializeSave(JSON.stringify(legacy));
+    expect(restoredLegacy.loadout).toBeUndefined();
+    expect(restoredLegacy.actor).toEqual(save.actor);
   });
 });
