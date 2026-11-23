@@ -13,14 +13,14 @@ import {
   stepScenario,
 } from './sim/spatial/scene';
 import { findRoutes, type Route } from './sim/nav/graph';
-import { takeLink } from './sim/nav/movement';
+import { travelRoute } from './sim/nav/travel';
 import { createBuildingView } from './render/buildingView';
 
 const canvas = document.getElementById('building-canvas') as HTMLCanvasElement;
 const view = createBuildingView(canvas);
 const def = createBuildingScenario();
 const actor = createActor();
-const occupant = createOccupant(1.2, 1.2);
+const occupant = createOccupant(0.3, 0.3);
 
 let currentRoom = def.startRoom;
 let routes: Route[] = [];
@@ -70,7 +70,7 @@ function recalcRoutes(): void {
 function renderRoutes(): void {
   if (currentRoom === targetRoom()) {
     out.routes.innerHTML = `<p class="hint">${
-      occupant.carried ? '把居民背回入口。' : '已在 202，按 C 背起居民。'
+      occupant.carried ? '在入口，按 C 完成撤离。' : '已在 202，按 C 背起居民。'
     }</p>`;
     return;
   }
@@ -94,32 +94,30 @@ function takeRoute(index: number): void {
   const route = routes[index];
   if (!route) return;
 
-  for (const step of route.steps) {
-    if (!takeLink(actor, step)) {
-      addLog('这条路线现在过不去，重新规划。', 'danger');
-      recalcRoutes();
-      return;
-    }
+  const travel = travelRoute(def.building, route, actor, currentRoom);
+  if (!travel.ok) {
+    addLog('这条路线现在过不去，重新规划。', 'danger');
+    recalcRoutes();
+    return;
   }
 
-  const last = route.steps[route.steps.length - 1];
-  currentRoom = last.a === currentRoom ? last.b : last.a;
+  currentRoom = travel.roomId;
+  // 到达新房间时落在房间中心的入口锚点，避免站在燃烧格上。
+  actor.x = 0;
+  actor.z = 0;
 
-  // Canvas 版没有逐帧位移：到达目标房间时把玩家放到居民身边，才能背起。
-  if (currentRoom === def.targetRoom) {
-    actor.x = occupant.x;
-    actor.z = occupant.z;
-  }
-
-  const ticks = Math.max(1, Math.round(route.time / FIXED_DT));
+  const ticks = Math.max(1, Math.round(travel.time / FIXED_DT));
   for (let i = 0; i < ticks; i++) {
-    stepActor(actor, roomOf(currentRoom), FIXED_DT, true);
+    stepScenario(def, FIXED_DT);
+    if (occupant.carried) syncCarriedOccupant(occupant, actor);
+    stepOccupant(
+      occupant,
+      roomOf(occupant.carried ? currentRoom : def.targetRoom),
+      FIXED_DT
+    );
   }
 
-  addLog(
-    `通过 ${route.steps.map((step) => step.kind).join(' → ')}，到达 ${currentRoom}`,
-    'ok'
-  );
+  addLog(`通过 ${route.steps.map((step) => step.kind).join(' → ')}，到达 ${currentRoom}`, 'ok');
   recalcRoutes();
   checkOutcome();
 }
@@ -225,6 +223,7 @@ function frame(now: number): void {
 }
 
 window.addEventListener('keydown', (event) => {
+  if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
   const key = event.key.toLowerCase();
   if (key === '1') takeRoute(0);
   if (key === '2') takeRoute(1);

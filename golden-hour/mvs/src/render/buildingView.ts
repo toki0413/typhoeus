@@ -28,11 +28,12 @@ function roomColor(fire: number, smoke: number, heat: number): string {
 
 export function createBuildingView(canvas: HTMLCanvasElement): BuildingView {
   const ctx = canvas.getContext('2d');
+  let dpr = 1;
   let rects: { id: string; x: number; y: number; w: number; h: number }[] = [];
   let centers: Record<string, { x: number; y: number }> = {};
 
   function resize(): void {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;
     canvas.width = Math.max(1, Math.round(w * dpr));
@@ -81,7 +82,7 @@ export function createBuildingView(canvas: HTMLCanvasElement): BuildingView {
         ctx.fillRect(x, y, cw, ch);
 
         ctx.strokeStyle = id === currentRoom ? '#e5b567' : '#2a323c';
-        ctx.lineWidth = id === currentRoom ? 3 : 1;
+        ctx.lineWidth = (id === currentRoom ? 3 : 1) * dpr;
         ctx.strokeRect(x, y, cw, ch);
 
         ctx.fillStyle = '#f2efe9';
@@ -99,7 +100,7 @@ export function createBuildingView(canvas: HTMLCanvasElement): BuildingView {
       if (!a || !b) continue;
       const active = routeSet.has(link.id);
       ctx.strokeStyle = link.blocked ? '#5a2a2a' : active ? '#e5b567' : '#2a323c';
-      ctx.lineWidth = active ? 3 : 1.5;
+      ctx.lineWidth = (active ? 3 : 1.5) * dpr;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -110,10 +111,10 @@ export function createBuildingView(canvas: HTMLCanvasElement): BuildingView {
     if (player) {
       ctx.beginPath();
       ctx.fillStyle = '#3f6f5c';
-      ctx.arc(player.x, player.y, 7, 0, Math.PI * 2);
+      ctx.arc(player.x, player.y, 7 * dpr, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#e5b567';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * dpr;
       ctx.stroke();
     }
 
@@ -122,7 +123,7 @@ export function createBuildingView(canvas: HTMLCanvasElement): BuildingView {
       if (target) {
         ctx.beginPath();
         ctx.fillStyle = '#c39a7f';
-        ctx.arc(target.x + 14, target.y + 10, 5, 0, Math.PI * 2);
+        ctx.arc(target.x + 14, target.y + 10, 5 * dpr, 0, Math.PI * 2);
         ctx.fill();
       }
     }
