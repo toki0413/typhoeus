@@ -12,10 +12,7 @@ import {
   escortResident,
   rescueResident,
   stepCrowd,
-  type ConfirmReason,
   type CrowdState,
-  type EscortReason,
-  type RescueReason,
   type RescueVerb,
 } from './sim/agents/crowd';
 import { gridToWorld } from './sim/spatial/coords';
@@ -34,7 +31,7 @@ import {
 } from './sim/agents/household';
 import { LAYOUTS, layoutById, layoutFireProfile } from './content/layouts';
 import { buildingToolActions, type BuildingToolAction } from './app/buildingTools';
-import { runPhase, zoneLabel, zoneStatuses, type ZoneStatus } from './app/zonePlan';
+import { runPhase, zoneLabel, zoneStatuses } from './app/zonePlan';
 import { isUnlocked, loadProgress, recordRun, saveProgress } from './app/progress';
 import {
   createSave,
@@ -69,11 +66,18 @@ import {
 import { findRoutes, type Route } from './sim/nav/graph';
 import { travelRoute } from './sim/nav/travel';
 import { createBuildingView } from './render/buildingView';
+import { residentMarkers, residentVisualState } from './render/residents';
+import { installDiagnostics } from './app/diagnostics';
 import {
-  residentMarkers,
-  residentVisualState,
-  type ResidentVisualState,
-} from './render/residents';
+  RESIDENT_STATE_TEXT,
+  ZONE_STATUS_TEXT,
+  confirmReasonText,
+  rescueReasonText,
+  windText,
+} from './app/buildingText';
+
+/** 版本、全局错误与匿名运行摘要；只写本地环形缓冲。 */
+const diag = installDiagnostics(window);
 
 const canvas = document.getElementById('building-canvas') as HTMLCanvasElement;
 const view = createBuildingView(canvas);
@@ -271,34 +275,6 @@ if (singleLink) {
   singleLink.href = url.toString();
 }
 
-const STATE_TEXT: Record<ResidentVisualState, string> = {
-  calm: '平静',
-  panic: '恐慌',
-  hidden: '躲藏',
-  unconscious: '昏迷',
-  dead: '已失去',
-  rescued: '已救出',
-};
-
-/** 区域条的状态文案：待救 / 进行 / 完成。 */
-const ZONE_TEXT: Record<ZoneStatus, string> = {
-  pending: '待救',
-  active: '进行',
-  done: '完成',
-};
-
-/** 8 个中文方位：0° 指向东，每 45° 一档。 */
-const WIND_LABELS = ['东', '东北', '北', '西北', '西', '西南', '南', '东南'];
-
-/** 把导演的风矢量翻成“方位 · 风速”，供 HUD 显示。 */
-function windText(): string {
-  const { x, y, speed } = director.wind;
-  if (Math.hypot(x, y) < 1e-6) return `无风 · ${speed.toFixed(2)}`;
-  const deg = (Math.atan2(y, x) * 180) / Math.PI;
-  const slot = Math.round(((deg + 360) % 360) / 45) % 8;
-  return `${WIND_LABELS[slot]} · ${speed.toFixed(2)}`;
-}
-
 function addLog(text: string, kind: 'info' | 'ok' | 'danger' = 'info'): void {
   logs = [{ text, kind }, ...logs].slice(0, 6);
   out.log.innerHTML = logs
@@ -453,43 +429,6 @@ function advanceWorld(dt: number, stepCrowdNow = true): void {
   recordLosses();
 }
 
-function reasonText(reason: RescueReason | EscortReason): string {
-  switch (reason) {
-    case 'too-far':
-      return '离居民太远';
-    case 'not-found':
-      return '没找到';
-    case 'unconscious-needs-carry':
-      return '昏迷只能背';
-    case 'lost':
-      return '已经失去';
-    case 'actor-downed':
-      return '你已失去行动能力';
-    case 'already-rescued':
-      return '已救出';
-    case 'already-escorted':
-      return '已带离';
-    case 'ok':
-      return '成功';
-  }
-}
-
-/** 确认送达失败时的中文提示；与救援的距离/状态文案区分开。 */
-function confirmReasonText(reason: ConfirmReason): string {
-  switch (reason) {
-    case 'too-far':
-      return '离门口太远';
-    case 'not-escorted':
-      return '尚未带离';
-    case 'lost':
-      return '已经失去';
-    case 'already-rescued':
-      return '已确认';
-    case 'ok':
-      return '已确认';
-  }
-}
-
 function recalcRoutes(): void {
   routes =
     currentRoom === targetRoom()
@@ -537,7 +476,7 @@ function renderZones(): void {
       (zone) =>
         `<span class="zone-chip ${statuses[zone.roomId]}" data-zone="${zone.roomId}">${
           zone.label
-        }<small>${ZONE_TEXT[statuses[zone.roomId]]}</small></span>`
+        }<small>${ZONE_STATUS_TEXT[statuses[zone.roomId]]}</small></span>`
     )
     .join('');
   // 撤离阶段在区域条末尾追加一个目标 chip，提示返回入口。
@@ -579,7 +518,7 @@ function renderResidents(): void {
       const isDead = state === 'dead';
       const canLead = state !== 'unconscious' && !isDead;
       // 已带离的居民只等门口确认；未带离的仍按牵/背处理。
-      const label = resident.escorted ? '待确认' : STATE_TEXT[state];
+      const label = resident.escorted ? '待确认' : RESIDENT_STATE_TEXT[state];
       const actions = resident.escorted
         ? `<button data-confirm="${resident.id}" aria-label="确认送达居民 ${resident.id}"${
             isDead ? ' disabled' : ''
@@ -815,7 +754,7 @@ function handleRescue(id: string, verb: RescueVerb): void {
     // 救援内部推进过世界，工具余量可能随动作变化，刷新面板。
     refreshTools();
   } else {
-    addLog(`${reasonText(result.reason)}（居民 ${id}）`, 'danger');
+    addLog(`${rescueReasonText(result.reason)}（居民 ${id}）`, 'danger');
   }
 
   recordLosses();
@@ -877,7 +816,7 @@ function updateHud(): void {
   out.stamina.textContent = `${Math.round(actor.stamina * 100)}%`;
   out.air.textContent = `${Math.round(actor.air * 100)}%`;
   out.exposure.textContent = `${Math.round(exposure * 100)}%`;
-  out.wind.textContent = windText();
+  out.wind.textContent = windText(director.wind);
   if (household) {
     const summary = householdSummary(household);
     out.resident.textContent = `救出 ${summary.rescued}/${summary.total} · 区域 ${summary.done}/${household.zones.length}`;
@@ -1149,6 +1088,21 @@ function end(title: string, body: string): void {
   out.outcomeBody.textContent = body;
   const run = collectRun();
   const breakdown = scoreRun(run);
+  // 匿名运行摘要：不包含玩家输入与个人信息。
+  diag.record(
+    'run',
+    JSON.stringify({
+      layout: layout.id,
+      mode,
+      rescued: run.rescued,
+      lost: run.lost,
+      total: run.total,
+      seconds: Math.round(run.seconds),
+      score: breakdown.score,
+      peakExposure: Number(run.peakExposure.toFixed(2)),
+      wrongAgent: run.wrongAgent,
+    })
+  );
   const previous = loadBest();
   const comparison = previous ? compareRuns(run, previous.run) : null;
   // 首次记录或刷新最佳时，连同截断后的曲线一起写回。

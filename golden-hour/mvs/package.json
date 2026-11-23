@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "check:bundle": "node scripts/check-bundle.mjs",
-    "check": "tsc --noEmit && vitest run && vite build && node scripts/check-bundle.mjs",
+    "check": "tsc --noEmit && vitest run && vite build && node scripts/check-boundaries.mjs && node scripts/check-bundle.mjs",
     "ci": "npm run check && npm run verify && npm run e2e && npm run verify:a11y",
     "build:firefighter": "blender --background --factory-startup --python assets-src/firefighter/build.py",
     "verify:visual": "node scripts/visual-check.mjs",

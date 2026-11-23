@@ -1,6 +1,7 @@
 import { cellAt } from './sim/spatial/fields';
 import { FIXED_DT } from './sim/spatial/spread';
 import { DRILLS } from './content/drills';
+import { installDiagnostics } from './app/diagnostics';
 import {
   coolDoor,
   createDrillSession,
@@ -13,6 +14,7 @@ import {
 } from './app/drillSession';
 
 const BASE = [23, 28, 34] as const;
+const diag = installDiagnostics(window);
 
 /** 参考建筑剖视图的混色：火偏橙红，热加亮，烟偏灰蓝。 */
 function cellColor(fire: number, smoke: number, heat: number): string {
@@ -71,6 +73,7 @@ function updateTimer(): void {
 function report(feedback: string, danger = false): void {
   const result = evaluateSession(session);
   if (result.ok) {
+    diag.record('drill', session.drill.id);
     showStatus(`${feedback}，演练完成。`, 'ok');
   } else {
     showStatus(`${feedback}，${result.reason}。`, danger ? 'danger' : 'plain');
@@ -233,6 +236,7 @@ function frame(now: number): void {
   if (stepped && session.drill.kind === 'low-stance' && !session.result) {
     updateTimer();
     if (evaluateSession(session).ok) {
+      diag.record('drill', session.drill.id);
       showStatus('低姿累计达标，演练完成。', 'ok');
     }
   }
