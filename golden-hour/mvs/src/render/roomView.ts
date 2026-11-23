@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { clamp01, type RoomState } from '../sim/spatial/fields';
+import { ROOM_SIZE_M, worldToGrid, gridToWorld } from '../sim/spatial/coords';
 
 /**
  * 单房间切片的俯视渲染：地板按场值着色，烟层高度表示浓度，
@@ -23,18 +24,8 @@ const COLORS = {
 };
 
 export function createRoomView(canvas: HTMLCanvasElement): RoomView {
-  const size = 6;
-  const cellSize = size / 8;
-
-  const worldToGrid = (wx: number, wz: number): { x: number; y: number } => ({
-    x: Math.floor((wx + size / 2) / cellSize),
-    y: Math.floor((wz + size / 2) / cellSize),
-  });
-
-  const gridToWorld = (x: number, y: number): { x: number; z: number } => ({
-    x: (x + 0.5) * cellSize - size / 2,
-    z: (y + 0.5) * cellSize - size / 2,
-  });
+  const size = ROOM_SIZE_M;
+  const cellSize = ROOM_SIZE_M / 8;
 
   let renderer: THREE.WebGLRenderer;
   try {
