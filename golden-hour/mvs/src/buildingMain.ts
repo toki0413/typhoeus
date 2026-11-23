@@ -15,6 +15,13 @@ import {
   snapshotScenario,
   stepScenario,
 } from './sim/spatial/scene';
+import {
+  createDirector,
+  setWind,
+  stepDirector,
+  type DirectorEvent,
+} from './sim/events/director';
+import { sampleRoom, buildDebrief, type ActionRecord } from './eval/causal';
 import { findRoutes, type Route } from './sim/nav/graph';
 import { travelRoute } from './sim/nav/travel';
 import { createBuildingView } from './render/buildingView';
@@ -63,18 +70,33 @@ let acc = 0;
 let lastHud = 0;
 let logs: { text: string; kind: 'info' | 'ok' | 'danger' }[] = [];
 
+/** 事件导演：风向、窗户失效与坍塌都由它决定，完全确定性。 */
+const director = createDirector(def.seed);
+/** 固定风向日程：按模拟时间触发，每条只生效一次。 */
+const WIND_SCHEDULE = [
+  { at: 15, x: 1, y: 0, speed: 0.7 },
+  { at: 30, x: 0, y: 1, speed: 0.8 },
+];
+let windCursor = 0;
+let seenEvents = 0;
+/** 因果复盘用的动作记录；按发生顺序追加。 */
+const actions: ActionRecord[] = [];
+let actionSeq = 0;
+
 const out = {
   room: document.getElementById('hud-room')!,
   target: document.getElementById('hud-target')!,
   stamina: document.getElementById('hud-stamina')!,
   exposure: document.getElementById('hud-exposure')!,
   resident: document.getElementById('hud-resident')!,
+  wind: document.getElementById('hud-wind')!,
   routes: document.getElementById('routes')!,
   residents: document.getElementById('residents')!,
   log: document.getElementById('log')!,
   outcome: document.getElementById('outcome')!,
   outcomeTitle: document.getElementById('outcome-title')!,
   outcomeBody: document.getElementById('outcome-body')!,
+  debrief: document.getElementById('outcome-debrief')!,
 };
 
 const STATE_TEXT: Record<ResidentVisualState, string> = {
@@ -85,6 +107,18 @@ const STATE_TEXT: Record<ResidentVisualState, string> = {
   dead: '已失去',
   rescued: '已救出',
 };
+
+/** 8 个中文方位：0° 指向东，每 45° 一档。 */
+const WIND_LABELS = ['东', '东北', '北', '西北', '西', '西南', '南', '东南'];
+
+/** 把导演的风矢量翻成“方位 · 风速”，供 HUD 显示。 */
+function windText(): string {
+  const { x, y, speed } = director.wind;
+  if (Math.hypot(x, y) < 1e-6) return `无风 · ${speed.toFixed(2)}`;
+  const deg = (Math.atan2(y, x) * 180) / Math.PI;
+  const slot = Math.round(((deg + 360) % 360) / 45) % 8;
+  return `${WIND_LABELS[slot]} · ${speed.toFixed(2)}`;
+}
 
 function addLog(text: string, kind: 'info' | 'ok' | 'danger' = 'info'): void {
   logs = [{ text, kind }, ...logs].slice(0, 6);
@@ -99,6 +133,37 @@ function roomOf(id: string) {
 
 function targetRoom(): string {
   return def.targetRoom;
+}
+
+/** 按模拟时间触发固定风向日程，每条只触发一次。 */
+function applyWindSchedule(): void {
+  while (
+    windCursor < WIND_SCHEDULE.length &&
+    director.t >= WIND_SCHEDULE[windCursor].at
+  ) {
+    const next = WIND_SCHEDULE[windCursor];
+    setWind(director, next.x, next.y, next.speed);
+    windCursor += 1;
+  }
+}
+
+/** 把导演的新事件写进日志；坍塌会封锁链路，需要立刻刷新路线。 */
+function flushDirectorEvents(): void {
+  for (; seenEvents < director.events.length; seenEvents++) {
+    const event: DirectorEvent = director.events[seenEvents];
+    addLog(event.detail, event.kind === 'collapse' ? 'danger' : 'info');
+    if (event.kind === 'collapse') recalcRoutes();
+  }
+}
+
+/** 推进一个固定步长：风向日程 → 火场 → 人群 → 事件导演。 */
+function advanceWorld(dt: number, stepCrowdNow = true): void {
+  applyWindSchedule();
+  stepScenario(def, dt);
+  // 救援动作内部已按耗时推进过人群，外部补时间时不能重复推进。
+  if (stepCrowdNow) stepCrowd(crowd, roomOf(def.targetRoom), dt);
+  stepDirector(director, def.building, dt);
+  flushDirectorEvents();
 }
 
 function reasonText(reason: RescueReason): string {
@@ -217,6 +282,10 @@ function takeRoute(index: number): void {
     return;
   }
 
+  // 行进前后各取一次 202 的聚合场，用于因果复盘。
+  const before = sampleRoom(roomOf(def.targetRoom));
+  const at = roomOf(def.targetRoom).t;
+
   currentRoom = travel.roomId;
   // 到达 202 时落在门侧入口，避免玩家站在火源所在格上承受数倍暴露。
   if (currentRoom === def.targetRoom) {
@@ -229,10 +298,18 @@ function takeRoute(index: number): void {
 
   const ticks = Math.max(1, Math.round(travel.time / FIXED_DT));
   for (let i = 0; i < ticks; i++) {
-    stepScenario(def, FIXED_DT);
-    // 玩家在路上时 202 的居民不会暂停恶化。
-    stepCrowd(crowd, roomOf(def.targetRoom), FIXED_DT);
+    // 路上只推进世界，玩家暴露由到达后的驻留与救援承担。
+    advanceWorld(FIXED_DT);
   }
+
+  actions.push({
+    id: 'travel-' + ++actionSeq,
+    at,
+    action: 'travel:' + route.steps.map((step) => step.kind).join('→'),
+    roomId: def.targetRoom,
+    before,
+    after: sampleRoom(roomOf(def.targetRoom)),
+  });
 
   addLog(`通过 ${route.steps.map((step) => step.kind).join(' → ')}，到达 ${currentRoom}`, 'ok');
   recalcRoutes();
@@ -251,6 +328,9 @@ function handleRescue(id: string, verb: RescueVerb): void {
     return;
   }
 
+  // 救援前后各取一次 202 的聚合场，用于因果复盘。
+  const before = sampleRoom(roomOf(def.targetRoom));
+  const at = roomOf(def.targetRoom).t;
   const t0 = crowd.t;
   const result = rescueResident(
     crowd,
@@ -265,9 +345,18 @@ function handleRescue(id: string, verb: RescueVerb): void {
   // 救援消耗的模拟时间同样推进火场与玩家暴露，让取舍有真实代价。
   const ticks = Math.max(0, Math.round(elapsed / FIXED_DT));
   for (let i = 0; i < ticks; i++) {
-    stepScenario(def, FIXED_DT);
+    advanceWorld(FIXED_DT, false);
     stepActor(actor, roomOf(currentRoom), FIXED_DT, true);
   }
+
+  actions.push({
+    id: 'rescue-' + id + '-' + ++actionSeq,
+    at,
+    action: verb === 'carry' ? 'carry' : 'lead',
+    roomId: def.targetRoom,
+    before,
+    after: sampleRoom(roomOf(def.targetRoom)),
+  });
 
   if (result.ok) {
     addLog(`${verb === 'carry' ? '已背出' : '已牵出'} 居民 ${id}`, 'ok');
@@ -287,6 +376,7 @@ function updateHud(): void {
   out.target.textContent = targetRoom();
   out.stamina.textContent = `${Math.round(actor.stamina * 100)}%`;
   out.exposure.textContent = `${Math.round(exposure * 100)}%`;
+  out.wind.textContent = windText();
   out.resident.textContent = `${crowd.rescued} 救出 · ${crowd.lost} 失去 · ${remaining} 待救`;
 }
 
@@ -311,6 +401,16 @@ function end(title: string, body: string): void {
   ended = true;
   out.outcomeTitle.textContent = title;
   out.outcomeBody.textContent = body;
+  // 取最近 6 条动作，逐条给出前后场差异与中文因果解释。
+  const debrief = buildDebrief(actions).slice(-6);
+  out.debrief.innerHTML = debrief.length
+    ? debrief
+        .map(
+          (entry) =>
+            `<li><b>${entry.at.toFixed(1)}s</b> ${entry.action} · ${entry.roomId}<span>${entry.summary}</span></li>`
+        )
+        .join('')
+    : '<li>没有可复盘的动作。</li>';
   out.outcome.classList.add('show');
   renderResidents();
 }
@@ -324,8 +424,7 @@ function frame(now: number): void {
   if (!ended) {
     acc += dt;
     while (acc >= FIXED_DT) {
-      stepScenario(def, FIXED_DT);
-      stepCrowd(crowd, roomOf(def.targetRoom), FIXED_DT);
+      advanceWorld(FIXED_DT);
       stepActor(actor, roomOf(currentRoom), FIXED_DT, false);
       acc -= FIXED_DT;
     }

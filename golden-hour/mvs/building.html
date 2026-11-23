@@ -266,6 +266,31 @@
         border-radius: 10px;
         cursor: pointer;
       }
+      #outcome .debrief {
+        list-style: none;
+        margin: 0 0 16px;
+        padding: 0;
+        text-align: left;
+        max-height: 168px;
+        overflow-y: auto;
+        font: 12px/1.55 var(--sans);
+      }
+      #outcome .debrief li {
+        margin: 0 0 8px;
+        color: var(--accent);
+        word-break: break-word;
+      }
+      #outcome .debrief li b {
+        color: var(--ink);
+        font: 11px/1 var(--mono);
+        margin-right: 4px;
+      }
+      #outcome .debrief li span {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font: 11px/1.5 var(--sans);
+      }
       @media (max-width: 900px) {
         #log,
         #hint {
@@ -286,6 +311,7 @@
       <div class="row"><span>目标</span><b id="hud-target">--</b></div>
       <div class="row"><span>体力</span><b id="hud-stamina">--</b></div>
       <div class="row"><span>烟气</span><b id="hud-exposure">--</b></div>
+      <div class="row"><span>风</span><b id="hud-wind">--</b></div>
       <div class="row"><span>居民</span><b id="hud-resident">--</b></div>
       <div class="scene-link"><a href="./">教学关</a> · <a href="./room.html">单房间原型</a></div>
     </section>
@@ -304,12 +330,14 @@
 
     <section class="panel" id="hint">
       <div><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> 选择路线 · <kbd>R</kbd> 重算 · 点击居民牵出/背出</div>
+      <div>风向会改变烟路。</div>
     </section>
 
     <section id="outcome">
       <div class="card">
         <h2 id="outcome-title"></h2>
         <p id="outcome-body"></p>
+        <ul id="outcome-debrief" class="debrief"></ul>
         <button id="outcome-reset">再来一次</button>
       </div>
     </section>
