@@ -47,6 +47,57 @@ describe('玩家状态', () => {
     expect(masked.downed).toBe(false);
   });
 
+  it('佩戴空呼移动时余量下降更快', () => {
+    const room = createRoom();
+    for (const c of room.cells) {
+      c.smoke = 0;
+      c.heat = 0;
+      c.steam = 0;
+    }
+    const moving = createActor(0, 0);
+    const still = createActor(0, 0);
+    moving.masked = true;
+    still.masked = true;
+
+    for (let i = 0; i < 100; i++) {
+      stepActor(moving, room, 0.1, true);
+      stepActor(still, room, 0.1, false);
+    }
+
+    expect(moving.air).toBeLessThan(still.air);
+    expect(still.air).toBeLessThan(1);
+  });
+
+  it('空呼耗尽后防护失效', () => {
+    const room = createRoom();
+    for (const c of room.cells) {
+      c.smoke = 0;
+      c.heat = 0;
+      c.steam = 0;
+    }
+    const actor = createActor(0, 0);
+    actor.masked = true;
+
+    for (let i = 0; i < 200; i++) stepActor(actor, room, 1, true);
+
+    expect(actor.air).toBe(0);
+    expect(actor.masked).toBe(false);
+  });
+
+  it('未佩戴空呼时余量保持满瓶', () => {
+    const room = createRoom();
+    for (const c of room.cells) {
+      c.smoke = 0;
+      c.heat = 0;
+      c.steam = 0;
+    }
+    const actor = createActor(0, 0);
+
+    for (let i = 0; i < 200; i++) stepActor(actor, room, 1, true);
+
+    expect(actor.air).toBe(1);
+  });
+
   it('持续高热暴露会让玩家倒地', () => {
     const room = createRoom();
     for (const c of room.cells) {

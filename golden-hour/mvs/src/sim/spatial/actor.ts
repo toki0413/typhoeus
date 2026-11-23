@@ -12,8 +12,13 @@ export interface ActorState {
   exposure: { smoke: number; heat: number };
   /** 佩戴空呼与防护装具：显著降低烟热累积，但仍非无敌 */
   masked: boolean;
+  /** 空呼气瓶余量 0..1，1 为满瓶 */
+  air: number;
   downed: boolean;
 }
+
+/** 满瓶约 120 秒；移动时按 1.5 倍消耗。 */
+export const AIR_DRAIN_PER_SECOND = 1 / 120;
 
 export function createActor(x = -2.35, z = 0): ActorState {
   return {
@@ -24,6 +29,7 @@ export function createActor(x = -2.35, z = 0): ActorState {
     stamina: 1,
     exposure: { smoke: 0, heat: 0 },
     masked: false,
+    air: 1,
     downed: false,
   };
 }
@@ -61,6 +67,13 @@ export function stepActor(
 ): void {
   if (!Number.isFinite(dt) || dt <= 0) return;
   if (actor.downed) return;
+
+  // 空呼只在佩戴时消耗；气瓶耗尽后防护失效，暴露回到未佩戴水平。
+  if (actor.masked) {
+    const drain = AIR_DRAIN_PER_SECOND * (moving ? 1.5 : 1) * dt;
+    actor.air = clamp01(actor.air - drain);
+    if (actor.air <= 0) actor.masked = false;
+  }
 
   const profile = STANCE[actor.stance];
   const env = exposureAt(actor, room);

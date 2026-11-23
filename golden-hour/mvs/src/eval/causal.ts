@@ -69,6 +69,10 @@ function significant(v: number): boolean {
  * 同一动作在不同场变化下会得到不同措辞与数值，而非同一句模板。
  */
 function describe(action: string, roomId: string, d: FieldDelta): string {
+  // 失去居民的记录没有“动作前后场差”，直接给出可读的因果解释。
+  if (action.startsWith('lost:')) {
+    return `${action.slice(5)} 在烟热中失去意识超过宽限期，未能救出`;
+  }
   const head = `${action} 在 ${roomId}`;
   const parts: string[] = [];
 

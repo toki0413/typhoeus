@@ -1,4 +1,4 @@
-import { clamp01, roomSummary } from './sim/spatial/fields';
+import { clamp01, computeBackdraftRisk, roomSummary } from './sim/spatial/fields';
 import { FIXED_DT } from './sim/spatial/spread';
 import { createActor, moveActor, stepActor } from './sim/spatial/actor';
 import {
@@ -21,6 +21,7 @@ import { createToolLoadout, type CarryLoadout } from './sim/interaction/tools';
 import { executeVerb } from './sim/interaction/multiSolution';
 import {
   createDirector,
+  COLLAPSE_SECONDS,
   setWind,
   stepDirector,
   type DirectorEvent,
@@ -112,12 +113,19 @@ let lastSampleT = -1;
 let radioCursor = 0;
 /** 当前按下的移动键；键盘与触控 D-pad 共用同一集合。 */
 const held = new Set<string>();
+/** 三类前兆只提示一次，避免在 HUD 节流循环里重复刷屏。 */
+let airWarned = false;
+let backdraftWarned = false;
+let collapseWarned = false;
+/** 已写入因果复盘的失去居民 id，防止同一人重复记录。 */
+const lostIds = new Set<string>();
 
 const out = {
   room: document.getElementById('hud-room')!,
   target: document.getElementById('hud-target')!,
   stamina: document.getElementById('hud-stamina')!,
   exposure: document.getElementById('hud-exposure')!,
+  air: document.getElementById('hud-air')!,
   resident: document.getElementById('hud-resident')!,
   wind: document.getElementById('hud-wind')!,
   routes: document.getElementById('routes')!,
@@ -225,6 +233,28 @@ function sampleRun(): void {
   }
 }
 
+/**
+ * 把新失去的居民写进因果复盘；每人只记一次。
+ * 前后场取当前聚合值，损失本身不改变房间场，只记录发生时刻。
+ */
+function recordLosses(): void {
+  for (const resident of crowd.residents) {
+    if (!resident.dead || resident.rescued) continue;
+    if (lostIds.has(resident.id)) continue;
+    lostIds.add(resident.id);
+    const room = roomOf(def.targetRoom);
+    const current = sampleRoom(room);
+    actions.push({
+      id: 'lost-' + resident.id,
+      at: room.t,
+      action: 'lost:' + resident.id,
+      roomId: def.targetRoom,
+      before: current,
+      after: current,
+    });
+  }
+}
+
 /** 推进一个固定步长：风向日程 → 火场 → 人群 → 事件导演 → 采样。 */
 function advanceWorld(dt: number, stepCrowdNow = true): void {
   applyWindSchedule();
@@ -234,6 +264,7 @@ function advanceWorld(dt: number, stepCrowdNow = true): void {
   stepDirector(director, def.building, dt);
   flushDirectorEvents();
   sampleRun();
+  recordLosses();
 }
 
 function reasonText(reason: RescueReason): string {
@@ -496,6 +527,7 @@ function handleRescue(id: string, verb: RescueVerb): void {
     addLog(`${reasonText(result.reason)}（居民 ${id}）`, 'danger');
   }
 
+  recordLosses();
   syncResidents();
   updateHud();
   checkOutcome();
@@ -507,6 +539,7 @@ function updateHud(): void {
   out.room.textContent = currentRoom;
   out.target.textContent = targetRoom();
   out.stamina.textContent = `${Math.round(actor.stamina * 100)}%`;
+  out.air.textContent = `${Math.round(actor.air * 100)}%`;
   out.exposure.textContent = `${Math.round(exposure * 100)}%`;
   out.wind.textContent = windText();
   out.resident.textContent = `${crowd.rescued} 救出 · ${crowd.lost} 失去 · ${remaining} 待救`;
@@ -613,6 +646,23 @@ function frame(now: number): void {
     updateHud();
     syncResidents();
     refreshTools();
+
+    // 三类前兆只在首次满足条件时提示，避免节流循环刷屏。
+    if (actor.air <= 0 && !airWarned) {
+      addLog('空呼耗尽，防护下降。', 'danger');
+      airWarned = true;
+    }
+    if (computeBackdraftRisk(roomOf(def.targetRoom)) > 0.55 && !backdraftWarned) {
+      addLog('门缝在吸风，可能回燃。先冷却门板。', 'danger');
+      backdraftWarned = true;
+    }
+    if (
+      (director.weakFor[def.targetRoom] ?? 0) >= COLLAPSE_SECONDS / 2 &&
+      !collapseWarned
+    ) {
+      addLog('结构在响，可能坍塌。', 'danger');
+      collapseWarned = true;
+    }
   }
 
   requestAnimationFrame(frame);

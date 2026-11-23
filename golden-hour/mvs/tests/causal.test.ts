@@ -66,6 +66,14 @@ describe('因果复盘', () => {
     expect(entry.summary).toContain('待命');
   });
 
+  it('失去居民记录给出可读的因果解释', () => {
+    const entry = explainAction(recordById('lost-B', 'lost:B', sample(), sample()));
+
+    expect(entry.summary).toContain('失去意识');
+    expect(entry.summary).toContain('B');
+    expect(entry.summary).not.toContain('没有明显变化');
+  });
+
   it('顺序与完整性保持不变', () => {
     const records = [
       recordById('a', 'open-door', sample(), sample({ oxygen: 0.75 })),
