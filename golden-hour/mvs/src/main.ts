@@ -1,6 +1,8 @@
 import { createWorld } from './sim/world';
+import * as THREE from 'three';
 import { buildDebrief } from './eval/debrief';
 import { createScene, CAMERA_FRUSTUM } from './render/scene';
+import { FLOOR_H } from './render/constants';
 import { createAgents } from './render/agents';
 import { createSmoke } from './render/smoke';
 import { createDoor } from './render/door';
@@ -8,6 +10,8 @@ import { createFireGlow } from './render/fire';
 import { createCorridorDetails } from './render/corridor';
 import { createSpatialAudio } from './render/spatial';
 import { createHeroCam } from './render/heroCam';
+import { createRoomCam, type RoomShot } from './render/roomCam';
+import { createSmokeLayer, smokeVisibility } from './render/smokeLayer';
 import { loadCrewModel } from './render/glbCrew';
 import { createHud } from './ui/hud';
 import { createDoorUi } from './ui/door';
@@ -45,6 +49,7 @@ const radioRoot = document.getElementById('radio')!;
 const debriefRoot = document.getElementById('debrief')!;
 const shellRoot = document.getElementById('shell')!;
 const vignette = document.getElementById('vignette')!;
+const smokeScreen = document.getElementById('smoke-screen')!;
 const pauseButton = document.getElementById('pause-btn')!;
 
 function safeStorage(): StorageLike | null {
@@ -103,6 +108,10 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   const sim = createWorld(records.lastSeed || SCENARIOS[0].seed);
   const spatial = createSpatialAudio(camera);
   const heroCam = createHeroCam({ reducedMotion: () => settings.reducedMotion });
+  const roomCam = createRoomCam();
+  const smokeLayer = createSmokeLayer(scene);
+  const shotTarget = new THREE.Vector3();
+  const shot: RoomShot = { id: 'wide', target: shotTarget, zoom: 1 };
   const agents = createAgents(scene);
   let keyX = 0;
   let keyZ = 0;
@@ -140,6 +149,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
           start: () => void;
         };
         finishRun: () => void;
+        cam: { zone: () => string; cuts: () => number; zoom: () => number };
       };
     };
     debugWindow.__gh = {
@@ -155,6 +165,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
         start: () => heroCam.trigger(agents.crewFocus()),
       },
       finishRun: () => completeExtraction(sim),
+      cam: { zone: () => roomCam.zone(), cuts: () => roomCam.cuts(), zoom: () => roomCam.zoom },
     };
   }
 
@@ -323,6 +334,37 @@ function createApp(kit: ReturnType<typeof createScene>): App {
 
   const DT = 1 / 20;
 
+  const clampX = (value: number, lo: number, hi: number): number =>
+    Math.min(hi, Math.max(lo, value));
+
+  function currentShot(): RoomShot | null {
+    if (sim.phase !== 'execute' || debriefShown) return null;
+    const f = agents.floor();
+    const x = agents.crewX();
+    if (agents.insideRoom()) {
+      shot.id = 'room202';
+      shotTarget.set(0.8, FLOOR_H + 1.25, -0.15);
+      shot.zoom = 3.0;
+      return shot;
+    }
+    if (Math.abs(x + 11) < 2.0 || Math.abs(x - 10.5) < 2.0) {
+      shot.id = `stairs${f}`;
+      shotTarget.set(x * 0.8, f * FLOOR_H + 1.55, 0.55);
+      shot.zoom = 1.7;
+      return shot;
+    }
+    if (f === 1) {
+      shot.id = 'f2';
+      shotTarget.set(clampX(x * 0.5, -4, 4), FLOOR_H + 1.65, 0.9);
+      shot.zoom = 1.4;
+      return shot;
+    }
+    shot.id = 'f1';
+    shotTarget.set(clampX(x * 0.55, -5, 5), 1.9, 0.9);
+    shot.zoom = 1.35;
+    return shot;
+  }
+
   function frame(now: number) {
     requestAnimationFrame(frame);
     const raw = Math.min((now - last) / 1000, 0.25);
@@ -379,9 +421,11 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     }
     if (sim.door.opened || sim.phase !== 'execute' || !agents.nearDoor()) heroCam.release();
     heroCam.update(paused ? 0 : Math.min(raw, 0.25));
-    heroLights.key.intensity = 12 * heroCam.strength;
-    heroLights.rim.intensity = 7 * heroCam.strength;
-    const heroOn = heroCam.strength > 0.12;
+    const heroStrength = heroCam.strength;
+    roomCam.update(paused ? 0 : Math.min(raw, 0.25), currentShot());
+    heroLights.key.intensity = 12 * heroStrength;
+    heroLights.rim.intensity = 7 * heroStrength;
+    const heroOn = heroStrength > 0.12;
     if (heroOn !== heroUiOn) {
       heroUiOn = heroOn;
       document.body.dataset.hero = heroOn ? 'on' : 'off';
@@ -389,16 +433,21 @@ function createApp(kit: ReturnType<typeof createScene>): App {
 
     const contextual = agents.action();
     const floorNow = agents.floor();
+    const inside = agents.insideRoom();
     const baseHint = agents.carrying()
-      ? '将被困者带到出口'
-      : floorNow === 1
-        ? '前往 202 门口'
-        : '上楼搜救';
+      ? '带被困者离开'
+      : inside
+        ? '搜索 202 房间'
+        : floorNow === 1
+          ? '前往 202 门口'
+          : '上楼搜救';
     const distance = agents.carrying()
       ? Math.max(0, 9.4 - agents.crewX())
-      : floorNow === 1
-        ? Math.abs(agents.crewX())
-        : Math.min(Math.abs(agents.crewX() + 11), Math.abs(agents.crewX() - 10.5));
+      : inside
+        ? Math.hypot(agents.crewX() - 0.9, agents.crewZ() - 0.1)
+        : floorNow === 1
+          ? Math.abs(agents.crewX())
+          : Math.min(Math.abs(agents.crewX() + 11), Math.abs(agents.crewX() - 10.5));
     moveUi.update({
       visible: !paused && sim.phase === 'execute' && !debriefShown,
       hint: contextual?.kind === 'blocked' ? contextual.label : baseHint,
@@ -429,15 +478,29 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     const shake = running && !settings.reducedMotion
       ? Math.min(0.14, sim.exposure.smoke * 0.22)
       : 0;
-    camera.position.x = CAMERA_HOME.x + Math.sin(now * 0.009) * shake + heroCam.offset.x;
-    camera.position.y = CAMERA_HOME.y + Math.cos(now * 0.012) * shake * 0.6 + heroCam.offset.y;
-    camera.position.z = CAMERA_HOME.z + heroCam.offset.z;
+    camera.position.x =
+      CAMERA_HOME.x + Math.sin(now * 0.009) * shake +
+      roomCam.offset.x * (1 - heroStrength) + heroCam.offset.x;
+    camera.position.y =
+      CAMERA_HOME.y + Math.cos(now * 0.012) * shake * 0.6 +
+      roomCam.offset.y * (1 - heroStrength) + heroCam.offset.y;
+    camera.position.z = CAMERA_HOME.z + roomCam.offset.z * (1 - heroStrength) + heroCam.offset.z;
 
     // 开始训练时轻微推近，建立镜头感；减少动态时直接停在最终视角。
     const intro = settings.reducedMotion ? 1 : Math.min(1, (now - introAt) / 1400);
     const eased = 1 - Math.pow(1 - intro, 3);
-    camera.zoom = (1.02 + 0.06 * eased) * heroCam.zoom;
+    camera.zoom =
+      (1.02 + 0.06 * eased) *
+      (roomCam.zoom * (1 - heroStrength) + heroCam.zoom * heroStrength);
     camera.updateProjectionMatrix();
+
+    smokeLayer.update(sim, agents.floor(), now / 1000);
+    const smokeNow = sim.smoke[agents.floor()] ?? 0;
+    smokeScreen.style.opacity = (
+      smokeVisibility(smokeNow) *
+      0.55 *
+      (1 - heroStrength * 0.5)
+    ).toFixed(3);
     vignette.style.opacity = running
       ? String(Math.min(0.5, sim.exposure.smoke * 0.75))
       : '0';

@@ -369,9 +369,11 @@ export function createAgents(scene: THREE.Scene): {
   nearDoor: () => boolean;
   mobile: () => boolean;
   crewX: () => number;
+  crewZ: () => number;
   speed: () => number;
   floor: () => number;
   carrying: () => boolean;
+  insideRoom: () => boolean;
   action: () => { kind: string; label: string } | null;
   performAction: (s: SimState) => void;
   snap: (s: SimState, x: number, z: number, floor: number) => void;
@@ -501,9 +503,11 @@ export function createAgents(scene: THREE.Scene): {
     nearDoor: () => nearDoor,
     mobile: () => mobile,
     crewX: () => px,
+    crewZ: () => pz,
     speed: () => Math.hypot(vx, vz),
     floor: () => floor,
     carrying: () => carrying,
+    insideRoom: () => floor === 1 && pz < 1.16,
     action: () => currentAction,
     performAction(s: SimState) {
       const a = currentAction;

@@ -89,6 +89,12 @@ try {
     .catch(() => false);
   check('站到 202 门口', nearDoor);
 
+  const f2Cut = await page
+    .waitForFunction(() => window.__gh?.cam?.zone?.() === 'f2', { timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  check('房间切镜：二层走廊', f2Cut);
+
   const heroAuto = await page
     .waitForFunction(() => (window.__gh?.hero?.autoRuns?.() ?? 0) >= 1, {
       timeout: 25000,
@@ -134,6 +140,27 @@ try {
       .then(() => true)
       .catch(() => false);
     check('开门进入 202', opened);
+
+    await page.evaluate(() => window.__gh?.agents?.snap?.(window.__gh.sim, 0.2, 0.35, 1));
+    await page.evaluate(() => {
+      window.__gh.sim.smoke[1] = 0.85;
+    });
+    const roomCut = await page
+      .waitForFunction(() => window.__gh?.cam?.zone?.() === 'room202', { timeout: 15000 })
+      .then(() => true)
+      .catch(() => false);
+    check('房间切镜：202 室内', roomCut);
+
+    const smokeDim = await page
+      .waitForFunction(
+        () => Number(getComputedStyle(document.getElementById('smoke-screen')).opacity) > 0.12,
+        { timeout: 15000 }
+      )
+      .then(() => true)
+      .catch(() => false);
+    check('浓烟产生视野压迫', smokeDim);
+    await screenshot(page, '04-room');
+
     await page.evaluate(() => window.__gh?.finishRun?.());
     await page.waitForFunction(() => document.body.dataset.run === 'debrief', { timeout: 20000 });
     await new Promise((resolve) => setTimeout(resolve, 400));
