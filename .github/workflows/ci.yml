@@ -1,0 +1,58 @@
+name: golden-hour-ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: golden-hour/mvs
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: golden-hour/mvs/package-lock.json
+
+      - name: Install Chrome runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libatk1.0-0 libatk-bridge2.0-0 libxcomposite1 libxdamage1 \
+            libxfixes3 libxrandr2 libxkbcommon0 libcups2 libpango-1.0-0 \
+            libcairo2 libx11-xcb1 libxcb-dri3-0 libdrm2 libgbm1 libnss3 libasound2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install headless Chrome
+        run: npx @puppeteer/browsers install chrome@stable
+
+      - name: Quality gate
+        run: npm run check
+
+      - name: Visual and audio verification
+        run: npm run verify
+
+      - name: Multi-zone end-to-end
+        run: npm run e2e
+
+      - name: Accessibility scan
+        run: npm run verify:a11y
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-hour-dist
+          path: |
+            golden-hour/mvs/dist
+            golden-hour/mvs/.verify
+          if-no-files-found: ignore

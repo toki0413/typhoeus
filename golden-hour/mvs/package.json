@@ -9,10 +9,13 @@
     "test": "vitest run",
     "check:bundle": "node scripts/check-bundle.mjs",
     "check": "tsc --noEmit && vitest run && vite build && node scripts/check-bundle.mjs",
+    "ci": "npm run check && npm run verify && npm run e2e && npm run verify:a11y",
     "build:firefighter": "blender --background --factory-startup --python assets-src/firefighter/build.py",
     "verify:visual": "node scripts/visual-check.mjs",
-    "verify:audio": "node scripts/audio-check.mjs",
+    "verify:audio": "node scripts/audio-check-retry.mjs",
+    "verify:a11y": "node scripts/a11y-check.mjs",
     "verify": "npm run verify:visual && npm run verify:audio",
+    "e2e": "node scripts/e2e-check.mjs",
     "preview": "vite preview --host 0.0.0.0 --port 4174"
   },
   "dependencies": {
