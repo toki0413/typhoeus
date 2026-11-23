@@ -36,6 +36,8 @@ export const ENTRY_BUDGETS = {
   room: 80 * 1024,
   // Phase 1 预留：建筑入口出现前不会命中任何产物。
   building: 90 * 1024,
+  // 独立演练入口：状态机 + Canvas2D 俯视图，不引入 three。
+  drills: 40 * 1024,
   // Phase 1 共享 chunk：救援模块与 Vite 的 modulepreload 辅助。
   rescue: 30 * 1024,
   modulepreload: 8 * 1024,

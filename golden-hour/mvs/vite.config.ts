@@ -8,6 +8,7 @@ export default defineConfig({
         main: 'index.html',
         room: 'room.html',
         building: 'building.html',
+        drills: 'drills.html',
       },
     },
   },

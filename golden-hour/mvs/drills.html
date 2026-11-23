@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0c0f" />
+    <title>演练 · 黄金时刻</title>
+    <style>
+      :root {
+        --bg: #0a0c0f;
+        --panel: rgba(13, 17, 22, 0.86);
+        --line: rgba(255, 255, 255, 0.1);
+        --ink: #f2efe9;
+        --muted: #9aa3ad;
+        --accent: #e5b567;
+        --danger: #e06a4a;
+        --ok: #6fbf9a;
+        --sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        --mono: ui-monospace, "SFMono-Regular", "Noto Sans Mono CJK SC", monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+      }
+      body {
+        padding: 14px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px 14px;
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(10px) saturate(1.1);
+        font: 13px/1.6 var(--sans);
+      }
+      #drill-header {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      #drill-header h1 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+      }
+      #drill-header p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .scene-link {
+        margin-top: 6px;
+        font-size: 12px;
+      }
+      .scene-link a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .scene-link a:hover {
+        text-decoration: underline;
+      }
+      .scene-link a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .drill-layout {
+        max-width: 1180px;
+        margin: 12px auto 0;
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr) 300px;
+        gap: 12px;
+        align-items: start;
+      }
+      #drill-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      #drill-list button,
+      #drill-actions button,
+      #drill-reset {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--ink);
+        font: 12px/1.45 var(--sans);
+        padding: 9px 10px;
+        border-radius: 9px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      #drill-list button {
+        text-align: left;
+      }
+      #drill-list button:hover,
+      #drill-actions button:hover,
+      #drill-reset:hover {
+        background: rgba(229, 181, 103, 0.16);
+        border-color: rgba(229, 181, 103, 0.5);
+      }
+      #drill-list button.active,
+      #drill-actions button.active {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: rgba(229, 181, 103, 0.18);
+      }
+      #drill-list button:focus-visible,
+      #drill-actions button:focus-visible,
+      #drill-reset:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      #drill-stage {
+        padding: 8px;
+      }
+      #drill-timer {
+        margin: 0 0 8px;
+        color: var(--accent);
+        font: 12px/1.4 var(--mono);
+        text-align: center;
+      }
+      #drill-canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        height: auto;
+        border-radius: 8px;
+        background: #0a0c0f;
+      }
+      #drill-info h2 {
+        margin: 0 0 6px;
+        font-size: 15px;
+        letter-spacing: 0.03em;
+        font-weight: 600;
+      }
+      #drill-hint {
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      #drill-status {
+        margin: 0 0 10px;
+        min-height: 1.6em;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+      #drill-status.ok {
+        color: var(--ok);
+      }
+      #drill-status.danger {
+        color: var(--danger);
+      }
+      #drill-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      #drill-actions button {
+        flex: 1 1 120px;
+      }
+      #drill-reset {
+        width: 100%;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 900px) {
+        .drill-layout {
+          grid-template-columns: 1fr;
+        }
+        #drill-list {
+          flex-direction: row;
+          flex-wrap: wrap;
+        }
+        #drill-list button {
+          flex: 1 1 140px;
+          text-align: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="panel" id="drill-header">
+      <h1>演练 · 黄金时刻</h1>
+      <p>先观察再行动：贴门测温、判断回燃、低姿穿越，每一步都对应真实火场里的一个判断。</p>
+      <div class="scene-link">
+        <a href="./building.html">建筑沙盒</a> · <a href="./room.html">单房间原型</a>
+      </div>
+    </header>
+
+    <main class="drill-layout">
+      <nav class="panel" id="drill-list" aria-label="演练选择"></nav>
+
+      <section class="panel" id="drill-stage">
+        <div id="drill-timer" hidden>低姿累计 0.0 秒</div>
+        <canvas id="drill-canvas" aria-hidden="true"></canvas>
+      </section>
+
+      <aside class="panel" id="drill-info">
+        <h2 id="drill-title"></h2>
+        <p id="drill-hint"></p>
+        <p id="drill-status">按提示完成演练动作。</p>
+        <div id="drill-actions"></div>
+        <button id="drill-reset" type="button">重试</button>
+      </aside>
+    </main>
+
+    <script type="module" src="/src/drillMain.ts"></script>
+  </body>
+</html>
