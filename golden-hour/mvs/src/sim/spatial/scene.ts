@@ -46,15 +46,19 @@ function quietRoom(cells: Cell[]): void {
   }
 }
 
-/** Phase 1 场景：入口出发，目标 202-F1；只有 202 的沙发起火。 */
-export function createBuildingScenario(): ScenarioDefinition {
-  const building = createBuilding();
-
+/** 用给定建筑图创建场景：其它房间清空火源，只在 targetRoom 点燃沙发与火源。 */
+export function createScenarioForBuilding(
+  building: BuildingGraph,
+  startRoom: string,
+  targetRoom: string,
+  id = 'building-202',
+  seed = 1
+): ScenarioDefinition {
   for (const node of Object.values(building.rooms)) {
     quietRoom(node.room.cells);
   }
 
-  const room = building.rooms['room-202-F1'].room;
+  const room = building.rooms[targetRoom].room;
   for (const [x, y] of SOFA_CELLS) {
     const cell = cellAt(room, x, y);
     cell.fuel = 1;
@@ -69,16 +73,27 @@ export function createBuildingScenario(): ScenarioDefinition {
   source.heat = 0.2;
 
   return {
-    id: 'building-202',
-    seed: 1,
+    id,
+    seed,
     building,
-    startRoom: 'entrance',
-    targetRoom: 'room-202-F1',
-    objectives: ['进入 202', '救出居民'],
+    startRoom,
+    targetRoom,
+    objectives: [`进入 ${targetRoom}`, '救出居民'],
   };
 }
 
-/** 推进整栋楼；目前只有 202 有火，其它房间保持安静。 */
+/** Phase 1 场景：入口出发，目标 202-F1；只有 202 的沙发起火。 */
+export function createBuildingScenario(): ScenarioDefinition {
+  return createScenarioForBuilding(
+    createBuilding(),
+    'entrance',
+    'room-202-F1',
+    'building-202',
+    1
+  );
+}
+
+/** 推进整栋楼；只有目标房间有火，其它房间保持安静。 */
 export function stepScenario(def: ScenarioDefinition, dt = FIXED_DT): void {
   for (const node of Object.values(def.building.rooms)) {
     stepRoom(node.room, dt);

@@ -73,6 +73,23 @@
       .row b.accent {
         color: var(--accent);
       }
+      #layout-select {
+        background: transparent;
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        font: inherit;
+        padding: 1px 4px;
+        cursor: pointer;
+      }
+      #layout-select option {
+        background: #0d1116;
+        color: var(--ink);
+      }
+      #layout-select:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
       #routes-panel {
         top: 14px;
         right: 14px;
@@ -306,7 +323,8 @@
     <canvas id="building-canvas"></canvas>
 
     <section class="panel" id="meters">
-      <h1>建筑进入 · 202 火场</h1>
+      <h1>建筑进入 · 火场</h1>
+      <div class="row"><span>户型</span><b><select id="layout-select" aria-label="选择户型"></select></b></div>
       <div class="row"><span>所在</span><b id="hud-room" class="accent">--</b></div>
       <div class="row"><span>目标</span><b id="hud-target">--</b></div>
       <div class="row"><span>体力</span><b id="hud-stamina">--</b></div>
@@ -319,7 +337,7 @@
     <section class="panel" id="routes-panel">
       <h2>可选路线</h2>
       <div id="routes"></div>
-      <h2>202 居民</h2>
+      <h2>居民</h2>
       <div id="residents"></div>
       <div class="actions">
         <button id="reset-btn">重开</button>

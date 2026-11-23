@@ -10,11 +10,8 @@ import {
   type RescueVerb,
 } from './sim/agents/crowd';
 import { gridToWorld } from './sim/spatial/coords';
-import {
-  createBuildingScenario,
-  snapshotScenario,
-  stepScenario,
-} from './sim/spatial/scene';
+import { createScenarioForBuilding, snapshotScenario, stepScenario } from './sim/spatial/scene';
+import { LAYOUTS, layoutById } from './content/layouts';
 import {
   createDirector,
   setWind,
@@ -33,7 +30,16 @@ import {
 
 const canvas = document.getElementById('building-canvas') as HTMLCanvasElement;
 const view = createBuildingView(canvas);
-const def = createBuildingScenario();
+/** 从查询串选择户型；未知 id 回退到第一个户型。 */
+const requestedLayout = new URLSearchParams(window.location.search).get('layout') ?? '';
+const layout = layoutById(requestedLayout) ?? LAYOUTS[0];
+const def = createScenarioForBuilding(
+  layout.build(),
+  layout.entrance,
+  layout.target,
+  'layout-' + layout.id,
+  1
+);
 const actor = createActor();
 // 建筑入口按消防员佩戴空呼处理：烟热仍会累积，但足以支撑多次进出救援。
 actor.masked = true;
@@ -98,6 +104,20 @@ const out = {
   outcomeBody: document.getElementById('outcome-body')!,
   debrief: document.getElementById('outcome-debrief')!,
 };
+
+/** 户型下拉：选项来自 LAYOUTS，切换后带查询串重新载入入口。 */
+const layoutSelect = document.getElementById('layout-select') as HTMLSelectElement | null;
+if (layoutSelect) {
+  layoutSelect.innerHTML = LAYOUTS.map(
+    (item) =>
+      `<option value="${item.id}"${item.id === layout.id ? ' selected' : ''}>${item.label}</option>`
+  ).join('');
+  layoutSelect.addEventListener('change', () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('layout', layoutSelect.value);
+    window.location.assign(url.toString());
+  });
+}
 
 const STATE_TEXT: Record<ResidentVisualState, string> = {
   calm: '平静',
@@ -196,7 +216,7 @@ function recalcRoutes(): void {
 function renderRoutes(): void {
   if (currentRoom === targetRoom()) {
     out.routes.innerHTML =
-      '<p class="hint">在 202：从居民列表选择牵出或背出。</p>';
+      '<p class="hint">在目标房间：从居民列表选择牵出或背出。</p>';
     return;
   }
   if (!routes.length) {
@@ -222,7 +242,7 @@ function renderResidents(): void {
     return;
   }
   if (currentRoom !== def.targetRoom) {
-    out.residents.innerHTML = '<p class="hint">抵达 202 后可选择牵出或背出。</p>';
+    out.residents.innerHTML = '<p class="hint">抵达目标房间后可选择牵出或背出。</p>';
     return;
   }
 
@@ -324,7 +344,7 @@ const ROOM_REACH = 6;
 function handleRescue(id: string, verb: RescueVerb): void {
   if (ended) return;
   if (currentRoom !== def.targetRoom) {
-    addLog('先到 202 才能救人。', 'danger');
+    addLog('先到目标房间才能救人。', 'danger');
     return;
   }
 
@@ -479,7 +499,7 @@ out.residents.addEventListener('click', (event) => {
 document.getElementById('reset-btn')!.addEventListener('click', () => window.location.reload());
 document.getElementById('outcome-reset')!.addEventListener('click', () => window.location.reload());
 
-addLog('到场：入口。目标 202，楼梯、消防梯、破拆三条路线。');
+addLog(`到场：入口。目标 ${def.targetRoom}，楼梯、消防梯、破拆三条路线。`);
 recalcRoutes();
 syncResidents();
 updateHud();
