@@ -70,6 +70,43 @@ function toPath(
   return segments.join(' ');
 }
 
+/** 数值保留 3 位小数，便于存 localStorage。 */
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+/** 复制一个采样点并压缩数值精度。 */
+function trimSample(sample: CurveSample): CurveSample {
+  const trimmed: CurveSample = {
+    t: round3(sample.t),
+    smoke: round3(sample.smoke),
+    heat: round3(sample.heat),
+  };
+  if (sample.fire !== undefined) trimmed.fire = round3(sample.fire);
+  return trimmed;
+}
+
+/** 均匀降采样到最多 max 个点，保留首尾；数值保留 3 位小数，便于存 localStorage。 */
+export function trimCurve(samples: CurveSample[], max = 150): CurveSample[] {
+  // 空或单点无需降采样，原样返回。
+  if (samples.length <= 1) return samples;
+
+  const limit = Math.max(2, Math.floor(max));
+  if (samples.length <= limit) return samples.map(trimSample);
+
+  const last = samples.length - 1;
+  const trimmed: CurveSample[] = [];
+  let previousIndex = -1;
+  for (let i = 0; i < limit; i++) {
+    // 等距取索引并去重；最后一个 i 必然命中尾点。
+    const index = Math.round((i * last) / (limit - 1));
+    if (index === previousIndex) continue;
+    previousIndex = index;
+    trimmed.push(trimSample(samples[index]));
+  }
+  return trimmed;
+}
+
 export function buildCurvePaths(
   samples: CurveSample[],
   width = DEFAULT_WIDTH,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCurvePaths, type CurveSample } from '../src/eval/curves';
+import { buildCurvePaths, trimCurve, type CurveSample } from '../src/eval/curves';
 
 /** 从路径里抽出所有点的 x、y 坐标。 */
 function points(path: string): { x: number; y: number }[] {
@@ -76,6 +76,29 @@ describe('暴露曲线路径', () => {
     ]);
 
     expect(set.smoke).not.toBe(set.heat);
+  });
+
+  it('超长序列被降采样到上限内且保留首尾', () => {
+    const samples: CurveSample[] = Array.from({ length: 400 }, (_, index) => ({
+      t: index * 0.5,
+      smoke: index / 400,
+      heat: 1 - index / 400,
+    }));
+
+    const trimmed = trimCurve(samples);
+
+    expect(trimmed.length).toBeLessThanOrEqual(150);
+    expect(trimmed[0].t).toBe(samples[0].t);
+    expect(trimmed[trimmed.length - 1].t).toBe(samples[samples.length - 1].t);
+    // 数值保留 3 位小数，便于存入 localStorage。
+    for (const sample of trimmed) {
+      expect(Number(sample.smoke.toFixed(3))).toBe(sample.smoke);
+      expect(Number(sample.heat.toFixed(3))).toBe(sample.heat);
+    }
+  });
+
+  it('空数组降采样后仍为空', () => {
+    expect(trimCurve([])).toEqual([]);
   });
 
   it('单点也有非空曲线，时间上下界相等', () => {

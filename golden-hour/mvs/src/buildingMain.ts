@@ -17,6 +17,7 @@ import { gridToWorld } from './sim/spatial/coords';
 import { createScenarioForBuilding, snapshotScenario, stepScenario } from './sim/spatial/scene';
 import { LAYOUTS, layoutById, layoutFireProfile } from './content/layouts';
 import { buildingToolActions, type BuildingToolAction } from './app/buildingTools';
+import { isUnlocked, loadProgress, recordRun, saveProgress } from './app/progress';
 import {
   compareRuns,
   scoreRun,
@@ -34,7 +35,7 @@ import {
   type DirectorEvent,
 } from './sim/events/director';
 import { sampleRoom, buildDebrief, type ActionRecord } from './eval/causal';
-import { buildCurvePaths, type CurveSample } from './eval/curves';
+import { buildCurvePaths, trimCurve, type CurveSample } from './eval/curves';
 import { BRIEFING, RADIO_LINES } from './content/narrative';
 import { findRoutes, type Route } from './sim/nav/graph';
 import { travelRoute } from './sim/nav/travel';
@@ -48,9 +49,16 @@ import {
 const canvas = document.getElementById('building-canvas') as HTMLCanvasElement;
 const view = createBuildingView(canvas);
 const params = new URLSearchParams(window.location.search);
-/** 从查询串选择户型；未知 id 回退到第一个户型。 */
+/** 从查询串选择户型；未解锁或未知 id 回退到第一个已解锁户型。 */
 const requestedLayout = params.get('layout') ?? '';
-const layout = layoutById(requestedLayout) ?? LAYOUTS[0];
+/** 每日挑战与普通局共用同一解锁进度，按分数解锁，不额外区分。 */
+let progress = loadProgress();
+const layoutIds = LAYOUTS.map((item) => item.id);
+const requested = layoutById(requestedLayout);
+const layout =
+  requested && isUnlocked(progress, layoutIds, requested.id)
+    ? requested
+    : LAYOUTS.find((item) => isUnlocked(progress, layoutIds, item.id)) ?? LAYOUTS[0];
 /** 每日挑战用当天日期（YYYYMMDD）当种子；普通局用 seed 参数，非法则回退 1。 */
 const daily = params.get('daily') === '1';
 const seedParam = Number(params.get('seed'));
@@ -160,10 +168,13 @@ const out = {
 /** 户型下拉：选项来自 LAYOUTS，切换后带查询串重新载入入口。 */
 const layoutSelect = document.getElementById('layout-select') as HTMLSelectElement | null;
 if (layoutSelect) {
-  layoutSelect.innerHTML = LAYOUTS.map(
-    (item) =>
-      `<option value="${item.id}"${item.id === layout.id ? ' selected' : ''}>${item.label}</option>`
-  ).join('');
+  layoutSelect.innerHTML = LAYOUTS.map((item) => {
+    const unlocked = isUnlocked(progress, layoutIds, item.id);
+    const label = unlocked ? item.label : `${item.label}（未解锁）`;
+    return `<option value="${item.id}"${
+      item.id === layout.id ? ' selected' : ''
+    }${unlocked ? '' : ' disabled'}>${label}</option>`;
+  }).join('');
   layoutSelect.addEventListener('change', () => {
     const url = new URL(window.location.href);
     url.searchParams.set('layout', layoutSelect.value);
@@ -591,17 +602,35 @@ function checkOutcome(): void {
   }
 }
 
-/** 结算时把采样折成三条 SVG 曲线；没有采样就给出提示。 */
-function renderCurve(): void {
+/** 最佳记录：本局结果 + 暴露曲线，用于结算时的幽灵对比。 */
+interface BestRecord {
+  run: RunResult;
+  curve: CurveSample[];
+}
+
+/** 结算时先画本次实线；若最佳记录有曲线，再叠两条虚线幽灵。 */
+function renderCurve(bestCurve: CurveSample[]): void {
   const curve = buildCurvePaths(exposureSamples);
-  out.curve.innerHTML = curve.hasData
-    ? `<svg viewBox="0 0 ${curve.width} ${curve.height}" role="img" aria-label="烟热暴露曲线">
+  if (!curve.hasData) {
+    out.curve.innerHTML = '<p class="hint">没有采样到暴露曲线。</p>';
+    return;
+  }
+  // 最佳曲线复用同一画布尺寸，横向按各自时间轴铺满。
+  const ghost = bestCurve.length
+    ? buildCurvePaths(bestCurve, curve.width, curve.height)
+    : null;
+  const ghostPaths = ghost?.hasData
+    ? `<path class="ghost-smoke" d="${ghost.smoke}" />
+        <path class="ghost-heat" d="${ghost.heat}" />`
+    : '';
+  const legend = ghostPaths ? '实线 本次 · 虚线 最佳' : '烟 / 热 / 火（0–1）';
+  out.curve.innerHTML = `<svg viewBox="0 0 ${curve.width} ${curve.height}" role="img" aria-label="烟热暴露曲线">
         <path class="smoke" d="${curve.smoke}" />
         <path class="heat" d="${curve.heat}" />
         <path class="fire" d="${curve.fire}" />
+        ${ghostPaths}
       </svg>
-      <div class="curve-legend">烟 / 热 / 火（0–1）</div>`
-    : '<p class="hint">没有采样到暴露曲线。</p>';
+      <div class="curve-legend">${legend}</div>`;
 }
 
 /** 最佳记录按户型 + 种子隔离，避免每日挑战与普通局互相覆盖。 */
@@ -624,41 +653,75 @@ function collectRun(): RunResult {
   };
 }
 
-/** 读取最佳记录；localStorage 不可用或 JSON 损坏时当作没有。 */
-function loadBest(): RunResult | null {
+const RUN_KEYS = [
+  'rescued',
+  'lost',
+  'total',
+  'seconds',
+  'peakExposure',
+  'wrongAgent',
+  'airLeft',
+] as const;
+
+/** 判断对象是否含完整的 RunResult 数值字段。 */
+function isRunResult(value: unknown): value is RunResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return RUN_KEYS.every(
+    (key) => typeof record[key] === 'number' && Number.isFinite(record[key] as number)
+  );
+}
+
+/** 只保留数值合法的曲线采样点，坏点直接丢弃。 */
+function readCurve(value: unknown): CurveSample[] {
+  if (!Array.isArray(value)) return [];
+  const samples: CurveSample[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const sample = item as Record<string, unknown>;
+    const { t, smoke, heat, fire } = sample;
+    if (typeof t !== 'number' || !Number.isFinite(t)) continue;
+    if (typeof smoke !== 'number' || !Number.isFinite(smoke)) continue;
+    if (typeof heat !== 'number' || !Number.isFinite(heat)) continue;
+    const cleaned: CurveSample = { t, smoke, heat };
+    if (typeof fire === 'number' && Number.isFinite(fire)) cleaned.fire = fire;
+    samples.push(cleaned);
+  }
+  return samples;
+}
+
+/** 读取最佳记录；兼容旧的纯 RunResult 格式（无曲线）。 */
+function loadBest(): BestRecord | null {
   try {
     const raw = window.localStorage.getItem(BEST_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const numericKeys = [
-      'rescued',
-      'lost',
-      'total',
-      'seconds',
-      'peakExposure',
-      'wrongAgent',
-      'airLeft',
-    ];
-    const valid = numericKeys.every(
-      (key) => typeof parsed[key] === 'number' && Number.isFinite(parsed[key] as number)
-    );
-    return valid ? (parsed as unknown as RunResult) : null;
+    const parsed = JSON.parse(raw) as unknown;
+    // 旧格式直接存 RunResult：视为 run 且 curve 为空。
+    if (isRunResult(parsed)) return { run: parsed, curve: [] };
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const record = parsed as Record<string, unknown>;
+    if (!isRunResult(record.run)) return null;
+    return { run: record.run, curve: readCurve(record.curve) };
   } catch {
     return null;
   }
 }
 
-/** 写入最佳记录；隐私模式或配额不足时静默放弃，不影响结算。 */
-function saveBest(run: RunResult): void {
+/** 写入最佳记录（结果 + 截断曲线）；隐私模式或配额不足时静默放弃。 */
+function saveBest(record: BestRecord): void {
   try {
-    window.localStorage.setItem(BEST_KEY, JSON.stringify(run));
+    window.localStorage.setItem(BEST_KEY, JSON.stringify(record));
   } catch {
     // 忽略写入失败。
   }
 }
 
-/** 渲染星级、分数、原因列表与本次/最佳对比。 */
-function renderScore(breakdown: ScoreBreakdown, comparison: RunComparison | null): void {
+/** 渲染星级、分数、原因列表、本次/最佳对比与该户型最佳分。 */
+function renderScore(
+  breakdown: ScoreBreakdown,
+  comparison: RunComparison | null,
+  bestScore: number
+): void {
   const stars = '★'.repeat(breakdown.stars) + '☆'.repeat(3 - breakdown.stars);
   const versus = comparison
     ? `本次 vs 最佳：救出 ${comparison.rescuedDelta >= 0 ? '+' : ''}${
@@ -671,7 +734,7 @@ function renderScore(breakdown: ScoreBreakdown, comparison: RunComparison | null
     : '首次记录，已保存为最佳';
   out.outcomeScore.innerHTML = `<b class="stars">${stars}</b> ${breakdown.score} 分<div class="reasons">${breakdown.reasons.join(
     ' · '
-  )}</div><div class="versus">${versus}</div>`;
+  )}</div><div class="versus">${versus}</div><div class="progress-best">该户型最佳 ${bestScore} 分</div>`;
 }
 
 function end(title: string, body: string): void {
@@ -681,11 +744,18 @@ function end(title: string, body: string): void {
   const run = collectRun();
   const breakdown = scoreRun(run);
   const previous = loadBest();
-  const comparison = previous ? compareRuns(run, previous) : null;
-  // 首次记录或刷新最佳时才写回，避免覆盖更优成绩。
-  if (!previous || comparison?.better) saveBest(run);
-  renderScore(breakdown, comparison);
-  renderCurve();
+  const comparison = previous ? compareRuns(run, previous.run) : null;
+  // 首次记录或刷新最佳时，连同截断后的曲线一起写回。
+  const record: BestRecord =
+    !previous || comparison?.better
+      ? { run, curve: trimCurve(exposureSamples, 150) }
+      : previous;
+  if (!previous || comparison?.better) saveBest(record);
+  // 解锁进度按户型记最高分；每日挑战与普通局共用同一份进度。
+  progress = recordRun(progress, layout.id, breakdown.score);
+  saveProgress(progress);
+  renderScore(breakdown, comparison, progress.best[layout.id]);
+  renderCurve(record.curve);
   // 取最近 6 条动作，逐条给出前后场差异与中文因果解释。
   const debrief = buildDebrief(actions).slice(-6);
   out.debrief.innerHTML = debrief.length
