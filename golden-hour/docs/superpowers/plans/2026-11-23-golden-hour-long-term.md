@@ -1502,6 +1502,19 @@ git commit -m "docs: mark phase 0.5 completion"
 
 ## 8. Milestone B — Phase 1 核心任务
 
+**执行状态（2026-11-23）：B1–B6 已完成。**
+
+| 任务 | 状态 | 提交 |
+| --- | --- | --- |
+| B1 房间图 | 完成 | `b3ad15f`、`4db069e` |
+| B2 路线搜索 | 完成 | `9d3a5f5`、`76a7d5d`、`5615b12` |
+| B3 上下楼成本 | 完成 | `1d40a9b`、`4ceb252` |
+| B4 建筑相机 | 完成 | `de6f87d`、`b90a662` |
+| B5a 建筑场景 | 完成 | `13337ae`、`7929c9d` |
+| B5b 建筑切片 | 完成 | `1f278bd`、`f752221` |
+| B6 场景选择 | 完成 | `3d238aa`、`a60af23` |
+| 整合终审修复 | 完成 | `490eea8` |
+
 **目标：** 3 层建筑图、可行走图、三条到 202 的路线、房间切镜。
 
 ### Task B1: 房间图与建筑骨架
@@ -1577,7 +1590,6 @@ export interface RoomLink {
   a: string;
   b: string;
   kind: LinkKind;
-  opening: Opening;
   time: number;
   risk: number;
   blocked: boolean;
@@ -1590,27 +1602,13 @@ export interface BuildingGraph {
   links: RoomLink[];
 }
 
-function opening(id: 'door' | 'window', open = false): Opening {
-  return {
-    id,
-    x: id === 'door' ? 0 : 7,
-    y: 4,
-    open,
-    broken: false,
-    temp: 0.12,
-    wet: 0,
-    backdraftTrigger: id === 'door',
-  };
-}
-
 let seq = 0;
 function link(
   a: string,
   b: string,
   kind: LinkKind,
   time: number,
-  risk: number,
-  band: 'door' | 'window' = 'door'
+  risk: number
 ): RoomLink {
   seq += 1;
   return {
@@ -1618,7 +1616,6 @@ function link(
     a,
     b,
     kind,
-    opening: opening(band),
     time,
     risk,
     blocked: false,
@@ -1654,7 +1651,7 @@ export function createBuilding(): BuildingGraph {
   links.push(link('stair-F1', 'room-201-F1', 'door', 3, 0.15));
   links.push(link('stair-F1', 'room-202-F1', 'door', 4, 0.25));
   links.push(link('stair-F2', 'room-202-F2', 'door', 3, 0.2));
-  links.push(link('room-202-F1', 'escape-F1', 'window', 2, 0.3, 'window'));
+  links.push(link('room-202-F1', 'escape-F1', 'window', 2, 0.3));
   links.push(link('escape-F1', 'escape-F2', 'ladder', 6, 0.35));
   links.push(link('escape-F2', 'roof', 'ladder', 4, 0.3));
   links.push(link('room-202-F2', 'room-202-F1', 'breach', 5, 0.5));
@@ -2035,7 +2032,8 @@ git commit -m "feat(mvs): deterministic building camera shots"
   - `building` 返回建筑入口配置。
   - 旧切片入口不被删除。
 
-**展开规则：** B1–B4 合并后，把 B5/B6 按 Task A1–A6 的粒度拆成失败测试 → 实现 → 通过 → 提交，再更新本节。
+**状态：** B5/B6 已按上述粒度完成并合入（见本节状态表）。建筑切片使用 Canvas2D 视图，
+路线选择、每段行程结算与背人撤离已在浏览器验证。
 
 ---
 
@@ -2142,6 +2140,8 @@ npm run verify         # 视觉 + 音频（改渲染/音频时）
 | main 入口 | 60 KB gzip | 旧教学关，保持可运行 |
 | room 入口 | 80 KB gzip | 单房间切片 |
 | building 入口 | 90 KB gzip | 建筑沙盒（Phase 1 起） |
+| rescue 共享 chunk | 30 KB gzip | 救援模块，供多个入口复用 |
+| modulepreload 辅助 | 8 KB gzip | Vite 预加载垫片 |
 | three.module | 170 KB gzip | 共享 vendor，单独记账 |
 | JS 总计 | 340 KB gzip | 超出即失败 |
 | 3D 资产 | 2.6 MB | 现有预算不变 |
