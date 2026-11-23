@@ -7,6 +7,13 @@
 
 export type OpeningId = 'door' | 'window';
 
+/**
+ * 火灾分类（GB/T 4968 / 国际通行）：
+ * A 固体（木材、布料、沙发） B 液体/可熔化固体（油、油漆） C 气体
+ * D 金属 E 带电 F 食用油（厨房）
+ */
+export type FireClass = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+
 export interface RoomConfig {
   cols: number;
   rows: number;
@@ -32,6 +39,8 @@ export interface Cell {
   combustibility: number;
   /** 单位燃料产烟系数 */
   smokeYield: number;
+  /** 该格燃料的火灾类别；决定哪种灭火剂有效 */
+  fireClass: FireClass;
 }
 
 export interface Opening {
@@ -43,14 +52,34 @@ export interface Opening {
   broken: boolean;
   /** 门板 / 窗框表面温度 0..1 */
   temp: number;
+  /** 门板被打湿的程度 0..1；湿门不易成为回燃的点火面 */
+  wet: number;
   /** 打开时是否会把新鲜空气直接送进富燃料烟气层（门为 true，窗为 false） */
   backdraftTrigger: boolean;
 }
 
 export interface RoomEvent {
   at: number;
-  kind: 'open' | 'break' | 'cool' | 'backdraft' | 'ignite' | 'extinguish' | 'vent';
+  kind:
+    | 'open'
+    | 'break'
+    | 'cool'
+    | 'backdraft'
+    | 'ignite'
+    | 'extinguish'
+    | 'vent'
+    | 'misagent';
   detail: string;
+}
+
+/** 玩家携带的灭火剂余量 0..1；没带的就是 0。 */
+export interface ToolLoadout {
+  water: number;
+  dryPowder: number;
+  co2: number;
+  foam: number;
+  wetChemical: number;
+  sand: number;
 }
 
 export interface RoomStats {
@@ -76,6 +105,7 @@ export interface RoomState {
   lastOpenedAt: number | null;
   log: RoomEvent[];
   stats: RoomStats;
+  tools: ToolLoadout;
 }
 
 export const ROOM_COLS = 8;
@@ -105,15 +135,17 @@ function emptyCell(): Cell {
     structure: 1,
     combustibility: 0,
     smokeYield: 0,
+    fireClass: 'A',
   };
 }
 
 function makeFuel(
   fuel: number,
   combustibility: number,
-  smokeYield: number
+  smokeYield: number,
+  fireClass: FireClass = 'A'
 ): Partial<Cell> {
-  return { fuel, combustibility, smokeYield };
+  return { fuel, combustibility, smokeYield, fireClass };
 }
 
 /**
@@ -146,6 +178,7 @@ export function createRoom(config: Partial<RoomConfig> = {}): RoomState {
         open: false,
         broken: false,
         temp: 0.12,
+        wet: 0,
         backdraftTrigger: true,
       },
       window: {
@@ -155,6 +188,7 @@ export function createRoom(config: Partial<RoomConfig> = {}): RoomState {
         open: false,
         broken: false,
         temp: 0.12,
+        wet: 0,
         backdraftTrigger: false,
       },
     },
@@ -166,9 +200,17 @@ export function createRoom(config: Partial<RoomConfig> = {}): RoomState {
     lastOpenedAt: null,
     log: [],
     stats: { smokeVented: 0, oxygenIn: 0, waterUsed: 0, peakHeat: 0 },
+    tools: {
+      water: 1,
+      dryPowder: 1,
+      co2: 1,
+      foam: 0,
+      wetChemical: 0,
+      sand: 0,
+    },
   };
 
-  // 沙发：靠窗的一块 L 形可燃家具
+  // 沙发：靠窗的一块 L 形可燃家具（A 类固体火）
   const sofa = [
     [5, 3],
     [6, 3],
@@ -178,8 +220,12 @@ export function createRoom(config: Partial<RoomConfig> = {}): RoomState {
   ];
   for (const [x, y] of sofa) {
     if (!inBounds(full, x, y)) continue;
-    Object.assign(cellAt(state, x, y), makeFuel(1, 0.8, 1.4));
+    Object.assign(cellAt(state, x, y), makeFuel(1, 0.8, 1.4, 'A'));
   }
+
+  // 门内侧一桶松香水（B 类液体火）：用水会飞溅扩散，必须先断源或用干粉/泡沫
+  Object.assign(cellAt(state, 2, 5), makeFuel(0.7, 0.95, 2.2, 'B'));
+  Object.assign(cellAt(state, 2, 5), { fire: 0.25, heat: 0.18 });
 
   // 火源在沙发中间
   const source = cellAt(state, 5, 4);
@@ -188,6 +234,7 @@ export function createRoom(config: Partial<RoomConfig> = {}): RoomState {
   source.combustibility = 0.85;
   source.smokeYield = 1.6;
   source.heat = 0.2;
+  source.fireClass = 'A';
 
   return state;
 }

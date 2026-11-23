@@ -20,13 +20,16 @@ const WINDOW_VENT = 2.2;
 
 const SMOKE_DIFFUSION = 1.6;
 const OXYGEN_DIFFUSION = 2.4;
-const HEAT_DIFFUSION = 1.8;
-const HEAT_COOLING = 0.12;
+const HEAT_DIFFUSION = 1.0;
+const HEAT_COOLING = 0.05;
 
-const BURN_RATE = 0.05;
-const OXY_CONSUME = 40;
-const HEAT_GAIN = 7;
-const SMOKE_GAIN = 20;
+const BURN_RATE = 0.012;
+const OXY_CONSUME = 45;
+const HEAT_GAIN = 24;
+const SMOKE_GAIN = 40;
+
+const SPREAD_RATE = 0.06;
+const SPREAD_MIN_FIRE = 0.2;
 
 const DOOR_TEMP_CONTACT = 0.7;
 const BACKDRAFT_DELAY = 0.9;
@@ -101,9 +104,45 @@ function diffuse(state: RoomState, dt: number): void {
   }
 }
 
+function spreadFire(state: RoomState, dt: number): void {
+  const { config, cells } = state;
+  const n = cells.length;
+  const ignitions = new Float32Array(n);
+
+  for (let y = 0; y < config.rows; y++) {
+    for (let x = 0; x < config.cols; x++) {
+      const i = index(config, x, y);
+      const c = cells[i];
+      if (c.fuel <= 0.001 || c.fire > 0.001 || c.water > 0.5) continue;
+      let hottest = 0;
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!inBounds(config, nx, ny)) continue;
+        hottest = Math.max(hottest, cells[index(config, nx, ny)].fire);
+      }
+      if (hottest > SPREAD_MIN_FIRE) {
+        ignitions[i] = hottest * SPREAD_RATE * dt;
+      }
+    }
+  }
+
+  for (let i = 0; i < n; i++) {
+    if (ignitions[i] <= 0) continue;
+    cells[i].fire = clamp01(cells[i].fire + ignitions[i]);
+    cells[i].heat = clamp01(cells[i].heat + ignitions[i] * 2);
+  }
+}
+
 function burn(state: RoomState, dt: number): void {
   for (const c of state.cells) {
-    if (c.fire <= 0.001 && c.fuel <= 0.001) {
+    // 只有已经燃起来的格子才继续烧；不会凭空自燃，蔓延由 spreadFire 负责。
+    if (c.fire <= 0.001) {
       c.heat = clamp01(c.heat - c.heat * HEAT_COOLING * dt);
       continue;
     }
@@ -145,13 +184,17 @@ function applyStructure(state: RoomState, dt: number): void {
 
 function trackDoorTemp(state: RoomState, dt: number): void {
   const s = roomSummary(state);
-  const contact = cellAt(state, state.openings.door.x, state.openings.door.y).heat;
-  const target = clamp01(contact * DOOR_TEMP_CONTACT + s.heat * (1 - DOOR_TEMP_CONTACT));
   const door = state.openings.door;
+  const contact = cellAt(state, door.x, door.y).heat;
+  const target = clamp01(contact * 0.5 + s.heat * 0.5 - door.wet * 0.3);
   door.temp = clamp01(door.temp + (target - door.temp) * 0.6 * dt);
+  door.wet = Math.max(0, door.wet - 0.05 * dt);
+
   const win = state.openings.window;
   const winContact = cellAt(state, win.x, win.y).heat;
-  win.temp = clamp01(win.temp + (clamp01(winContact * 0.8 + s.heat * 0.2) - win.temp) * 0.6 * dt);
+  const winTarget = clamp01(winContact * 0.8 + s.heat * 0.2 - win.wet * 0.3);
+  win.temp = clamp01(win.temp + (winTarget - win.temp) * 0.6 * dt);
+  win.wet = Math.max(0, win.wet - 0.05 * dt);
 }
 
 function resolveBackdraft(state: RoomState): void {
@@ -161,11 +204,11 @@ function resolveBackdraft(state: RoomState): void {
   triggerBackdraft(state);
 }
 
-/** 开门/窗瞬间判定：富燃料 + 门板高温，才会把新鲜空气变成爆燃。 */
+/** 开门/窗瞬间判定：富燃料 + 门板高温 + 门板未被打湿，才会把新鲜空气变成爆燃。 */
 export function shouldBackdraft(state: RoomState, id: 'door' | 'window'): boolean {
   const o = state.openings[id];
   if (!o.backdraftTrigger) return false;
-  return isFuelRich(state) && o.temp > BACKDRAFT_DOOR_TEMP;
+  return isFuelRich(state) && o.temp > BACKDRAFT_DOOR_TEMP && o.wet < 0.35;
 }
 
 export function triggerBackdraft(state: RoomState): void {
