@@ -5,8 +5,12 @@
  * 不碰渲染、输入与随机数。房间场由 fields 层的 createRoom 初始化。
  */
 
-import { createRoom } from '../sim/spatial/fields';
+import { createRoom, type FireClass } from '../sim/spatial/fields';
 import type { BuildingGraph, LinkKind, RoomLink, RoomNode } from '../sim/spatial/rooms';
+import { materialsByClass, type Material } from './materials';
+import type { TargetFireProfile } from '../sim/spatial/scene';
+
+export type { TargetFireProfile };
 
 export interface LayoutDefinition {
   id: string;
@@ -15,6 +19,8 @@ export interface LayoutDefinition {
   entrance: string;
   /** 目标房间 id */
   target: string;
+  /** 该户型目标房间的火灾类别，决定用哪种灭火剂 */
+  targetFireClass: FireClass;
   build(): BuildingGraph;
 }
 
@@ -71,6 +77,7 @@ const classic: LayoutDefinition = {
   label: '经典两层',
   entrance: 'entrance',
   target: 'room-202-F1',
+  targetFireClass: 'A',
   build: () =>
     buildGraph({
       rooms: [
@@ -98,6 +105,7 @@ const narrow: LayoutDefinition = {
   label: '窄楼梯',
   entrance: 'entrance',
   target: 'room-202-F1',
+  targetFireClass: 'F',
   build: () =>
     buildGraph({
       rooms: [
@@ -123,6 +131,7 @@ const courtyard: LayoutDefinition = {
   label: '内院双梯',
   entrance: 'entrance',
   target: 'room-202-F1',
+  targetFireClass: 'B',
   build: () =>
     buildGraph({
       rooms: [
@@ -155,6 +164,7 @@ const duplex: LayoutDefinition = {
   label: '跃层',
   entrance: 'entrance',
   target: 'room-202-F2',
+  targetFireClass: 'E',
   build: () =>
     buildGraph({
       rooms: [
@@ -179,6 +189,28 @@ const duplex: LayoutDefinition = {
 };
 
 export const LAYOUTS: LayoutDefinition[] = [classic, narrow, courtyard, duplex];
+
+/**
+ * 用目标火类对应的材料推导火场剖面（取产烟最高者）。
+ * 某类目暂无材料时回退 A 类默认值，保证场景仍能初始化。
+ */
+export function layoutFireProfile(layout: LayoutDefinition): TargetFireProfile {
+  const candidates = materialsByClass(layout.targetFireClass);
+  // 同一火类可能对应多种材料：取产烟最高的一种，保留火场压迫感；
+  // 平手时按 MATERIALS 顺序取先出现者，保证确定性。
+  let material: Material | undefined;
+  for (const item of candidates) {
+    if (!material || item.smokeYield > material.smokeYield) material = item;
+  }
+  if (!material) {
+    return { fireClass: 'A', combustibility: 0.8, smokeYield: 1.4 };
+  }
+  return {
+    fireClass: material.fireClass,
+    combustibility: material.combustibility,
+    smokeYield: material.smokeYield,
+  };
+}
 
 export function layoutById(id: string): LayoutDefinition | undefined {
   return LAYOUTS.find((layout) => layout.id === id);

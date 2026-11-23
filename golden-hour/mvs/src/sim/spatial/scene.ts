@@ -1,4 +1,4 @@
-import { SOFA_CELLS, cellAt, roomSummary, type Cell } from './fields';
+import { SOFA_CELLS, cellAt, roomSummary, type Cell, type FireClass } from './fields';
 import type { BuildingGraph } from './rooms';
 import { createBuilding } from './rooms';
 import { FIXED_DT, stepRoom } from './spread';
@@ -12,6 +12,13 @@ export interface ScenarioDefinition {
   startRoom: string;
   targetRoom: string;
   objectives: string[];
+}
+
+/** 目标房间的火场剖面：火类与燃料属性由内容层按户型给出。 */
+export interface TargetFireProfile {
+  fireClass: FireClass;
+  combustibility: number;
+  smokeYield: number;
 }
 
 export interface RoomSnapshot {
@@ -52,7 +59,8 @@ export function createScenarioForBuilding(
   startRoom: string,
   targetRoom: string,
   id = 'building-202',
-  seed = 1
+  seed = 1,
+  fire: TargetFireProfile = { fireClass: 'A', combustibility: 0.8, smokeYield: 1.4 }
 ): ScenarioDefinition {
   for (const node of Object.values(building.rooms)) {
     quietRoom(node.room.cells);
@@ -62,8 +70,9 @@ export function createScenarioForBuilding(
   for (const [x, y] of SOFA_CELLS) {
     const cell = cellAt(room, x, y);
     cell.fuel = 1;
-    cell.combustibility = 0.8;
-    cell.smokeYield = 1.4;
+    cell.combustibility = fire.combustibility;
+    cell.smokeYield = fire.smokeYield;
+    cell.fireClass = fire.fireClass;
     // 整张沙发已进入初期燃烧，而非单点起火。
     cell.fire = 0.2;
   }
@@ -71,6 +80,9 @@ export function createScenarioForBuilding(
   const source = cellAt(room, 5, 4);
   source.fire = 0.45;
   source.heat = 0.2;
+  source.combustibility = fire.combustibility;
+  source.smokeYield = fire.smokeYield;
+  source.fireClass = fire.fireClass;
 
   return {
     id,

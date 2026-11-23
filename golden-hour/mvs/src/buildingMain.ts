@@ -15,7 +15,10 @@ import {
 } from './sim/agents/crowd';
 import { gridToWorld } from './sim/spatial/coords';
 import { createScenarioForBuilding, snapshotScenario, stepScenario } from './sim/spatial/scene';
-import { LAYOUTS, layoutById } from './content/layouts';
+import { LAYOUTS, layoutById, layoutFireProfile } from './content/layouts';
+import { buildingToolActions, type BuildingToolAction } from './app/buildingTools';
+import { createToolLoadout, type CarryLoadout } from './sim/interaction/tools';
+import { executeVerb } from './sim/interaction/multiSolution';
 import {
   createDirector,
   setWind,
@@ -44,9 +47,12 @@ const def = createScenarioForBuilding(
   layout.entrance,
   layout.target,
   'layout-' + layout.id,
-  1
+  1,
+  layoutFireProfile(layout)
 );
 const actor = createActor();
+/** 随身器材；工具动作会消耗 charge，用空后按钮禁用。 */
+const loadout: CarryLoadout = createToolLoadout();
 // 建筑入口按消防员佩戴空呼处理：烟热仍会累积，但足以支撑多次进出救援。
 actor.masked = true;
 
@@ -98,6 +104,8 @@ let seenEvents = 0;
 /** 因果复盘用的动作记录；按发生顺序追加。 */
 const actions: ActionRecord[] = [];
 let actionSeq = 0;
+/** 对非 A 类火使用水枪的次数；先只维护，供后续评分使用。 */
+let wrongAgent = 0;
 /** 结算暴露曲线的采样；每 0.5 秒一条。 */
 const exposureSamples: CurveSample[] = [];
 let lastSampleT = -1;
@@ -114,6 +122,7 @@ const out = {
   wind: document.getElementById('hud-wind')!,
   routes: document.getElementById('routes')!,
   residents: document.getElementById('residents')!,
+  tools: document.getElementById('tools')!,
   log: document.getElementById('log')!,
   outcome: document.getElementById('outcome')!,
   outcomeTitle: document.getElementById('outcome-title')!,
@@ -257,7 +266,7 @@ function recalcRoutes(): void {
 function renderRoutes(): void {
   if (currentRoom === targetRoom()) {
     out.routes.innerHTML =
-      '<p class="hint">在目标房间：WASD/方向键移动，靠近居民后牵出或背出；角落可能有躲藏者。</p>';
+      '<p class="hint">在目标房间：WASD/方向键移动，靠近居民后牵出或背出；角落可能有躲藏者。工具在右侧面板。</p>';
     return;
   }
   if (!routes.length) {
@@ -333,6 +342,67 @@ function syncResidents(): void {
   renderResidents();
 }
 
+let toolsSig = '';
+
+/** 工具面板的内容指纹：房间、结束状态、可用性与余量百分比。 */
+function toolsSignature(actions: BuildingToolAction[], inactive: boolean): string {
+  const parts = actions.map(
+    (action) => `${action.verbId}:${action.enabled ? 1 : 0}:${Math.round(action.charge * 100)}`
+  );
+  return `${inactive ? 1 : 0}|${parts.join(',')}`;
+}
+
+/** 渲染右侧工具面板；不在目标房间或已结束时全部禁用。 */
+function refreshTools(): void {
+  const inactive = ended || currentRoom !== def.targetRoom;
+  const actions = buildingToolActions(roomOf(def.targetRoom), loadout);
+  const sig = toolsSignature(actions, inactive);
+  if (sig === toolsSig) return;
+  toolsSig = sig;
+
+  out.tools.innerHTML = actions
+    .map((action) => {
+      const enabled = action.enabled && !inactive;
+      const percent = Math.round(action.charge * 100);
+      return `<button data-verb="${action.verbId}" aria-label="${action.label}，余量 ${percent}%"${
+        enabled ? '' : ' disabled'
+      }>${action.label}<small>${percent}%</small></button>`;
+    })
+    .join('');
+}
+
+/** 执行一次工具动作，并记录因果复盘与用错灭火剂的次数。 */
+function runToolAction(action: BuildingToolAction): void {
+  if (ended || currentRoom !== def.targetRoom) return;
+
+  const room = roomOf(def.targetRoom);
+  const before = sampleRoom(room);
+  const at = room.t;
+  // 是否“用错水”，取决于动作发生时正在燃烧的火类。
+  const wetNonA = room.cells.some((cell) => cell.fire > 0 && cell.fireClass !== 'A');
+  const result = executeVerb(action.verbId, {
+    room,
+    loadout,
+    actor,
+    target: action.target,
+  });
+
+  actions.push({
+    id: 'tool-' + action.verbId + '-' + ++actionSeq,
+    at,
+    action: 'tool:' + action.verbId,
+    roomId: def.targetRoom,
+    before,
+    after: sampleRoom(room),
+  });
+
+  addLog(result.lesson, result.ok ? 'ok' : 'danger');
+  if (action.verbId === 'fire-water' && result.ok && wetNonA) wrongAgent += 1;
+
+  refreshTools();
+  updateHud();
+}
+
 function takeRoute(index: number): void {
   if (ended) return;
   const route = routes[index];
@@ -377,6 +447,7 @@ function takeRoute(index: number): void {
   addLog(`通过 ${route.steps.map((step) => step.kind).join(' → ')}，到达 ${currentRoom}`, 'ok');
   recalcRoutes();
   syncResidents();
+  refreshTools();
   updateHud();
   checkOutcome();
 }
@@ -419,6 +490,8 @@ function handleRescue(id: string, verb: RescueVerb): void {
 
   if (result.ok) {
     addLog(`${verb === 'carry' ? '已背出' : '已牵出'} 居民 ${id}`, 'ok');
+    // 救援内部推进过世界，工具余量可能随动作变化，刷新面板。
+    refreshTools();
   } else {
     addLog(`${reasonText(result.reason)}（居民 ${id}）`, 'danger');
   }
@@ -486,6 +559,7 @@ function end(title: string, body: string): void {
     : '<li>没有可复盘的动作。</li>';
   out.outcome.classList.add('show');
   renderResidents();
+  refreshTools();
   // 结算弹层出现后把焦点交给“再来一次”，键盘用户不必重新寻路。
   (document.getElementById('outcome-reset') as HTMLButtonElement | null)?.focus();
 }
@@ -538,6 +612,7 @@ function frame(now: number): void {
     lastHud = now;
     updateHud();
     syncResidents();
+    refreshTools();
   }
 
   requestAnimationFrame(frame);
@@ -615,6 +690,18 @@ out.residents.addEventListener('click', (event) => {
   if (id && (verb === 'lead' || verb === 'carry')) handleRescue(id, verb);
 });
 
+out.tools.addEventListener('click', (event) => {
+  const button = (event.target as HTMLElement).closest('button');
+  if (!button || (button as HTMLButtonElement).disabled) return;
+  const verbId = button.dataset.verb;
+  if (!verbId) return;
+  // 每次点击都按当前场态重算目标格，避免火势移动后仍打旧位置。
+  const action = buildingToolActions(roomOf(def.targetRoom), loadout).find(
+    (entry) => entry.verbId === verbId
+  );
+  if (action) runToolAction(action);
+});
+
 document.getElementById('reset-btn')!.addEventListener('click', () => window.location.reload());
 document.getElementById('outcome-reset')!.addEventListener('click', () => window.location.reload());
 
@@ -622,5 +709,6 @@ addLog(`到场：入口。目标 ${def.targetRoom}，楼梯、消防梯、破拆
 for (const line of BRIEFING) addLog(`【${line.speaker}】${line.text}`);
 recalcRoutes();
 syncResidents();
+refreshTools();
 updateHud();
 requestAnimationFrame(frame);
