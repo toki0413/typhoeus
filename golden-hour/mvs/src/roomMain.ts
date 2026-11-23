@@ -9,12 +9,7 @@ import {
 import { FIXED_DT, stepRoom } from './sim/spatial/spread';
 import { gridToWorld } from './sim/spatial/coords';
 import { measureOpening, openOpening } from './sim/spatial/verbs';
-import { useImprovised } from './sim/spatial/improvised';
-import {
-  availableVerbs,
-  executeVerb,
-  type Obstacle,
-} from './sim/interaction/multiSolution';
+import { executeVerb } from './sim/interaction/multiSolution';
 import { createToolLoadout } from './sim/interaction/tools';
 import { createToolWheel } from './ui/toolWheel';
 import { createRoomView } from './render/roomView';
@@ -124,6 +119,16 @@ function verbTarget(verbId: string): { x: number; y: number } {
 
 function runVerb(verbId: string): void {
   if (ended) return;
+
+  if (verbId.startsWith('door-') && !nearOpening('door')) {
+    addLog('离门太远，先走到门边。', 'info');
+    return;
+  }
+  if (verbId.startsWith('window-') && !nearOpening('window')) {
+    addLog('离窗太远，先走到窗边。', 'info');
+    return;
+  }
+
   const result = executeVerb(verbId, {
     room,
     loadout,
@@ -149,7 +154,6 @@ function nearOpening(id: 'door' | 'window', range = 1.7): boolean {
 
 function action(name: string): void {
   if (ended) return;
-  const g = playerGrid();
 
   if (name === 'reset') {
     window.location.reload();
@@ -192,32 +196,6 @@ function action(name: string): void {
       return;
     }
     addLog('窗户打开，烟开始往外走，但新鲜空气也会进来。', 'lesson');
-    return;
-  }
-
-  if (name === 'water') {
-    runVerb('fire-water');
-    return;
-  }
-
-  if (name === 'dryPowder' || name === 'co2') {
-    runVerb('fire-powder');
-    return;
-  }
-
-  if (name === 'wetBlanket') {
-    runVerb('fire-smother');
-    return;
-  }
-
-  if (name === 'powerCut') {
-    const res = useImprovised(room, 'powerCut', g.x, g.y);
-    addLog(res.lesson, 'lesson');
-    return;
-  }
-
-  if (name === 'closeDoor') {
-    runVerb('fire-isolate');
     return;
   }
 
@@ -359,12 +337,6 @@ window.addEventListener('keydown', (event) => {
   if (k === 'e') action('door');
   if (k === 'r') action('window');
   if (k === 't') runVerb('thermal-scan');
-  if (k === '1') action('water');
-  if (k === '2') action('dryPowder');
-  if (k === '3') action('co2');
-  if (k === '4') action('wetBlanket');
-  if (k === '5') action('powerCut');
-  if (k === '6') action('closeDoor');
   if (k === 'c') action('carry');
 });
 

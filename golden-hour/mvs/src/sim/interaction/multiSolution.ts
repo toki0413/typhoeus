@@ -50,10 +50,29 @@ export function verbsFor(obstacle: Obstacle): Verb[] {
   return VERBS.filter((verb) => verb.obstacle === obstacle);
 }
 
+export const VERB_TOOL_COST: Record<string, number> = {
+  'door-break': 0.2,
+  'door-cool': 0.12,
+  'window-break': 0.2,
+  'window-vent': 0.08,
+  'wall-breach': 0.2,
+  'wall-breach-wide': 0.35,
+  'wall-cool': 0.12,
+  'fire-water': 0.12,
+  'fire-powder': 0.12,
+  'thermal-scan': 0.04,
+};
+
+export function verbCost(verbId: string): number {
+  return VERB_TOOL_COST[verbId] ?? 0;
+}
+
 export function availableVerbs(obstacle: Obstacle, loadout: CarryLoadout): Verb[] {
-  return verbsFor(obstacle).filter(
-    (verb) => verb.tool === null || toolAvailable(loadout, verb.tool)
-  );
+  return verbsFor(obstacle).filter((verb) => {
+    if (verb.tool === null) return true;
+    if (!toolAvailable(loadout, verb.tool)) return false;
+    return loadout[verb.tool].charge + 1e-9 >= verbCost(verb.id);
+  });
 }
 
 export interface VerbContext {
@@ -72,12 +91,6 @@ export interface VerbResult {
   scan?: ThermalScan;
 }
 
-const SPRAY_COST = 0.12;
-const AXE_COST = 0.2;
-const AXE_WIDE_COST = 0.35;
-const FAN_COST = 0.08;
-const SCAN_COST = 0.04;
-
 function fail(lesson: string): VerbResult {
   return { ok: false, lesson, effect: 0 };
 }
@@ -90,8 +103,13 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
   const verb = VERBS.find((entry) => entry.id === verbId);
   if (!verb) return fail('未知动作。');
 
-  if (verb.tool && !toolAvailable(ctx.loadout, verb.tool)) {
-    return fail(`${verb.label}需要可用的${verb.tool}。`);
+  if (verb.tool) {
+    if (!toolAvailable(ctx.loadout, verb.tool)) {
+      return fail(`${verb.label}需要可用的${verb.tool}。`);
+    }
+    if (ctx.loadout[verb.tool].charge + 1e-9 < verbCost(verb.id)) {
+      return fail(`${verb.label}余量不足。`);
+    }
   }
 
   switch (verb.id) {
@@ -101,12 +119,12 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
     }
     case 'door-break': {
       if (ctx.room.openings.door.broken) return fail('门已经破了。');
-      if (!spend(ctx, 'axe', AXE_COST)) return fail('斧头不可用。');
+      if (!spend(ctx, 'axe', verbCost(verb.id))) return fail('斧头不可用。');
       const result = breakOpening(ctx.room, 'door');
       return { ok: result.opened, lesson: verb.lesson, effect: result.opened ? 1 : 0 };
     }
     case 'door-cool': {
-      if (!spend(ctx, 'hose', SPRAY_COST)) return fail('水带不可用。');
+      if (!spend(ctx, 'hose', verbCost(verb.id))) return fail('水带不可用。');
       const door = ctx.room.openings.door;
       const beforeTemp = door.temp;
       spray(ctx.room, 'water', door.x, door.y, { radius: 1, amount: 0.2, free: true });
@@ -126,14 +144,14 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
     }
     case 'window-break': {
       if (ctx.room.openings.window.broken) return fail('窗已经破了。');
-      if (!spend(ctx, 'axe', AXE_COST)) return fail('斧头不可用。');
+      if (!spend(ctx, 'axe', verbCost(verb.id))) return fail('斧头不可用。');
       const result = breakOpening(ctx.room, 'window');
       return { ok: result.opened, lesson: verb.lesson, effect: result.opened ? 1 : 0 };
     }
     case 'window-vent': {
       const source = cellAt(ctx.room, ctx.target.x, ctx.target.y);
       if (!source || source.smoke <= 0.01) return fail('这里没有需要排的烟。');
-      if (!spend(ctx, 'fan', FAN_COST)) return fail('排烟机不可用。');
+      if (!spend(ctx, 'fan', verbCost(verb.id))) return fail('排烟机不可用。');
       const moved = ventSmoke(ctx.room, ctx.target.x, ctx.target.y, 0, -1, 0.5);
       return { ok: true, lesson: verb.lesson, effect: moved };
     }
@@ -143,7 +161,7 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
       }
       const wall = cellAt(ctx.room, ctx.target.x, ctx.target.y);
       if (wall.structure <= 0) return fail('墙已经打通了。');
-      if (!spend(ctx, 'axe', AXE_COST)) return fail('斧头不可用。');
+      if (!spend(ctx, 'axe', verbCost(verb.id))) return fail('斧头不可用。');
       const result = breachCell(ctx.room, ctx.target.x, ctx.target.y, 0.25);
       return {
         ok: true,
@@ -158,7 +176,7 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
       }
       const wall = cellAt(ctx.room, ctx.target.x, ctx.target.y);
       if (wall.structure <= 0) return fail('墙已经打通了。');
-      if (!spend(ctx, 'axe', AXE_WIDE_COST)) return fail('斧头不可用。');
+      if (!spend(ctx, 'axe', verbCost(verb.id))) return fail('斧头不可用。');
       const result = breachCell(ctx.room, ctx.target.x, ctx.target.y, 0.4);
       return {
         ok: true,
@@ -170,7 +188,7 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
     case 'wall-cool': {
       const wall = cellAt(ctx.room, ctx.target.x, ctx.target.y);
       if (!wall || wall.heat <= 0.05) return fail('这面墙不需要冷却。');
-      if (!spend(ctx, 'hose', SPRAY_COST)) return fail('水带不可用。');
+      if (!spend(ctx, 'hose', verbCost(verb.id))) return fail('水带不可用。');
       const beforeHeat = wall.heat;
       spray(ctx.room, 'water', ctx.target.x, ctx.target.y, { radius: 1.2, amount: 0.18, free: true });
       return {
@@ -180,7 +198,7 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
       };
     }
     case 'fire-water': {
-      if (!spend(ctx, 'hose', SPRAY_COST)) return fail('水带不可用。');
+      if (!spend(ctx, 'hose', verbCost(verb.id))) return fail('水带不可用。');
       const result = spray(ctx.room, 'water', ctx.target.x, ctx.target.y, {
         radius: 2,
         amount: 0.24,
@@ -189,7 +207,7 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
       return { ok: true, lesson: `${verb.lesson} ${result.lesson}`, effect: result.effect };
     }
     case 'fire-powder': {
-      if (!spend(ctx, 'extinguisher', SPRAY_COST)) return fail('灭火器不可用。');
+      if (!spend(ctx, 'extinguisher', verbCost(verb.id))) return fail('灭火器不可用。');
       const result = spray(ctx.room, 'dryPowder', ctx.target.x, ctx.target.y, {
         radius: 2,
         amount: 0.24,
@@ -226,7 +244,7 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
       return { ok: true, lesson: verb.lesson, effect: before - ctx.actor.exposure.smoke };
     }
     case 'thermal-scan': {
-      if (!spend(ctx, 'thermal', SCAN_COST)) return fail('热像仪不可用。');
+      if (!spend(ctx, 'thermal', verbCost(verb.id))) return fail('热像仪不可用。');
       const scan = thermalScan(ctx.room, ctx.target.x, ctx.target.y, 0, -1);
       return { ok: true, lesson: verb.lesson, effect: scan.heat, scan };
     }

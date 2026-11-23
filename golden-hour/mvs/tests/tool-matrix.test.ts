@@ -33,6 +33,13 @@ describe('多解动词矩阵', () => {
     expect(fire.length).toBeGreaterThanOrEqual(3);
   });
 
+  it('余量低于单次消耗时动词不可用', () => {
+    const loadout = createToolLoadout();
+    loadout.hose.charge = 0.04;
+    const fire = availableVerbs('fire', loadout).map((verb) => verb.id);
+    expect(fire).not.toContain('fire-water');
+  });
+
   it('门：冷却、破拆、开门都改变状态', () => {
     const room = createRoom();
     const loadout = createToolLoadout();

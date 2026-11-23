@@ -44,12 +44,22 @@ export function createToolWheel(
       const tool = loadout[id];
       const pct = Math.round(tool.charge * 100);
       const bad = CARRY_CONDITION_FACTOR[tool.condition] < 1;
-      return `<span class="tool-chip ${bad ? 'bad' : ''}">${TOOL_SPECS[id].label} ${pct}%</span>`;
+      const status =
+        tool.condition === 'ok'
+          ? `${pct}%`
+          : tool.condition === 'empty'
+            ? '空'
+            : tool.condition === 'expired'
+              ? '过期'
+              : tool.condition === 'depressurized'
+                ? '压力不足'
+                : '破损';
+      return `<span class="tool-chip ${bad ? 'bad' : ''}">${TOOL_SPECS[id].label} ${status}</span>`;
     }).join('');
 
     const tabs = OBSTACLES.map(
       (entry) =>
-        `<button data-obstacle="${entry.id}" class="${entry.id === obstacle ? 'active' : ''}">${entry.label}</button>`
+        `<button data-obstacle="${entry.id}" aria-pressed="${entry.id === obstacle}" class="${entry.id === obstacle ? 'active' : ''}">${entry.label}</button>`
     ).join('');
 
     const verbs = availableVerbs(obstacle, loadout)
