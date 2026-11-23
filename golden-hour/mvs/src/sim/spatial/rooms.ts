@@ -65,10 +65,12 @@ function link(
     a,
     b,
     kind,
+    // TODO(B5): 与 RoomState.openings 同步，避免双份真值。
     opening: opening(band),
     time,
     risk,
     blocked: false,
+    // TODO(B5): 由房间布局推导真实锚点，供渲染与移动使用。
     aAnchor: { x: 0, z: 0 },
     bAnchor: { x: 0, z: 0 },
   };
@@ -82,6 +84,7 @@ export function createBuilding(): BuildingGraph {
       id,
       floor,
       bounds: { x, z, w: 6, d: 6 },
+      // TODO(B5): 场景定义应显式布置初始火源，而不是每间房默认起火。
       room: createRoom(),
     };
   };

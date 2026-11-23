@@ -26,4 +26,17 @@ describe('建筑房间图', () => {
     const kinds = new Set(links.map((l) => l.kind));
     expect(kinds.size).toBeGreaterThanOrEqual(3);
   });
+
+  it('链接 id 唯一且两次构建稳定', () => {
+    const a = createBuilding();
+    const b = createBuilding();
+    const ids = a.links.map((l) => l.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(b.links.map((l) => l.id)).toEqual(ids);
+  });
+
+  it('所有连接默认关闭且未破拆', () => {
+    const graph = createBuilding();
+    expect(graph.links.every((l) => !l.opening.open && !l.opening.broken)).toBe(true);
+  });
 });
