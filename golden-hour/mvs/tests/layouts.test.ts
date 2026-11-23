@@ -37,13 +37,13 @@ describe('户型内容', () => {
     }
   });
 
-  it('房间数在 5–12，楼层在 0..2，每间房 8×8 格', () => {
+  it('房间数在 5–13，楼层在 0..2，每间房 8×8 格', () => {
     for (const layout of LAYOUTS) {
       const graph = layout.build();
       const rooms = Object.values(graph.rooms);
 
       expect(rooms.length).toBeGreaterThanOrEqual(5);
-      expect(rooms.length).toBeLessThanOrEqual(12);
+      expect(rooms.length).toBeLessThanOrEqual(13);
 
       for (const node of rooms) {
         expect(node.floor).toBeGreaterThanOrEqual(0);

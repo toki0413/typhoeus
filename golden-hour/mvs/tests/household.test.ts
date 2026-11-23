@@ -42,7 +42,7 @@ describe('多区域人群', () => {
     const zones = classicZones();
     const household = createHousehold(zones, 5);
 
-    expect(Object.keys(household.crowds)).toHaveLength(4);
+    expect(Object.keys(household.crowds)).toHaveLength(5);
     expect(household.activeRoomId).toBe(zones[0].roomId);
     expect(household.events).toEqual([]);
 
@@ -97,7 +97,7 @@ describe('多区域人群', () => {
     expect(householdSummary(household).done).toBe(1);
   });
 
-  it('全部完成：active 归空，统计 8 人全获救', () => {
+  it('全部完成：active 归空，统计 10 人全获救', () => {
     const household = createHousehold(classicZones(), 9);
     const graph = clearBuilding();
 
@@ -105,7 +105,7 @@ describe('多区域人群', () => {
     stepHousehold(household, graph, 0.5);
 
     expect(household.activeRoomId).toBeNull();
-    expect(householdSummary(household)).toEqual({ rescued: 8, lost: 0, total: 8, done: 4 });
+    expect(householdSummary(household)).toEqual({ rescued: 10, lost: 0, total: 10, done: 5 });
   });
 
   it('同种子同推进序列得到完全一致的健康值', () => {

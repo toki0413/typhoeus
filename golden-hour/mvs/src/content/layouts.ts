@@ -152,6 +152,12 @@ const classic: LayoutDefinition = {
       fireClass: 'A',
       residents: zoneResidents('room-204-F1', false),
     }),
+    zone({
+      roomId: 'room-205-F1',
+      label: '205 儿童房',
+      fireClass: 'A',
+      residents: zoneResidents('room-205-F1', false),
+    }),
   ],
   build: () =>
     buildGraph({
@@ -164,6 +170,7 @@ const classic: LayoutDefinition = {
         { id: 'room-201-F1', floor: 1, x: -2, z: 2 },
         { id: 'room-203-F1', floor: 1, x: 10, z: 8 },
         { id: 'room-204-F1', floor: 1, x: 16, z: 8 },
+        { id: 'room-205-F1', floor: 1, x: 4, z: -4 },
         { id: 'escape-F1', floor: 1, x: 10, z: 2 },
         { id: 'roof', floor: 2, x: 10, z: -4 },
       ],
@@ -175,6 +182,7 @@ const classic: LayoutDefinition = {
         { a: 'stair-F1', b: 'room-201-F1', kind: 'door', time: 3, risk: 0.2 },
         { a: 'stair-F1', b: 'room-203-F1', kind: 'door', time: 3, risk: 0.24 },
         { a: 'stair-F1', b: 'room-204-F1', kind: 'door', time: 4, risk: 0.22 },
+        { a: 'stair-F1', b: 'room-205-F1', kind: 'door', time: 4, risk: 0.26 },
         { a: 'room-202-F1', b: 'escape-F1', kind: 'window', time: 2, risk: 0.3 },
         { a: 'escape-F1', b: 'roof', kind: 'ladder', time: 6, risk: 0.35 },
       ],
@@ -213,6 +221,12 @@ const narrow: LayoutDefinition = {
       fireClass: 'A',
       residents: zoneResidents('room-204-F1', false),
     }),
+    zone({
+      roomId: 'room-205-F1',
+      label: '205 儿童房',
+      fireClass: 'A',
+      residents: zoneResidents('room-205-F1', false),
+    }),
   ],
   build: () =>
     buildGraph({
@@ -225,6 +239,7 @@ const narrow: LayoutDefinition = {
         { id: 'room-201-F1', floor: 1, x: -2, z: 2 },
         { id: 'room-203-F1', floor: 1, x: 10, z: 8 },
         { id: 'room-204-F1', floor: 1, x: 16, z: 2 },
+        { id: 'room-205-F1', floor: 1, x: 16, z: 8 },
         { id: 'escape-narrow-F1', floor: 1, x: 10, z: 2 },
       ],
       links: [
@@ -235,6 +250,7 @@ const narrow: LayoutDefinition = {
         { a: 'stair-narrow-F1', b: 'room-201-F1', kind: 'door', time: 3, risk: 0.18 },
         { a: 'stair-narrow-F1', b: 'room-203-F1', kind: 'door', time: 3, risk: 0.24 },
         { a: 'stair-narrow-F1', b: 'room-204-F1', kind: 'door', time: 4, risk: 0.22 },
+        { a: 'stair-narrow-F1', b: 'room-205-F1', kind: 'door', time: 4, risk: 0.26 },
         { a: 'room-202-F1', b: 'escape-narrow-F1', kind: 'window', time: 2, risk: 0.3 },
       ],
     }),
@@ -272,6 +288,12 @@ const courtyard: LayoutDefinition = {
       fireClass: 'A',
       residents: zoneResidents('room-204-F1', false),
     }),
+    zone({
+      roomId: 'room-205-F1',
+      label: '205 儿童房',
+      fireClass: 'A',
+      residents: zoneResidents('room-205-F1', false),
+    }),
   ],
   build: () =>
     buildGraph({
@@ -286,6 +308,7 @@ const courtyard: LayoutDefinition = {
         { id: 'room-201-F1', floor: 1, x: 10, z: -2 },
         { id: 'room-203-F1', floor: 1, x: -2, z: 2 },
         { id: 'room-204-F1', floor: 1, x: 16, z: -2 },
+        { id: 'room-205-F1', floor: 1, x: 16, z: 10 },
         { id: 'balcony-F1', floor: 1, x: 16, z: 4 },
         { id: 'courtyard-roof', floor: 2, x: 16, z: 4 },
       ],
@@ -300,6 +323,7 @@ const courtyard: LayoutDefinition = {
         { a: 'stairB-F1', b: 'room-201-F1', kind: 'door', time: 3, risk: 0.24 },
         { a: 'stairA-F1', b: 'room-203-F1', kind: 'door', time: 3, risk: 0.26 },
         { a: 'stairB-F1', b: 'room-204-F1', kind: 'door', time: 4, risk: 0.22 },
+        { a: 'stairA-F1', b: 'room-205-F1', kind: 'door', time: 4, risk: 0.26 },
         { a: 'room-202-F1', b: 'balcony-F1', kind: 'window', time: 2, risk: 0.3 },
         { a: 'balcony-F1', b: 'courtyard-roof', kind: 'ladder', time: 6, risk: 0.35 },
       ],
@@ -338,6 +362,12 @@ const duplex: LayoutDefinition = {
       fireClass: 'A',
       residents: zoneResidents('room-203-F2', false),
     }),
+    zone({
+      roomId: 'room-205-F2',
+      label: '205-F2 儿童房',
+      fireClass: 'A',
+      residents: zoneResidents('room-205-F2', false),
+    }),
   ],
   build: () =>
     buildGraph({
@@ -348,6 +378,7 @@ const duplex: LayoutDefinition = {
         { id: 'room-202-F1', floor: 1, x: 6, z: 4 },
         { id: 'room-202-F2', floor: 2, x: 6, z: 4 },
         { id: 'room-203-F2', floor: 2, x: -6, z: 4 },
+        { id: 'room-205-F2', floor: 2, x: 0, z: 4 },
         { id: 'garden-F1', floor: 1, x: 12, z: 8 },
         { id: 'balcony-F2', floor: 2, x: 12, z: 4 },
       ],
@@ -357,6 +388,7 @@ const duplex: LayoutDefinition = {
         { a: 'stair-F1', b: 'room-202-F1', kind: 'door', time: 3, risk: 0.2 },
         { a: 'room-202-F1', b: 'room-202-F2', kind: 'stair', time: 6, risk: 0.15 },
         { a: 'room-202-F2', b: 'room-203-F2', kind: 'door', time: 3, risk: 0.18 },
+        { a: 'room-202-F2', b: 'room-205-F2', kind: 'door', time: 3, risk: 0.2 },
         { a: 'room-202-F1', b: 'garden-F1', kind: 'door', time: 3, risk: 0.1 },
         { a: 'garden-F1', b: 'balcony-F2', kind: 'ladder', time: 6, risk: 0.3 },
         { a: 'balcony-F2', b: 'room-202-F2', kind: 'window', time: 2, risk: 0.25 },

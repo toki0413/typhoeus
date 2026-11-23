@@ -7,7 +7,7 @@ import { createDirector, stepDirector } from '../src/sim/events/director';
 import { createHousehold, stepHousehold } from '../src/sim/agents/household';
 
 describe('多区域性能', () => {
-  it('4 区 8 人单步平均低于 2ms', () => {
+  it('5 区 10 人单步平均低于 2ms', () => {
     const layout = LAYOUTS[0];
     const def = createZoneScenario(
       layout.build(),

@@ -2,13 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { LAYOUTS, validateLayout } from '../src/content/layouts';
 
 describe('区域内容', () => {
-  it('每个户型恰好 4 个区域、每区 2 名居民，共 8 人', () => {
+  it('每个户型恰好 5 个区域、每区 2 名居民，共 10 人', () => {
     for (const layout of LAYOUTS) {
-      expect(layout.zones).toHaveLength(4);
+      expect(layout.zones).toHaveLength(5);
       for (const zone of layout.zones) {
         expect(zone.residents).toHaveLength(2);
       }
-      expect(layout.zones.flatMap((zone) => zone.residents)).toHaveLength(8);
+      expect(layout.zones.flatMap((zone) => zone.residents)).toHaveLength(10);
     }
   });
 

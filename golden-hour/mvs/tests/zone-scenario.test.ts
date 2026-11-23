@@ -4,7 +4,7 @@ import { LAYOUTS } from '../src/content/layouts';
 import { createZoneScenario, stepScenario } from '../src/sim/spatial/scene';
 
 describe('多区域场景', () => {
-  it('每个户型生成 4 个区域，起点与目标正确', () => {
+  it('每个户型生成 5 个区域，起点与目标正确', () => {
     for (const layout of LAYOUTS) {
       const def = createZoneScenario(
         layout.build(),
@@ -14,7 +14,7 @@ describe('多区域场景', () => {
         1
       );
 
-      expect(def.zones).toHaveLength(4);
+      expect(def.zones).toHaveLength(5);
       expect(def.startRoom).toBe(layout.entrance);
       expect(def.targetRoom).toBe(layout.zones[0].roomId);
     }

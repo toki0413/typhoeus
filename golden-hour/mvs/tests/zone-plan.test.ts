@@ -21,6 +21,7 @@ describe('区域目标规划', () => {
     const household = setup();
     const [first] = household.zones;
 
+    expect(household.zones).toHaveLength(5);
     expect(zoneStatuses(household)).toEqual(
       Object.fromEntries(
         household.zones.map((zone, index) => [zone.roomId, index === 0 ? 'active' : 'pending'])

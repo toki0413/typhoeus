@@ -2215,24 +2215,24 @@ git commit -m "feat(mvs): deterministic building camera shots"
 
 ### Phase 7 — 多房间多波居民（核心完成）
 
-**已锁定范围：** 4 区域 8 人（初版 3 区 6 人后扩展）、全部居民开局存在（搜索分层，不做定时刷怪）、保持原地救出。
+**已锁定范围：** 5 区域 10 人（初版 3 区 6 人后逐次扩展）、全部居民开局存在（搜索分层，不做定时刷怪）、保持原地救出。
 默认启用，`?zones=single` 回退单区域旧玩法。
 
 **详细计划：** [多房间多波居民内容扩展计划](./2026-11-23-multi-room-rescue.md)
 
 **交付：**
-- `src/content/zones.ts` + `LayoutDefinition.zones`：每户型 4 区域 8 人
+- `src/content/zones.ts` + `LayoutDefinition.zones`：每户型 5 区域 10 人
 - `createZoneScenario`：多区域初始火
 - `src/sim/spatial/ventilation.ts`：沿连接的跨房间烟流
 - `src/sim/agents/household.ts`：多支 Crowd 与区域完成判定
 - `src/app/zonePlan.ts`：区域状态与下一目标
 - 区域条、动态路线目标、区域无线电/复盘标签
-- 存档 v2（多区域 + v1 兼容）、评分总数 8、区域完成原因
+- 存档 v2（多区域 + v1 兼容）、评分总数 10、区域完成原因
 - 多区域性能门禁：1000 步平均 <2ms
 
-**实测：** 最优路径 4 区 8 人全部救出，模拟 74.5 秒；432 项测试、`check`、`verify` 全绿。
+**实测：** 最优路径 5 区 10 人全部救出，模拟 93.5 秒（空呼耗尽）；432 项测试、`check`、`verify` 全绿。
 
-**验收：** 0–8 人结果、区域切换、串烟、存档迁移、完整门禁通过；5–8 分钟真人时长继续微调。
+**验收：** 0–10 人结果、区域切换、串烟、存档迁移、完整门禁通过；5–8 分钟真人时长继续微调。
 
 ---
 
