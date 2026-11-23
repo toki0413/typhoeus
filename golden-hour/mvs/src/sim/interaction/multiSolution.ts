@@ -1,4 +1,4 @@
-import { type RoomState } from '../spatial/fields';
+import { cellAt, inBounds, type RoomState } from '../spatial/fields';
 import { breakOpening, isolate, openOpening, spray } from '../spatial/verbs';
 import { useImprovised } from '../spatial/improvised';
 import { attachOccupant, distance, type OccupantState } from '../spatial/rescue';
@@ -39,6 +39,7 @@ export const VERBS: Verb[] = [
   { id: 'fire-powder', obstacle: 'fire', label: '干粉', tool: 'extinguisher', lesson: '干粉对液体与带电火更安全。' },
   { id: 'fire-smother', obstacle: 'fire', label: '湿棉被覆盖', tool: null, lesson: '没有对应灭火器时，湿棉被可压灭小火。' },
   { id: 'fire-isolate', obstacle: 'fire', label: '关门断氧', tool: null, lesson: '断氧能压火，但烟热会留在室内。' },
+  { id: 'thermal-scan', obstacle: 'fire', label: '热像仪扫描', tool: 'thermal', lesson: '热像仪能隔着门/墙看到热区，先判断再靠近。' },
 
   { id: 'occupant-carry', obstacle: 'occupant', label: '背起', tool: null, lesson: '失去意识的居民只能背，负重会限制路线。' },
   { id: 'occupant-lead', obstacle: 'occupant', label: '引导', tool: null, lesson: '清醒的居民可以引导，不增加负重。' },
@@ -99,6 +100,7 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
       return { ok: result.opened, lesson: verb.lesson, effect: result.opened ? 1 : 0 };
     }
     case 'door-break': {
+      if (ctx.room.openings.door.broken) return fail('门已经破了。');
       if (!spend(ctx, 'axe', AXE_COST)) return fail('斧头不可用。');
       const result = breakOpening(ctx.room, 'door');
       return { ok: result.opened, lesson: verb.lesson, effect: result.opened ? 1 : 0 };
@@ -123,16 +125,24 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
       return { ok: result.opened, lesson: verb.lesson, effect: result.opened ? 1 : 0 };
     }
     case 'window-break': {
+      if (ctx.room.openings.window.broken) return fail('窗已经破了。');
       if (!spend(ctx, 'axe', AXE_COST)) return fail('斧头不可用。');
       const result = breakOpening(ctx.room, 'window');
       return { ok: result.opened, lesson: verb.lesson, effect: result.opened ? 1 : 0 };
     }
     case 'window-vent': {
+      const source = cellAt(ctx.room, ctx.target.x, ctx.target.y);
+      if (!source || source.smoke <= 0.01) return fail('这里没有需要排的烟。');
       if (!spend(ctx, 'fan', FAN_COST)) return fail('排烟机不可用。');
       const moved = ventSmoke(ctx.room, ctx.target.x, ctx.target.y, 0, -1, 0.5);
       return { ok: true, lesson: verb.lesson, effect: moved };
     }
     case 'wall-breach': {
+      if (!inBounds(ctx.room.config, ctx.target.x, ctx.target.y)) {
+        return fail('目标不在房间里。');
+      }
+      const wall = cellAt(ctx.room, ctx.target.x, ctx.target.y);
+      if (wall.structure <= 0) return fail('墙已经打通了。');
       if (!spend(ctx, 'axe', AXE_COST)) return fail('斧头不可用。');
       const result = breachCell(ctx.room, ctx.target.x, ctx.target.y, 0.25);
       return {
@@ -143,6 +153,11 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
       };
     }
     case 'wall-breach-wide': {
+      if (!inBounds(ctx.room.config, ctx.target.x, ctx.target.y)) {
+        return fail('目标不在房间里。');
+      }
+      const wall = cellAt(ctx.room, ctx.target.x, ctx.target.y);
+      if (wall.structure <= 0) return fail('墙已经打通了。');
       if (!spend(ctx, 'axe', AXE_WIDE_COST)) return fail('斧头不可用。');
       const result = breachCell(ctx.room, ctx.target.x, ctx.target.y, 0.4);
       return {
@@ -153,15 +168,15 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
       };
     }
     case 'wall-cool': {
+      const wall = cellAt(ctx.room, ctx.target.x, ctx.target.y);
+      if (!wall || wall.heat <= 0.05) return fail('这面墙不需要冷却。');
       if (!spend(ctx, 'hose', SPRAY_COST)) return fail('水带不可用。');
-      const before = ctx.room.cells[ctx.target.y * ctx.room.config.cols + ctx.target.x];
-      const beforeHeat = before ? before.heat : 0;
+      const beforeHeat = wall.heat;
       spray(ctx.room, 'water', ctx.target.x, ctx.target.y, { radius: 1.2, amount: 0.18, free: true });
-      const after = ctx.room.cells[ctx.target.y * ctx.room.config.cols + ctx.target.x];
       return {
         ok: true,
         lesson: verb.lesson,
-        effect: Math.max(0.01, beforeHeat - (after ? after.heat : 0)),
+        effect: Math.max(0.01, beforeHeat - wall.heat),
       };
     }
     case 'fire-water': {
@@ -184,7 +199,8 @@ export function executeVerb(verbId: string, ctx: VerbContext): VerbResult {
     }
     case 'fire-smother': {
       const result = useImprovised(ctx.room, 'wetBlanket', ctx.target.x, ctx.target.y);
-      return { ok: result.ok, lesson: result.lesson, effect: result.ok ? 1 : 0 };
+      const effect = result.spray?.effect ?? (result.ok ? 0.01 : 0);
+      return { ok: result.ok, lesson: result.lesson, effect };
     }
     case 'fire-isolate': {
       isolate(ctx.room);

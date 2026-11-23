@@ -17,13 +17,14 @@ export function thermalScan(
   dy: number
 ): ThermalScan {
   let best: ThermalScan = { x, y, heat: 0, fuel: 0, throughWall: false };
+  let found = false;
 
   for (let step = 1; step <= 2; step++) {
     const nx = x + dx * step;
     const ny = y + dy * step;
     if (!inBounds(room.config, nx, ny)) break;
     const cell = cellAt(room, nx, ny);
-    if (cell.heat >= best.heat) {
+    if (!found || cell.heat > best.heat) {
       best = {
         x: nx,
         y: ny,
@@ -31,13 +32,14 @@ export function thermalScan(
         fuel: cell.fuel,
         throughWall: step > 1,
       };
+      found = true;
     }
   }
 
   return best;
 }
 
-/** 排烟机：把源格的一部分烟推到相邻格。返回移动量。 */
+/** 排烟机：把源格的一部分烟整体推到相邻格；越界视为排到室外。返回移动量。 */
 export function ventSmoke(
   room: RoomState,
   x: number,
@@ -56,8 +58,9 @@ export function ventSmoke(
   const ty = y + dy;
   if (inBounds(room.config, tx, ty)) {
     const target = cellAt(room, tx, ty);
-    target.smoke = clamp01(target.smoke + moved * 0.8);
+    target.smoke = clamp01(target.smoke + moved);
   }
+  // 越界视为排到室外。
 
   return moved;
 }

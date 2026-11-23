@@ -37,4 +37,11 @@ describe('特殊工具', () => {
     expect(result.ready).toBe(true);
     expect(cell.structure).toBeCloseTo(0.25, 10);
   });
+
+  it('空房间扫描不误报隔墙热点', () => {
+    const room = createRoom();
+    const scan = thermalScan(room, 4, 6, 0, -1);
+    expect(scan.throughWall).toBe(false);
+    expect(scan.heat).toBeLessThanOrEqual(0.05);
+  });
 });

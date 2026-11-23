@@ -294,7 +294,6 @@ export function spray(
 export function isolate(state: RoomState): void {
   for (const id of ['door', 'window'] as const) {
     state.openings[id].open = false;
-    state.openings[id].broken = false;
   }
   state.log.push({ at: state.t, kind: 'vent', detail: '关闭开口，限制供氧' });
   state.lastOpened = null;

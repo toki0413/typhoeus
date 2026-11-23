@@ -148,4 +148,33 @@ describe('多解动词矩阵', () => {
     expect(protect.ok).toBe(true);
     expect(actor3.exposure.smoke).toBeLessThan(0.5);
   });
+
+  it('热像仪扫描是真实动词并消耗电量', () => {
+    const room = createRoom();
+    cellAt(room, 4, 4).heat = 0.8;
+    const loadout = createToolLoadout();
+    const scan = executeVerb('thermal-scan', {
+      room,
+      loadout,
+      target: { x: 4, y: 6 },
+    });
+    expect(scan.ok).toBe(true);
+    expect(scan.scan?.heat).toBeGreaterThan(0.5);
+    expect(loadout.thermal.charge).toBeLessThan(1);
+  });
+
+  it('无效操作不消耗工具', () => {
+    const room = createRoom();
+    room.openings.door.broken = true;
+    const loadout = createToolLoadout();
+    const axeBefore = loadout.axe.charge;
+    expect(executeVerb('door-break', { room, loadout, target: { x: 0, y: 4 } }).ok).toBe(false);
+    expect(loadout.axe.charge).toBe(axeBefore);
+
+    const empty = createRoom();
+    const loadout2 = createToolLoadout();
+    const fanBefore = loadout2.fan.charge;
+    expect(executeVerb('window-vent', { room: empty, loadout: loadout2, target: { x: 7, y: 4 } }).ok).toBe(false);
+    expect(loadout2.fan.charge).toBe(fanBefore);
+  });
 });
