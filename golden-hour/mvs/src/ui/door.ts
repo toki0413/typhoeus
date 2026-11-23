@@ -4,7 +4,7 @@ import { checkDoor, waitDoor, openDoor } from '../sim/door';
 export function createDoorUi(
   root: HTMLElement,
   sim: SimState
-): { update: (s: SimState) => void } {
+): { update: (s: SimState, allow?: boolean) => void } {
   root.innerHTML = `
     <div class="panel-head">
       <span class="panel-title">202 · 入户门</span>
@@ -77,13 +77,14 @@ export function createDoorUi(
   });
 
   return {
-    update(s: SimState) {
+    update(s: SimState, allow = true) {
       if (s.phase === 'plan') {
         prevWaiting = false;
         lastWaitFailed = false;
       }
 
-      const atDoor = s.crew.atDoor && !s.door.opened && s.phase === 'execute';
+      const atDoor =
+        allow && s.crew.atDoor && !s.door.opened && s.phase === 'execute';
       root.style.display = atDoor ? 'block' : 'none';
 
       const checkBtn = root.querySelector<HTMLButtonElement>('[data-act="check"]')!;

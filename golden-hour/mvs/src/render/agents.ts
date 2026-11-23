@@ -346,6 +346,17 @@ function buildCivilian(): Rig {
 const damp = (current: number, target: number, rate: number): number =>
   current + (target - current) * rate;
 
+const clamp = (value: number, lo: number, hi: number): number =>
+  Math.min(hi, Math.max(lo, value));
+
+const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+
+const turnToward = (current: number, target: number, rate: number): number => {
+  const TAU = Math.PI * 2;
+  const delta = (((target - current + Math.PI) % TAU) + TAU) % TAU - Math.PI;
+  return current + delta * Math.min(1, rate);
+};
+
 export function createAgents(scene: THREE.Scene): {
   group: THREE.Group;
   crew: THREE.Object3D;
@@ -354,7 +365,12 @@ export function createAgents(scene: THREE.Scene): {
   usingGLB: () => boolean;
   clipNames: () => string[];
   crewFocus: () => THREE.Vector3;
-  update: (s: SimState) => void;
+  move: (dir: number) => void;
+  nearDoor: () => boolean;
+  mobile: () => boolean;
+  crewX: () => number;
+  speed: () => number;
+  update: (s: SimState, dt?: number) => void;
 } {
   const group = new THREE.Group();
   scene.add(group);
@@ -372,6 +388,15 @@ export function createAgents(scene: THREE.Scene): {
   let modelShadow: THREE.Mesh | null = null;
   let currentClip = '';
   let lastT = 0;
+  let inputDir = 0;
+  let moveVel = 0;
+  let crewX = -6.8;
+  let crewZ = 1.65;
+  let freeUnlocked = false;
+  let orderSeenAt: number | null = null;
+  let gait = 0;
+  let nearDoor = false;
+  let mobile = false;
 
   function playClip(name: string): void {
     if (!model || currentClip === name) return;
@@ -385,6 +410,7 @@ export function createAgents(scene: THREE.Scene): {
     next.setEffectiveWeight(1);
     next.setLoop(name === 'Reach' ? THREE.LoopOnce : THREE.LoopRepeat, name === 'Reach' ? 1 : Infinity);
     next.clampWhenFinished = name === 'Reach';
+    next.timeScale = name === 'Walk' ? 1.25 : 1;
     next.fadeIn(0.18).play();
     currentClip = name;
   }
@@ -413,48 +439,114 @@ export function createAgents(scene: THREE.Scene): {
       const root = model ? model.root : rig.group;
       return focusPoint.set(root.position.x, root.position.y + 1.0, root.position.z);
     },
-    update(s: SimState) {
-      const target = s.crew.order
+    move(dir: number) {
+      inputDir = dir > 0.2 ? 1 : dir < -0.2 ? -1 : 0;
+    },
+    nearDoor: () => nearDoor,
+    mobile: () => mobile,
+    crewX: () => crewX,
+    speed: () => Math.abs(moveVel),
+    update(s: SimState, dtIn?: number) {
+      const dt =
+        dtIn === undefined
+          ? lastT === 0
+            ? 0
+            : Math.min(0.1, Math.max(0, s.t - lastT))
+          : Math.max(0, Math.min(0.1, dtIn));
+      lastT = s.t;
+
+      const targetFloor = s.crew.order
         ? Math.min(s.crew.order.floor, s.smoke.length - 1)
         : s.crew.floor;
-      const moving =
-        Boolean(s.crew.order) && s.t >= s.crew.busyUntil && s.crew.floor < target;
-      const reach = s.crew.atDoor && !s.door.opened;
+      const ordered = Boolean(s.crew.order);
+      if (!ordered) orderSeenAt = null;
+      else if (orderSeenAt === null) orderSeenAt = s.t;
+
+      const climbing = ordered && s.crew.floor < targetFloor;
+      const atDoor = s.crew.atDoor;
       const base = s.crew.floor * FLOOR_H + s.crew.progress * FLOOR_H;
-      const phase = s.t * 8.5;
+      let facing = 0;
+      let walking = false;
+      let bob = 0;
+      let y = base;
+
+      if (atDoor) {
+        mobile = true;
+        if (!freeUnlocked) {
+          freeUnlocked = true;
+          crewX = -10.8;
+          crewZ = 1.65;
+          moveVel = 0;
+        }
+        const targetVel = inputDir * 3.2;
+        moveVel += (targetVel - moveVel) * Math.min(1, dt * 10);
+        crewX = clamp(crewX + moveVel * dt, -11, 5.4);
+        crewZ = 1.65;
+        y = base;
+        if (Math.abs(moveVel) > 0.08) {
+          facing = moveVel > 0 ? Math.PI / 2 : -Math.PI / 2;
+          walking = true;
+        } else if (Math.abs(crewX) < 1.55) {
+          facing = Math.PI;
+        }
+      } else if (climbing) {
+        mobile = false;
+        freeUnlocked = false;
+        const walk = orderSeenAt === null ? 1 : clamp((s.t - orderSeenAt) / 1.4, 0, 1);
+        if (walk < 1) {
+          const e = walk * walk * (3 - 2 * walk);
+          crewX = lerp(-6.8, -11.1, e);
+          crewZ = lerp(1.65, -0.95, e);
+          facing = Math.atan2(-11.1 + 6.8, -0.95 - 1.65);
+          walking = true;
+          y = 0;
+        } else {
+          crewX = -11.15;
+          crewZ = lerp(-1.2, 1.6, s.crew.progress);
+          facing = 0;
+          walking = true;
+          y = base;
+          bob = Math.abs(Math.sin(s.t * 5.6)) * 0.02;
+        }
+      } else {
+        mobile = false;
+        freeUnlocked = false;
+        crewX = -6.8;
+        crewZ = 1.65;
+        moveVel = 0;
+        facing = 0;
+        y = 0;
+      }
+
+      nearDoor = atDoor && Math.abs(crewX) < 1.45;
+      const reach = nearDoor && !s.door.opened && Math.abs(moveVel) < 0.12;
+      gait += dt * (walking ? 9 : 0);
+
       const actorRoot = model ? model.root : rig.group;
       const shadow = modelShadow ?? rig.shadow;
 
       if (model) {
-        if (s.t < lastT) lastT = s.t;
-        const dt = lastT === 0 ? 0 : Math.min(0.1, Math.max(0, s.t - lastT));
-        lastT = s.t;
-        playClip(reach ? 'Reach' : moving ? 'Walk' : 'Idle');
+        playClip(reach ? 'Reach' : walking ? 'Walk' : 'Idle');
         model.mixer.update(dt);
-
-        actorRoot.position.set(
-          damp(actorRoot.position.x, reach ? 0 : -6.8, 0.22),
-          base,
-          1.65
-        );
-        actorRoot.rotation.y = damp(actorRoot.rotation.y, reach ? Math.PI : 0, 0.12);
+        actorRoot.position.set(crewX, y, crewZ);
+        actorRoot.rotation.y = turnToward(actorRoot.rotation.y, facing, dt * 9);
         shadow.position.y = 0.015;
       } else {
-        const stride = moving ? Math.sin(phase) * 0.55 : 0;
+        const stride = walking ? Math.sin(gait) * 0.55 : 0;
         rig.leftHip.rotation.x = damp(rig.leftHip.rotation.x, stride, 0.25);
         rig.rightHip.rotation.x = damp(rig.rightHip.rotation.x, -stride, 0.25);
         rig.leftKnee.rotation.x = damp(
           rig.leftKnee.rotation.x,
-          moving ? Math.max(0, -Math.sin(phase)) * 0.8 : 0,
+          walking ? Math.max(0, -Math.sin(gait)) * 0.8 : 0,
           0.25
         );
         rig.rightKnee.rotation.x = damp(
           rig.rightKnee.rotation.x,
-          moving ? Math.max(0, Math.sin(phase)) * 0.8 : 0,
+          walking ? Math.max(0, Math.sin(gait)) * 0.8 : 0,
           0.25
         );
 
-        const armSwing = moving ? -stride * 0.7 : 0;
+        const armSwing = walking ? -stride * 0.7 : 0;
         rig.leftShoulder.rotation.x = damp(rig.leftShoulder.rotation.x, armSwing, 0.2);
         rig.rightShoulder.rotation.x = damp(
           rig.rightShoulder.rotation.x,
@@ -463,20 +555,11 @@ export function createAgents(scene: THREE.Scene): {
         );
         rig.rightElbow.rotation.x = damp(rig.rightElbow.rotation.x, reach ? -0.2 : 0.08, 0.2);
 
-        const bob = moving ? Math.abs(Math.sin(phase)) * 0.035 : 0;
-        rig.group.position.set(
-          damp(rig.group.position.x, reach ? 0 : -6.8, 0.22),
-          base + bob,
-          1.65
-        );
-        rig.group.rotation.y = damp(
-          rig.group.rotation.y,
-          reach ? Math.PI : 0,
-          0.12
-        );
+        rig.group.position.set(crewX, y + bob, crewZ);
+        rig.group.rotation.y = turnToward(rig.group.rotation.y, facing, dt * 9);
         rig.shadow.position.y = -bob + 0.015;
 
-        rig.torso.rotation.x = damp(rig.torso.rotation.x, moving ? 0.09 : 0.02, 0.15);
+        rig.torso.rotation.x = damp(rig.torso.rotation.x, walking ? 0.09 : 0.02, 0.15);
         rig.torso.scale.y = 1 + Math.sin(s.t * 2.1) * 0.006;
         rig.head.rotation.y = Math.sin(s.t * 0.7) * 0.12;
       }
@@ -486,7 +569,8 @@ export function createAgents(scene: THREE.Scene): {
       if (victimVisible) {
         victim.group.position.y = FLOOR_H + Math.sin(s.t * 1.8) * 0.008;
         victim.torso.rotation.z = Math.sin(s.t * 0.9) * 0.025;
-        victim.head.rotation.x = 0.18 + Math.sin(s.t * 0.8) * 0.03;
+        victim.head.rotation.x =
+          0.18 + Math.sin(s.t * 0.8) * 0.03 + Math.sin(s.t * 5.3) * 0.02;
       }
     },
   };

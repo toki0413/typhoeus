@@ -14,6 +14,7 @@ import { createDoorUi } from './ui/door';
 import { createActions } from './ui/actions';
 import { createIncidentUi } from './ui/incidents';
 import { createRadio } from './ui/radio';
+import { createMoveUi } from './ui/move';
 import { renderDebrief } from './ui/debrief';
 import { createShell } from './ui/shell';
 import { createAudio } from './audio/engine';
@@ -35,6 +36,7 @@ import { SCENARIOS, nextScenario as pickNextScenario } from './content/scenarios
 
 const canvas = document.getElementById('app') as HTMLCanvasElement;
 const hudRoot = document.getElementById('hud')!;
+const moveRoot = document.getElementById('move')!;
 const doorRoot = document.getElementById('door-ui')!;
 const actionsRoot = document.getElementById('actions')!;
 const incidentRoot = document.getElementById('incidents')!;
@@ -101,6 +103,11 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   const spatial = createSpatialAudio(camera);
   const heroCam = createHeroCam({ reducedMotion: () => settings.reducedMotion });
   const agents = createAgents(scene);
+  let keyDir = 0;
+  let padDir = 0;
+  const moveUi = createMoveUi(moveRoot, (dir) => {
+    padDir = dir;
+  });
   const smoke = createSmoke(scene);
   const doorMesh = createDoor(scene);
   const fireGlow = createFireGlow(scene);
@@ -183,6 +190,9 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     heroArmed = false;
     heroAutoRuns = 0;
     heroCam.cancel();
+    keyDir = 0;
+    padDir = 0;
+    agents.move(0);
   }
 
   function retry(): void {
@@ -220,6 +230,9 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     audio.setActive(false);
     heroArmed = false;
     heroCam.cancel();
+    keyDir = 0;
+    padDir = 0;
+    agents.move(0);
     document.body.dataset.run = 'title';
     shell.showTitle();
   }
@@ -245,6 +258,8 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   pauseButton.addEventListener('click', () => setPaused(true));
 
   window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') keyDir = -1;
+    if (e.code === 'KeyD' || e.code === 'ArrowRight') keyDir = 1;
     const onButton = (e.target as HTMLElement | null)?.tagName === 'BUTTON';
     if (e.code === 'Enter' && document.body.dataset.run === 'title' && !onButton) {
       e.preventDefault();
@@ -262,7 +277,14 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   });
 
   window.addEventListener('blur', () => {
+    keyDir = 0;
+    padDir = 0;
     if (sim.phase === 'execute' && !paused) setPaused(true);
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if ((e.code === 'KeyA' || e.code === 'ArrowLeft') && keyDir === -1) keyDir = 0;
+    if ((e.code === 'KeyD' || e.code === 'ArrowRight') && keyDir === 1) keyDir = 0;
   });
 
   const DT = 1 / 20;
