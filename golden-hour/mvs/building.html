@@ -231,6 +231,13 @@
       #log p.danger {
         color: var(--danger);
       }
+      #perf {
+        right: 14px;
+        bottom: 72px;
+        color: var(--muted);
+        font: 11px/1.5 var(--mono);
+        pointer-events: none;
+      }
       #hint {
         right: 14px;
         bottom: 16px;
@@ -482,6 +489,7 @@
       <div class="row"><span>空呼</span><b id="hud-air">--</b></div>
       <div class="row"><span>风</span><b id="hud-wind">--</b></div>
       <div class="row"><span>居民</span><b id="hud-resident">--</b></div>
+      <div class="row"><span>用时</span><b id="hud-time">--</b></div>
       <div class="scene-link"><a href="./">教学关</a> · <a href="./room.html">单房间原型</a> · <a href="./drills.html">演练</a> · <a id="daily-link" href="?daily=1">每日挑战</a></div>
     </section>
 
@@ -500,6 +508,8 @@
     </section>
 
     <section class="panel" id="log" aria-live="polite"></section>
+
+    <section class="panel" id="perf" hidden aria-label="性能指标"></section>
 
     <section class="panel" id="move-pad" aria-label="移动方向键">
       <button data-move="up" aria-label="向上移动">▲</button>

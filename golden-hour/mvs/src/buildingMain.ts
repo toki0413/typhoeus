@@ -67,6 +67,8 @@ const layout =
     : LAYOUTS.find((item) => isUnlocked(progress, layoutIds, item.id)) ?? LAYOUTS[0];
 /** 每日挑战用当天日期（YYYYMMDD）当种子；普通局用 seed 参数，非法则回退 1。 */
 const daily = params.get('daily') === '1';
+/** ?perf=1 时显示帧率与固定步长耗时，便于桌面 60fps 实测。 */
+const perfMode = params.get('perf') === '1';
 const seedParam = Number(params.get('seed'));
 const seed = daily
   ? Number(new Date().toISOString().slice(0, 10).replace(/-/g, ''))
@@ -161,7 +163,9 @@ const out = {
   exposure: document.getElementById('hud-exposure')!,
   air: document.getElementById('hud-air')!,
   resident: document.getElementById('hud-resident')!,
+  time: document.getElementById('hud-time')!,
   wind: document.getElementById('hud-wind')!,
+  perf: document.getElementById('perf')!,
   routes: document.getElementById('routes')!,
   residents: document.getElementById('residents')!,
   tools: document.getElementById('tools')!,
@@ -592,6 +596,7 @@ function updateHud(): void {
   out.exposure.textContent = `${Math.round(exposure * 100)}%`;
   out.wind.textContent = windText();
   out.resident.textContent = `${crowd.rescued} 救出 · ${crowd.lost} 失去 · ${remaining} 待救`;
+  out.time.textContent = `${roomOf(def.targetRoom).t.toFixed(1)}s`;
 }
 
 function checkOutcome(): void {
@@ -836,6 +841,10 @@ function end(title: string, body: string): void {
 }
 
 let last = performance.now();
+/** ?perf=1 的统计窗口：每秒刷新一次 FPS 与固定步长耗时。 */
+let perfFrames = 0;
+let perfElapsed = 0;
+let perfStepMs = 0;
 
 /** 把当前按下的移动键合成 -1/0/1 的方向；没有输入时返回 null。 */
 function moveInput(): { x: number; z: number } | null {
@@ -858,12 +867,14 @@ function frame(now: number): void {
     const moving = input !== null;
     if (input) moveActor(actor, input.x, input.z, dt);
 
+    const stepStart = perfMode ? performance.now() : 0;
     acc += dt;
     while (acc >= FIXED_DT) {
       advanceWorld(FIXED_DT);
       stepActor(actor, roomOf(currentRoom), FIXED_DT, moving);
       acc -= FIXED_DT;
     }
+    if (perfMode) perfStepMs += performance.now() - stepStart;
     checkOutcome();
   }
 
@@ -901,6 +912,19 @@ function frame(now: number): void {
       addLog('结构在响，可能坍塌。', 'danger');
       collapseWarned = true;
     }
+  }
+
+  // 性能面板：只在 ?perf=1 时显示，避免影响正常 HUD。
+  perfFrames += 1;
+  perfElapsed += dt;
+  if (perfMode && perfElapsed >= 1) {
+    out.perf.hidden = false;
+    out.perf.textContent = `FPS ${Math.round(perfFrames / perfElapsed)} · 模拟 ${(
+      perfStepMs / perfFrames
+    ).toFixed(2)} ms/帧`;
+    perfFrames = 0;
+    perfElapsed = 0;
+    perfStepMs = 0;
   }
 
   requestAnimationFrame(frame);
