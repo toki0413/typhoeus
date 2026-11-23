@@ -17,6 +17,13 @@ import { gridToWorld } from './sim/spatial/coords';
 import { createScenarioForBuilding, snapshotScenario, stepScenario } from './sim/spatial/scene';
 import { LAYOUTS, layoutById, layoutFireProfile } from './content/layouts';
 import { buildingToolActions, type BuildingToolAction } from './app/buildingTools';
+import {
+  compareRuns,
+  scoreRun,
+  type RunComparison,
+  type RunResult,
+  type ScoreBreakdown,
+} from './eval/score';
 import { createToolLoadout, type CarryLoadout } from './sim/interaction/tools';
 import { executeVerb } from './sim/interaction/multiSolution';
 import {
@@ -40,15 +47,24 @@ import {
 
 const canvas = document.getElementById('building-canvas') as HTMLCanvasElement;
 const view = createBuildingView(canvas);
+const params = new URLSearchParams(window.location.search);
 /** 从查询串选择户型；未知 id 回退到第一个户型。 */
-const requestedLayout = new URLSearchParams(window.location.search).get('layout') ?? '';
+const requestedLayout = params.get('layout') ?? '';
 const layout = layoutById(requestedLayout) ?? LAYOUTS[0];
+/** 每日挑战用当天日期（YYYYMMDD）当种子；普通局用 seed 参数，非法则回退 1。 */
+const daily = params.get('daily') === '1';
+const seedParam = Number(params.get('seed'));
+const seed = daily
+  ? Number(new Date().toISOString().slice(0, 10).replace(/-/g, ''))
+  : Number.isFinite(seedParam) && seedParam > 0
+    ? Math.floor(seedParam)
+    : 1;
 const def = createScenarioForBuilding(
   layout.build(),
   layout.entrance,
   layout.target,
   'layout-' + layout.id,
-  1,
+  seed,
   layoutFireProfile(layout)
 );
 const actor = createActor();
@@ -72,8 +88,8 @@ function residentAt(
   return resident;
 }
 
-/** 居民 C 初始就躲在远离门侧入口的角落，需玩家靠近搜索才能发现。 */
-const residentC = residentAt('C', 6, 6, 0.22, 0.3);
+/** 居民 C 初始就躲在下侧中段；血线略高，留给“发现 + 走过去”的窗口。 */
+const residentC = residentAt('C', 3, 6, 0.6, 0.3);
 residentC.hidden = true;
 
 const crowd = createCrowd(
@@ -83,7 +99,7 @@ const crowd = createCrowd(
     residentAt('B', 2, 2, 0.45, 0.6),
     residentC,
   ],
-  def.seed
+  seed
 );
 
 let currentRoom = def.startRoom;
@@ -94,7 +110,7 @@ let lastHud = 0;
 let logs: { text: string; kind: 'info' | 'ok' | 'danger' }[] = [];
 
 /** 事件导演：风向、窗户失效与坍塌都由它决定，完全确定性。 */
-const director = createDirector(def.seed);
+const director = createDirector(seed);
 /** 固定风向日程：按模拟时间触发，每条只生效一次。 */
 const WIND_SCHEDULE = [
   { at: 15, x: 1, y: 0, speed: 0.7 },
@@ -123,6 +139,7 @@ const lostIds = new Set<string>();
 const out = {
   room: document.getElementById('hud-room')!,
   target: document.getElementById('hud-target')!,
+  seed: document.getElementById('hud-seed')!,
   stamina: document.getElementById('hud-stamina')!,
   exposure: document.getElementById('hud-exposure')!,
   air: document.getElementById('hud-air')!,
@@ -135,6 +152,7 @@ const out = {
   outcome: document.getElementById('outcome')!,
   outcomeTitle: document.getElementById('outcome-title')!,
   outcomeBody: document.getElementById('outcome-body')!,
+  outcomeScore: document.getElementById('outcome-score')!,
   curve: document.getElementById('outcome-curve')!,
   debrief: document.getElementById('outcome-debrief')!,
 };
@@ -151,6 +169,16 @@ if (layoutSelect) {
     url.searchParams.set('layout', layoutSelect.value);
     window.location.assign(url.toString());
   });
+}
+
+/** 每日挑战入口：带当前户型跳到当天种子，清掉旧查询串。 */
+const dailyLink = document.getElementById('daily-link') as HTMLAnchorElement | null;
+if (dailyLink) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.searchParams.set('daily', '1');
+  url.searchParams.set('layout', layout.id);
+  dailyLink.href = url.toString();
 }
 
 const STATE_TEXT: Record<ResidentVisualState, string> = {
@@ -538,6 +566,7 @@ function updateHud(): void {
   const remaining = crowd.residents.length - crowd.rescued - crowd.lost;
   out.room.textContent = currentRoom;
   out.target.textContent = targetRoom();
+  out.seed.textContent = daily ? `每日 #${seed}` : `种子 ${seed}`;
   out.stamina.textContent = `${Math.round(actor.stamina * 100)}%`;
   out.air.textContent = `${Math.round(actor.air * 100)}%`;
   out.exposure.textContent = `${Math.round(exposure * 100)}%`;
@@ -575,10 +604,87 @@ function renderCurve(): void {
     : '<p class="hint">没有采样到暴露曲线。</p>';
 }
 
+/** 最佳记录按户型 + 种子隔离，避免每日挑战与普通局互相覆盖。 */
+const BEST_KEY = `gh-best:${layout.id}:${seed}`;
+
+/** 汇总本局结果：时间取起点房间时钟，峰值暴露取采样中烟+热的最大值。 */
+function collectRun(): RunResult {
+  let peak = 0;
+  for (const sample of exposureSamples) {
+    peak = Math.max(peak, sample.smoke + sample.heat);
+  }
+  return {
+    rescued: crowd.rescued,
+    lost: crowd.lost,
+    total: crowd.residents.length,
+    seconds: def.building.rooms[def.startRoom].room.t,
+    peakExposure: clamp01(peak),
+    wrongAgent,
+    airLeft: actor.air,
+  };
+}
+
+/** 读取最佳记录；localStorage 不可用或 JSON 损坏时当作没有。 */
+function loadBest(): RunResult | null {
+  try {
+    const raw = window.localStorage.getItem(BEST_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const numericKeys = [
+      'rescued',
+      'lost',
+      'total',
+      'seconds',
+      'peakExposure',
+      'wrongAgent',
+      'airLeft',
+    ];
+    const valid = numericKeys.every(
+      (key) => typeof parsed[key] === 'number' && Number.isFinite(parsed[key] as number)
+    );
+    return valid ? (parsed as unknown as RunResult) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 写入最佳记录；隐私模式或配额不足时静默放弃，不影响结算。 */
+function saveBest(run: RunResult): void {
+  try {
+    window.localStorage.setItem(BEST_KEY, JSON.stringify(run));
+  } catch {
+    // 忽略写入失败。
+  }
+}
+
+/** 渲染星级、分数、原因列表与本次/最佳对比。 */
+function renderScore(breakdown: ScoreBreakdown, comparison: RunComparison | null): void {
+  const stars = '★'.repeat(breakdown.stars) + '☆'.repeat(3 - breakdown.stars);
+  const versus = comparison
+    ? `本次 vs 最佳：救出 ${comparison.rescuedDelta >= 0 ? '+' : ''}${
+        comparison.rescuedDelta
+      } · 用时 ${comparison.timeDelta >= 0 ? '+' : ''}${comparison.timeDelta.toFixed(
+        1
+      )}s · 峰值暴露 ${comparison.exposureDelta >= 0 ? '+' : ''}${comparison.exposureDelta.toFixed(
+        2
+      )}`
+    : '首次记录，已保存为最佳';
+  out.outcomeScore.innerHTML = `<b class="stars">${stars}</b> ${breakdown.score} 分<div class="reasons">${breakdown.reasons.join(
+    ' · '
+  )}</div><div class="versus">${versus}</div>`;
+}
+
 function end(title: string, body: string): void {
   ended = true;
   out.outcomeTitle.textContent = title;
   out.outcomeBody.textContent = body;
+  const run = collectRun();
+  const breakdown = scoreRun(run);
+  const previous = loadBest();
+  const comparison = previous ? compareRuns(run, previous) : null;
+  // 首次记录或刷新最佳时才写回，避免覆盖更优成绩。
+  if (!previous || comparison?.better) saveBest(run);
+  renderScore(breakdown, comparison);
   renderCurve();
   // 取最近 6 条动作，逐条给出前后场差异与中文因果解释。
   const debrief = buildDebrief(actions).slice(-6);

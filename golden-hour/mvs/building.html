@@ -374,6 +374,16 @@
         color: var(--muted);
         font: 11px/1.5 var(--sans);
       }
+      #outcome-score {
+        text-align: left;
+        font: 12px/1.7 var(--mono);
+        color: var(--muted);
+        margin: 0 0 14px;
+      }
+      #outcome-score .stars {
+        color: var(--accent);
+        letter-spacing: 0.2em;
+      }
       #outcome-curve svg {
         width: 100%;
         height: auto;
@@ -452,6 +462,7 @@
     <section class="panel" id="meters">
       <h1>建筑进入 · 火场</h1>
       <div class="row"><span>户型</span><b><select id="layout-select" aria-label="选择户型"></select></b></div>
+      <div class="row"><span>种子</span><b id="hud-seed">--</b></div>
       <div class="row"><span>所在</span><b id="hud-room" class="accent">--</b></div>
       <div class="row"><span>目标</span><b id="hud-target">--</b></div>
       <div class="row"><span>体力</span><b id="hud-stamina">--</b></div>
@@ -459,7 +470,7 @@
       <div class="row"><span>空呼</span><b id="hud-air">--</b></div>
       <div class="row"><span>风</span><b id="hud-wind">--</b></div>
       <div class="row"><span>居民</span><b id="hud-resident">--</b></div>
-      <div class="scene-link"><a href="./">教学关</a> · <a href="./room.html">单房间原型</a> · <a href="./drills.html">演练</a></div>
+      <div class="scene-link"><a href="./">教学关</a> · <a href="./room.html">单房间原型</a> · <a href="./drills.html">演练</a> · <a id="daily-link" href="?daily=1">每日挑战</a></div>
     </section>
 
     <section class="panel" id="routes-panel">
@@ -493,6 +504,7 @@
       <div class="card">
         <h2 id="outcome-title"></h2>
         <p id="outcome-body"></p>
+        <div id="outcome-score"></div>
         <div id="outcome-curve"></div>
         <ul id="outcome-debrief" class="debrief"></ul>
         <button id="outcome-reset">再来一次</button>

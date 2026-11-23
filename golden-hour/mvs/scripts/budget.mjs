@@ -45,6 +45,8 @@ export const ENTRY_BUDGETS = {
   rng: 4 * 1024,
   // Phase 5 共享 chunk：多入口复用的固定步长场更新。
   spread: 8 * 1024,
+  // Phase 6 共享 chunk：工具动作矩阵（单房间与建筑入口复用）。
+  multiSolution: 20 * 1024,
   'three.module': 170 * 1024,
 };
 
