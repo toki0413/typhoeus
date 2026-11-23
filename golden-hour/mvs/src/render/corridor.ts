@@ -99,7 +99,10 @@ function merged(group: THREE.Group, parts: THREE.BufferGeometry[], material: THR
   group.add(mesh);
 }
 
-export function createCorridorDetails(scene: THREE.Scene): { group: THREE.Group } {
+export function createCorridorDetails(scene: THREE.Scene): {
+  group: THREE.Group;
+  setCollapsed: (collapsed: boolean) => void;
+} {
   const group = new THREE.Group();
   const concreteParts: THREE.BufferGeometry[] = [];
   const woodParts: THREE.BufferGeometry[] = [];
@@ -146,6 +149,13 @@ export function createCorridorDetails(scene: THREE.Scene): { group: THREE.Group 
     if (notice) {
       notice.position.set(-11, base + 2.6, 1.3);
       group.add(notice);
+    }
+
+    // 右侧消防梯标识
+    const fire = textPlane('消防梯', 0.8, 0.3, '#c9a227', '#1c1c1c');
+    if (fire) {
+      fire.position.set(10.5, base + 2.5, 1.34);
+      group.add(fire);
     }
 
     // 楼道堆物：纸箱
@@ -262,6 +272,32 @@ export function createCorridorDetails(scene: THREE.Scene): { group: THREE.Group 
     group.add(exit);
   }
 
+  // 右侧外挂消防梯：贯通两层，给“第二条下楼路线”一个实体
+  for (const dx of [-0.32, 0.32]) {
+    metalParts.push(box(0.05, FLOOR_H * 2 + 0.4, 0.05, 10.5 + dx, FLOOR_H + 0.2, 1.12));
+  }
+  for (let y = 0.3; y < FLOOR_H * 2; y += 0.38) {
+    metalParts.push(box(0.64, 0.035, 0.035, 10.5, y, 1.12));
+  }
+  metalParts.push(box(0.9, 0.08, 0.5, 10.5, 0.02, 1.12));
+  metalParts.push(box(0.9, 0.08, 0.5, 10.5, FLOOR_H + 0.02, 1.12));
+
+  // 主楼梯坍塌后的堆物，默认隐藏
+  const debrisParts: THREE.BufferGeometry[] = [
+    box(1.4, 0.35, 1.1, -11.6, FLOOR_H + 0.18, -0.5),
+    box(0.9, 0.5, 0.8, -11.2, FLOOR_H + 0.25, -1.1),
+    box(0.7, 0.3, 0.7, -11.9, FLOOR_H + 0.15, -1.4),
+  ];
+  const debrisGeometry = mergeGeometries(debrisParts, false);
+  const debris = new THREE.Mesh(
+    debrisGeometry ?? new THREE.BufferGeometry(),
+    new THREE.MeshStandardMaterial({ color: 0x555b62, roughness: 1 })
+  );
+  debris.visible = false;
+  debris.castShadow = true;
+  debris.receiveShadow = true;
+  group.add(debris);
+
   const wallMap = concreteTexture();
   const woodMap = woodTexture();
   const metalMap = metalTexture();
@@ -332,5 +368,10 @@ export function createCorridorDetails(scene: THREE.Scene): { group: THREE.Group 
   }
 
   scene.add(group);
-  return { group };
+  return {
+    group,
+    setCollapsed: (collapsed: boolean) => {
+      debris.visible = collapsed;
+    },
+  };
 }

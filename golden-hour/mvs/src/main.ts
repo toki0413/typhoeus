@@ -32,6 +32,7 @@ import {
   type TrainingRecord,
 } from './app/records';
 import { beginRun, advance, restart } from './app/session';
+import { completeExtraction } from './sim/crew';
 import { SCENARIOS, nextScenario as pickNextScenario } from './content/scenarios';
 
 const canvas = document.getElementById('app') as HTMLCanvasElement;
@@ -103,15 +104,21 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   const spatial = createSpatialAudio(camera);
   const heroCam = createHeroCam({ reducedMotion: () => settings.reducedMotion });
   const agents = createAgents(scene);
-  let keyDir = 0;
-  let padDir = 0;
-  const moveUi = createMoveUi(moveRoot, (dir) => {
-    padDir = dir;
+  let keyX = 0;
+  let keyZ = 0;
+  let padX = 0;
+  let padZ = 0;
+  const moveUi = createMoveUi(moveRoot, {
+    onMove: (x, z) => {
+      padX = x;
+      padZ = z;
+    },
+    onAction: () => agents.performAction(sim),
   });
   const smoke = createSmoke(scene);
   const doorMesh = createDoor(scene);
   const fireGlow = createFireGlow(scene);
-  createCorridorDetails(scene);
+  const corridor = createCorridorDetails(scene);
   const hud = createHud(hudRoot);
   const doorUi = createDoorUi(doorRoot, sim);
   const actions = createActions(actionsRoot, sim);
@@ -132,6 +139,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
           autoRuns: () => number;
           start: () => void;
         };
+        finishRun: () => void;
       };
     };
     debugWindow.__gh = {
@@ -146,6 +154,7 @@ function createApp(kit: ReturnType<typeof createScene>): App {
         autoRuns: () => heroAutoRuns,
         start: () => heroCam.trigger(agents.crewFocus()),
       },
+      finishRun: () => completeExtraction(sim),
     };
   }
 
@@ -190,9 +199,12 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     heroArmed = false;
     heroAutoRuns = 0;
     heroCam.cancel();
-    keyDir = 0;
-    padDir = 0;
-    agents.move(0);
+    keyX = 0;
+    keyZ = 0;
+    padX = 0;
+    padZ = 0;
+    agents.move(0, 0);
+    agents.reset();
   }
 
   function retry(): void {
@@ -230,9 +242,12 @@ function createApp(kit: ReturnType<typeof createScene>): App {
     audio.setActive(false);
     heroArmed = false;
     heroCam.cancel();
-    keyDir = 0;
-    padDir = 0;
-    agents.move(0);
+    keyX = 0;
+    keyZ = 0;
+    padX = 0;
+    padZ = 0;
+    agents.move(0, 0);
+    agents.reset();
     document.body.dataset.run = 'title';
     shell.showTitle();
   }
@@ -258,8 +273,23 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   pauseButton.addEventListener('click', () => setPaused(true));
 
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyA' || e.code === 'ArrowLeft') keyDir = -1;
-    if (e.code === 'KeyD' || e.code === 'ArrowRight') keyDir = 1;
+    const moveKey =
+      e.code === 'KeyA' ||
+      e.code === 'KeyD' ||
+      e.code === 'KeyW' ||
+      e.code === 'KeyS' ||
+      e.code === 'ArrowLeft' ||
+      e.code === 'ArrowRight' ||
+      e.code === 'ArrowUp' ||
+      e.code === 'ArrowDown';
+    if (moveKey && sim.phase === 'execute' && !paused) e.preventDefault();
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') keyX = -1;
+    if (e.code === 'KeyD' || e.code === 'ArrowRight') keyX = 1;
+    if (e.code === 'KeyW' || e.code === 'ArrowUp') keyZ = -1;
+    if (e.code === 'KeyS' || e.code === 'ArrowDown') keyZ = 1;
+    if (e.code === 'KeyE' && sim.phase === 'execute' && !paused) {
+      agents.performAction(sim);
+    }
     const onButton = (e.target as HTMLElement | null)?.tagName === 'BUTTON';
     if (e.code === 'Enter' && document.body.dataset.run === 'title' && !onButton) {
       e.preventDefault();
@@ -277,14 +307,18 @@ function createApp(kit: ReturnType<typeof createScene>): App {
   });
 
   window.addEventListener('blur', () => {
-    keyDir = 0;
-    padDir = 0;
+    keyX = 0;
+    keyZ = 0;
+    padX = 0;
+    padZ = 0;
     if (sim.phase === 'execute' && !paused) setPaused(true);
   });
 
   window.addEventListener('keyup', (e) => {
-    if ((e.code === 'KeyA' || e.code === 'ArrowLeft') && keyDir === -1) keyDir = 0;
-    if ((e.code === 'KeyD' || e.code === 'ArrowRight') && keyDir === 1) keyDir = 0;
+    if ((e.code === 'KeyA' || e.code === 'ArrowLeft') && keyX === -1) keyX = 0;
+    if ((e.code === 'KeyD' || e.code === 'ArrowRight') && keyX === 1) keyX = 0;
+    if ((e.code === 'KeyW' || e.code === 'ArrowUp') && keyZ === -1) keyZ = 0;
+    if ((e.code === 'KeyS' || e.code === 'ArrowDown') && keyZ === 1) keyZ = 0;
   });
 
   const DT = 1 / 20;
@@ -330,8 +364,12 @@ function createApp(kit: ReturnType<typeof createScene>): App {
       });
     }
 
-    agents.move(paused ? 0 : keyDir || padDir);
+    agents.move(
+      paused ? 0 : keyX || padX,
+      paused ? 0 : keyZ || padZ
+    );
     agents.update(sim, Math.min(raw, 0.25));
+    corridor.setCollapsed(sim.stairs.collapsed);
 
     // 玩家把班组走到门口并停稳后，才推近英雄镜头。
     if (running && agents.nearDoor() && agents.speed() < 0.12 && !sim.door.opened && !heroArmed) {
@@ -349,14 +387,25 @@ function createApp(kit: ReturnType<typeof createScene>): App {
       document.body.dataset.hero = heroOn ? 'on' : 'off';
     }
 
-    moveUi.update(
-      !paused &&
-        sim.phase === 'execute' &&
-        sim.crew.atDoor &&
-        !sim.door.opened &&
-        !agents.nearDoor(),
-      Math.abs(agents.crewX())
-    );
+    const contextual = agents.action();
+    const floorNow = agents.floor();
+    const baseHint = agents.carrying()
+      ? '将被困者带到出口'
+      : floorNow === 1
+        ? '前往 202 门口'
+        : '上楼搜救';
+    const distance = agents.carrying()
+      ? Math.max(0, 9.4 - agents.crewX())
+      : floorNow === 1
+        ? Math.abs(agents.crewX())
+        : Math.min(Math.abs(agents.crewX() + 11), Math.abs(agents.crewX() - 10.5));
+    moveUi.update({
+      visible: !paused && sim.phase === 'execute' && !debriefShown,
+      hint: contextual?.kind === 'blocked' ? contextual.label : baseHint,
+      distance,
+      action:
+        contextual && contextual.kind !== 'blocked' ? contextual.label : null,
+    });
 
     smoke.update(sim);
     doorMesh.update(sim);

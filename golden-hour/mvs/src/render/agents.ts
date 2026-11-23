@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { SimState } from '../sim/types';
+import { completeExtraction, setCrewFloor, withdraw } from '../sim/crew';
 import { FLOOR_H } from './constants';
 import type { CrewModel } from './glbCrew';
 
@@ -249,7 +250,6 @@ function buildFirefighter(): Rig {
       object.receiveShadow = true;
     }
   });
-
   return {
     group,
     torso,
@@ -365,11 +365,17 @@ export function createAgents(scene: THREE.Scene): {
   usingGLB: () => boolean;
   clipNames: () => string[];
   crewFocus: () => THREE.Vector3;
-  move: (dir: number) => void;
+  move: (x: number, z: number) => void;
   nearDoor: () => boolean;
   mobile: () => boolean;
   crewX: () => number;
   speed: () => number;
+  floor: () => number;
+  carrying: () => boolean;
+  action: () => { kind: string; label: string } | null;
+  performAction: (s: SimState) => void;
+  snap: (s: SimState, x: number, z: number, floor: number) => void;
+  reset: () => void;
   update: (s: SimState, dt?: number) => void;
 } {
   const group = new THREE.Group();
@@ -378,7 +384,7 @@ export function createAgents(scene: THREE.Scene): {
 
   const crew = buildFirefighter();
   const victim = buildCivilian();
-  crew.group.position.set(-6.8, 0, 1.65);
+  crew.group.position.set(6.5, 0, 1.65);
   victim.group.position.set(0.9, FLOOR_H, 0.1);
   victim.group.rotation.y = -0.3;
   group.add(crew.group, victim.group);
@@ -388,15 +394,63 @@ export function createAgents(scene: THREE.Scene): {
   let modelShadow: THREE.Mesh | null = null;
   let currentClip = '';
   let lastT = 0;
-  let inputDir = 0;
-  let moveVel = 0;
-  let crewX = -6.8;
-  let crewZ = 1.65;
-  let freeUnlocked = false;
-  let orderSeenAt: number | null = null;
-  let gait = 0;
+  const START = { x: 6.5, z: 1.65 };
+  const WALK_SPEED = 3.4;
+  const CARRY_SPEED = 2.05;
+  const CLIMB_TIME = 1.2;
+  const VICTIM_X = 0.9;
+  const VICTIM_Z = 0.1;
+  const STAIRS_MAIN = -11.0;
+  const FIRE_ESCAPE = 10.5;
+  const EXIT_X = 9.4;
+
+  let px = START.x;
+  let pz = START.z;
+  let vx = 0;
+  let vz = 0;
+  let inputX = 0;
+  let inputZ = 0;
+  let floor = 0;
+  let mode: 'free' | 'climb' = 'free';
+  let climbT = 0;
+  let climbFrom = 0;
+  let climbTo = 0;
+  let carrying = false;
+  let victimAttached = false;
   let nearDoor = false;
   let mobile = false;
+  let currentAction: { kind: string; label: string } | null = null;
+  let gait = 0;
+
+  function actorRoot(): THREE.Object3D {
+    return model ? model.root : rig.group;
+  }
+
+  function attachVictim(): void {
+    if (victimAttached) return;
+    actorRoot().add(victim.group);
+    victim.group.position.set(0, 1.02, 0.02);
+    victim.group.rotation.set(Math.PI / 2, 0, 0.18);
+    victimAttached = true;
+  }
+
+  function detachVictim(): void {
+    if (!victimAttached) return;
+    group.add(victim.group);
+    victim.group.position.set(VICTIM_X, FLOOR_H, VICTIM_Z);
+    victim.group.rotation.set(0, -0.3, 0);
+    victimAttached = false;
+  }
+
+  function startClimb(to: number): void {
+    if (mode === 'climb') return;
+    mode = 'climb';
+    climbFrom = floor;
+    climbTo = to;
+    climbT = 0;
+    vx = 0;
+    vz = 0;
+  }
 
   function playClip(name: string): void {
     if (!model || currentClip === name) return;
@@ -421,12 +475,13 @@ export function createAgents(scene: THREE.Scene): {
     crew.group.visible = false;
     modelShadow = shadowMesh(0.4);
     loaded.root.add(modelShadow);
-    loaded.root.position.set(-6.8, 0, 1.65);
+    loaded.root.position.set(6.5, 0, 1.65);
     group.add(loaded.root);
     model = loaded;
     lastT = 0;
     playClip('Idle');
   }
+
 
   return {
     group,
@@ -436,16 +491,64 @@ export function createAgents(scene: THREE.Scene): {
     usingGLB: () => Boolean(model),
     clipNames: () => model?.clipNames ?? [],
     crewFocus: () => {
-      const root = model ? model.root : rig.group;
+      const root = actorRoot();
       return focusPoint.set(root.position.x, root.position.y + 1.0, root.position.z);
     },
-    move(dir: number) {
-      inputDir = dir > 0.2 ? 1 : dir < -0.2 ? -1 : 0;
+    move(x: number, z: number) {
+      inputX = Math.abs(x) > 0.2 ? Math.sign(x) : 0;
+      inputZ = Math.abs(z) > 0.2 ? Math.sign(z) : 0;
     },
     nearDoor: () => nearDoor,
     mobile: () => mobile,
-    crewX: () => crewX,
-    speed: () => Math.abs(moveVel),
+    crewX: () => px,
+    speed: () => Math.hypot(vx, vz),
+    floor: () => floor,
+    carrying: () => carrying,
+    action: () => currentAction,
+    performAction(s: SimState) {
+      const a = currentAction;
+      if (!a || mode !== 'free') return;
+      if (a.kind === 'up' && floor === 0) startClimb(1);
+      else if (a.kind === 'down' && floor === 1) startClimb(0);
+      else if (a.kind === 'carry') {
+        if (s.victim.alive && !carrying) {
+          carrying = true;
+          attachVictim();
+        }
+      } else if (a.kind === 'exit') {
+        if (carrying && s.victim.alive) completeExtraction(s);
+        else withdraw(s);
+        currentAction = null;
+      }
+    },
+    snap(s: SimState, x: number, z: number, nextFloor: number) {
+      floor = nextFloor;
+      px = x;
+      pz = z;
+      vx = 0;
+      vz = 0;
+      mode = 'free';
+      setCrewFloor(s, floor);
+      const root = actorRoot();
+      root.position.set(px, floor * FLOOR_H, pz);
+      currentAction = null;
+    },
+    reset() {
+      detachVictim();
+      carrying = false;
+      floor = 0;
+      px = START.x;
+      pz = START.z;
+      vx = 0;
+      vz = 0;
+      inputX = 0;
+      inputZ = 0;
+      mode = 'free';
+      currentAction = null;
+      const root = actorRoot();
+      root.position.set(px, 0, pz);
+      root.rotation.y = 0;
+    },
     update(s: SimState, dtIn?: number) {
       const dt =
         dtIn === undefined
@@ -455,84 +558,96 @@ export function createAgents(scene: THREE.Scene): {
           : Math.max(0, Math.min(0.25, dtIn));
       lastT = s.t;
 
-      const targetFloor = s.crew.order
-        ? Math.min(s.crew.order.floor, s.smoke.length - 1)
-        : s.crew.floor;
-      const ordered = Boolean(s.crew.order);
-      if (!ordered) orderSeenAt = null;
-      else if (orderSeenAt === null) orderSeenAt = s.t;
-
-      const climbing = ordered && s.crew.floor < targetFloor;
-      const atDoor = s.crew.atDoor;
-      const base = s.crew.floor * FLOOR_H + s.crew.progress * FLOOR_H;
-      let facing = 0;
       let walking = false;
-      let bob = 0;
-      let y = base;
+      const root = actorRoot();
+      let facing = root.rotation.y;
+      let y = floor * FLOOR_H;
 
-      if (atDoor) {
-        mobile = true;
-        if (!freeUnlocked) {
-          freeUnlocked = true;
-          crewX = -10.8;
-          crewZ = 1.65;
-          moveVel = 0;
-        }
-        const targetVel = inputDir * 3.2;
-        moveVel += (targetVel - moveVel) * Math.min(1, dt * 10);
-        crewX = clamp(crewX + moveVel * dt, -11, 5.4);
-        crewZ = 1.65;
-        y = base;
-        if (Math.abs(moveVel) > 0.08) {
-          facing = moveVel > 0 ? Math.PI / 2 : -Math.PI / 2;
-          walking = true;
-        } else if (Math.abs(crewX) < 1.55) {
-          facing = Math.PI;
-        }
-      } else if (climbing) {
+      if (mode === 'climb') {
         mobile = false;
-        freeUnlocked = false;
-        const walk = orderSeenAt === null ? 1 : clamp((s.t - orderSeenAt) / 1.4, 0, 1);
-        if (walk < 1) {
-          const e = walk * walk * (3 - 2 * walk);
-          crewX = lerp(-6.8, -11.1, e);
-          crewZ = lerp(1.65, -0.95, e);
-          facing = Math.atan2(-11.1 + 6.8, -0.95 - 1.65);
-          walking = true;
-          y = 0;
-        } else {
-          crewX = -11.15;
-          crewZ = lerp(-1.2, 1.6, s.crew.progress);
-          facing = 0;
-          walking = true;
-          y = base;
-          bob = Math.abs(Math.sin(s.t * 5.6)) * 0.02;
+        climbT += dt;
+        const k = clamp(climbT / CLIMB_TIME, 0, 1);
+        const e = k * k * (3 - 2 * k);
+        y = lerp(climbFrom * FLOOR_H, climbTo * FLOOR_H, e);
+        walking = true;
+        facing = 0;
+        if (k >= 1) {
+          floor = climbTo;
+          mode = 'free';
+          y = floor * FLOOR_H;
+          setCrewFloor(s, floor);
         }
       } else {
-        mobile = false;
-        freeUnlocked = false;
-        crewX = -6.8;
-        crewZ = 1.65;
-        moveVel = 0;
-        facing = 0;
-        y = 0;
+        mobile = s.phase === 'execute';
+        const busy = s.t < s.crew.busyUntil;
+        const smoke = s.smoke[Math.min(floor, s.smoke.length - 1)] ?? 0;
+        const speed = (carrying ? CARRY_SPEED : WALK_SPEED) * (1 - 0.35 * smoke);
+        const ix = busy ? 0 : inputX;
+        const iz = busy ? 0 : inputZ;
+        const length = Math.hypot(ix, iz) || 1;
+        vx += ((ix / length) * speed - vx) * Math.min(1, dt * 12);
+        vz += ((iz / length) * speed - vz) * Math.min(1, dt * 12);
+        px += vx * dt;
+        pz += vz * dt;
+
+        const canEnter = s.door.opened && Math.abs(px) < 1.12;
+        pz = clamp(pz, canEnter ? -2.0 : 1.28, 2.05);
+        if (pz < 1.26) px = clamp(px, -1.12, 1.12);
+        px = clamp(px, -12.0, 12.0);
+
+        const speedNow = Math.hypot(vx, vz);
+        walking = speedNow > 0.12;
+        if (walking) facing = Math.atan2(vx, vz);
+        else if (floor === 1 && Math.abs(px) < 1.55 && pz > 1.2) facing = Math.PI;
+        y = floor * FLOOR_H;
       }
 
-      nearDoor = atDoor && Math.abs(crewX) < 1.45;
-      const reach = nearDoor && !s.door.opened && Math.abs(moveVel) < 0.12;
-      gait += dt * (walking ? 9 : 0);
+      nearDoor = mode === 'free' && floor === 1 && Math.abs(px) < 1.45 && pz > 1.1;
+      const reach = nearDoor && !s.door.opened && Math.hypot(vx, vz) < 0.12;
 
-      const actorRoot = model ? model.root : rig.group;
-      const shadow = modelShadow ?? rig.shadow;
+      let next: { kind: string; label: string } | null = null;
+      if (mode === 'free') {
+        const atMain = Math.abs(px - STAIRS_MAIN) < 1.15 && pz > 1.18;
+        const atFire = Math.abs(px - FIRE_ESCAPE) < 1.05 && pz > 1.18;
+        const nearVictim =
+          floor === 1 &&
+          s.victim.alive &&
+          !carrying &&
+          Math.hypot(px - VICTIM_X, pz - VICTIM_Z) < 0.95;
+
+        if (carrying && floor === 0 && px > EXIT_X && pz > 1.18) {
+          next = { kind: 'exit', label: '将被困者撤出火场' };
+        } else if (nearVictim) {
+          next = { kind: 'carry', label: '背起被困者' };
+        } else if (floor === 0 && atMain) {
+          next = s.stairs.collapsed
+            ? { kind: 'blocked', label: '主楼梯坍塌，走消防梯' }
+            : { kind: 'up', label: '沿主楼梯上二层' };
+        } else if (floor === 0 && atFire) {
+          next = { kind: 'up', label: '沿消防梯上二层' };
+        } else if (floor === 1 && atMain) {
+          next = s.stairs.collapsed
+            ? { kind: 'blocked', label: '主楼梯坍塌，走消防梯' }
+            : { kind: 'down', label: '沿主楼梯下一层' };
+        } else if (floor === 1 && atFire) {
+          next = { kind: 'down', label: '沿消防梯下一层' };
+        } else if (floor === 0 && px > EXIT_X && pz > 1.18 && s.door.opened) {
+          next = { kind: 'exit', label: '撤出火场' };
+        }
+      }
+      currentAction = next;
+
+      playClip(reach ? 'Reach' : walking ? 'Walk' : 'Idle');
+      if (model) model.mixer.update(dt);
+      root.position.set(px, y, pz);
+      root.rotation.y = turnToward(root.rotation.y, facing, dt * 10);
 
       if (model) {
-        playClip(reach ? 'Reach' : walking ? 'Walk' : 'Idle');
-        model.mixer.update(dt);
-        actorRoot.position.set(crewX, y, crewZ);
-        actorRoot.rotation.y = turnToward(actorRoot.rotation.y, facing, dt * 9);
-        shadow.position.y = 0.015;
+        if (modelShadow) modelShadow.position.y = 0.015;
       } else {
+        gait += dt * (walking ? 9 : 0);
         const stride = walking ? Math.sin(gait) * 0.55 : 0;
+        const bob = walking ? Math.abs(Math.sin(gait)) * 0.03 : 0;
         rig.leftHip.rotation.x = damp(rig.leftHip.rotation.x, stride, 0.25);
         rig.rightHip.rotation.x = damp(rig.rightHip.rotation.x, -stride, 0.25);
         rig.leftKnee.rotation.x = damp(
@@ -555,8 +670,8 @@ export function createAgents(scene: THREE.Scene): {
         );
         rig.rightElbow.rotation.x = damp(rig.rightElbow.rotation.x, reach ? -0.2 : 0.08, 0.2);
 
-        rig.group.position.set(crewX, y + bob, crewZ);
-        rig.group.rotation.y = turnToward(rig.group.rotation.y, facing, dt * 9);
+        rig.group.position.set(px, y + bob, pz);
+        rig.group.rotation.y = turnToward(rig.group.rotation.y, facing, dt * 10);
         rig.shadow.position.y = -bob + 0.015;
 
         rig.torso.rotation.x = damp(rig.torso.rotation.x, walking ? 0.09 : 0.02, 0.15);
@@ -564,9 +679,10 @@ export function createAgents(scene: THREE.Scene): {
         rig.head.rotation.y = Math.sin(s.t * 0.7) * 0.12;
       }
 
-      const victimVisible = s.victim.alive && !s.victim.rescued;
-      victim.group.visible = victimVisible;
-      if (victimVisible) {
+      if (!s.victim.alive) {
+        victim.group.visible = false;
+      } else if (!victimAttached) {
+        victim.group.visible = true;
         victim.group.position.y = FLOOR_H + Math.sin(s.t * 1.8) * 0.008;
         victim.torso.rotation.z = Math.sin(s.t * 0.9) * 0.025;
         victim.head.rotation.x =

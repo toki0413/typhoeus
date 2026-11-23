@@ -70,9 +70,11 @@ export interface SimState {
     atDoor: boolean;
     injured: boolean;
     busyUntil: number;
+    /** 玩家接管后，位置与楼层由渲染/输入层驱动。 */
+    manual: boolean;
   };
   door: DoorState;
-  victim: { alive: boolean; rescued: boolean };
+  victim: { alive: boolean; rescued: boolean; extracted: boolean };
   neighbor: {
     alive: boolean;
     saved: boolean;

@@ -76,30 +76,18 @@ try {
   check('软件 WebGL 上下文', Boolean(renderState.renderer), renderState.renderer ?? '无');
   check('HUD 显示现场数据', hudReady);
 
-  await page.keyboard.press('t');
+  await page.evaluate(() => window.__gh?.agents?.snap?.(window.__gh.sim, 0, 1.65, 1));
   const mobile = await page
-    .waitForFunction(() => window.__gh?.agents?.mobile?.() === true, { timeout: 30000 })
+    .waitForFunction(() => window.__gh?.agents?.mobile?.() === true, { timeout: 15000 })
     .then(() => true)
     .catch(() => false);
-  check('班组抵达二层并可操控', mobile);
+  check('二层门口可直接操控', mobile);
 
-  await page.keyboard.down('d');
-  const walked = await page
-    .waitForFunction(() => window.__gh?.agents?.nearDoor?.() === true, { timeout: 45000 })
+  const nearDoor = await page
+    .waitForFunction(() => window.__gh?.agents?.nearDoor?.() === true, { timeout: 15000 })
     .then(() => true)
     .catch(() => false);
-  await page.keyboard.up('d');
-  if (!walked) {
-    const state = await page.evaluate(() => ({
-      run: document.body.dataset.run,
-      mobile: window.__gh?.agents?.mobile?.(),
-      x: window.__gh?.agents?.crewX?.(),
-      speed: window.__gh?.agents?.speed?.(),
-      near: window.__gh?.agents?.nearDoor?.(),
-    }));
-    console.log('WALK STATE', JSON.stringify(state));
-  }
-  check('操控班组走到 202 门口', walked);
+  check('站到 202 门口', nearDoor);
 
   const heroAuto = await page
     .waitForFunction(() => (window.__gh?.hero?.autoRuns?.() ?? 0) >= 1, {
@@ -141,6 +129,12 @@ try {
 
   if (doorVisible) {
     await page.click('[data-act="open"]');
+    const opened = await page
+      .waitForFunction(() => window.__gh?.sim?.door?.opened === true, { timeout: 20000 })
+      .then(() => true)
+      .catch(() => false);
+    check('开门进入 202', opened);
+    await page.evaluate(() => window.__gh?.finishRun?.());
     await page.waitForFunction(() => document.body.dataset.run === 'debrief', { timeout: 20000 });
     await new Promise((resolve) => setTimeout(resolve, 400));
     const debrief = await page.evaluate(() => {

@@ -23,6 +23,7 @@ export function createWorld(seed: string): SimState {
       atDoor: false,
       injured: false,
       busyUntil: 0,
+      manual: false,
     },
     door: {
       checked: false,
@@ -32,7 +33,7 @@ export function createWorld(seed: string): SimState {
       safe: false,
       opened: false,
     },
-    victim: { alive: true, rescued: false },
+    victim: { alive: true, rescued: false, extracted: false },
     neighbor: { alive: true, saved: false, saveAt: null, doomAt: null },
     stairs: { safe: true, collapsed: false, collapseAt: null },
     incidents: createIncidents(scenario.incidentShift),

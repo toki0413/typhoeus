@@ -12,16 +12,14 @@ describe('渲染对象', () => {
     const a = createAgents(scene);
     const s = createWorld('x');
     s.phase = 'execute';
-    s.crew.order = { kind: 'search', floor: 1 };
 
     for (let i = 0; i < 60; i++) {
       s.t += 0.05;
-      s.crew.progress = (s.crew.progress + 0.01) % 1;
-      a.update(s);
+      a.update(s, 0.05);
     }
 
     expect(Number.isFinite(a.crew.position.y)).toBe(true);
-    expect(a.crew.position.y).toBeGreaterThan(0);
+    expect(a.crew.position.y).toBeGreaterThanOrEqual(0);
     expect(a.group.children).toHaveLength(2);
   });
 
@@ -81,15 +79,16 @@ describe('渲染对象', () => {
     expect(Number.isFinite(glow.light.intensity)).toBe(true);
   });
 
-  it('被困者救出后隐藏', () => {
+  it('被困者遇难后隐藏，获救后仍可被背起', () => {
     const scene = new THREE.Scene();
     const a = createAgents(scene);
     const s = createWorld('x');
-    s.victim.rescued = true;
+    s.victim.alive = false;
     a.update(s);
     expect(a.victim.visible).toBe(false);
 
-    s.victim.rescued = false;
+    s.victim.alive = true;
+    s.victim.rescued = true;
     a.update(s);
     expect(a.victim.visible).toBe(true);
   });

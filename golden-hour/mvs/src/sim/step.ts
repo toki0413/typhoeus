@@ -26,18 +26,20 @@ export function stepSim(s: SimState, dt: number): void {
     s.heat[i] = clamp01(s.heat[i] + (target - s.heat[i]) * dt * 0.5);
   }
 
-  if (s.crew.order) {
-    const target = Math.min(s.crew.order.floor, s.smoke.length - 1);
-    if (s.t >= s.crew.busyUntil && s.crew.floor < target) {
-      s.crew.progress += dt * 0.2;
-      if (s.crew.progress >= 1) {
-        s.crew.progress -= 1;
-        s.crew.floor += 1;
+  if (!s.crew.manual) {
+    if (s.crew.order) {
+      const target = Math.min(s.crew.order.floor, s.smoke.length - 1);
+      if (s.t >= s.crew.busyUntil && s.crew.floor < target) {
+        s.crew.progress += dt * 0.2;
+        if (s.crew.progress >= 1) {
+          s.crew.progress -= 1;
+          s.crew.floor += 1;
+        }
       }
+      s.crew.atDoor = s.crew.floor === 1 && target === 1;
+    } else {
+      s.crew.atDoor = false;
     }
-    s.crew.atDoor = s.crew.floor === 1 && target === 1;
-  } else {
-    s.crew.atDoor = false;
   }
 
   const f = Math.min(s.crew.floor, s.smoke.length - 1);

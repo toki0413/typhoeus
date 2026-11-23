@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createWorld } from '../src/sim/world';
 import { beginRun, advance, restart } from '../src/app/session';
 import { openDoor } from '../src/sim/door';
+import { completeExtraction } from '../src/sim/crew';
 
 describe('session', () => {
   it('beginRun 进入执行并下达搜索', () => {
@@ -21,10 +22,13 @@ describe('session', () => {
     expect(s.t).toBeCloseTo(0.05);
   });
 
-  it('开门后 advance 返回 enteredDebrief 并切到 debrief', () => {
+  it('开门不再直接结算，背出被困者后才进入 debrief', () => {
     const s = createWorld('x');
     s.phase = 'execute';
     openDoor(s);
+    expect(advance(s, 0.05).enteredDebrief).toBe(false);
+
+    completeExtraction(s);
     const r = advance(s, 0.05);
     expect(r.enteredDebrief).toBe(true);
     expect(s.phase).toBe('debrief');

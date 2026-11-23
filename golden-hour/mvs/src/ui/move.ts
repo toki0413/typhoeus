@@ -1,22 +1,39 @@
+export interface MoveUiState {
+  visible: boolean;
+  hint: string;
+  distance: number;
+  action: string | null;
+}
+
 export function createMoveUi(
   root: HTMLElement,
-  onInput: (dir: number) => void
-): { update: (visible: boolean, distance: number) => void } {
+  handlers: { onMove: (x: number, z: number) => void; onAction: () => void }
+): { update: (state: MoveUiState) => void } {
   root.innerHTML = `
-    <div class="move-hint">走向 <b>202</b> 门口 <span data-dist></span></div>
-    <div class="move-row">
-      <button data-move="-1" aria-label="向左移动">◀</button>
-      <button data-move="1" aria-label="向右移动">▶</button>
+    <div class="move-hint"><span data-hint></span><span data-dist></span></div>
+    <div class="move-pad">
+      <button data-move="up" class="up" aria-label="向前">▲</button>
+      <button data-move="left" class="left" aria-label="向左">◀</button>
+      <button data-move="right" class="right" aria-label="向右">▶</button>
+      <button data-move="down" class="down" aria-label="向后">▼</button>
     </div>
+    <button class="move-act" data-act hidden></button>
   `;
 
-  const stop = () => onInput(0);
+  const stop = () => handlers.onMove(0, 0);
+  const vectors: Record<string, [number, number]> = {
+    up: [0, -1],
+    down: [0, 1],
+    left: [-1, 0],
+    right: [1, 0],
+  };
+
   for (const btn of root.querySelectorAll<HTMLButtonElement>('[data-move]')) {
-    const dir = Number(btn.dataset.move);
+    const vec = vectors[btn.dataset.move ?? ''] ?? [0, 0];
     btn.addEventListener('pointerdown', (event) => {
       event.preventDefault();
       btn.setPointerCapture(event.pointerId);
-      onInput(dir);
+      handlers.onMove(vec[0], vec[1]);
     });
     btn.addEventListener('pointerup', stop);
     btn.addEventListener('pointercancel', stop);
@@ -24,11 +41,21 @@ export function createMoveUi(
     btn.addEventListener('contextmenu', (event) => event.preventDefault());
   }
 
+  root.querySelector<HTMLButtonElement>('[data-act]')!.addEventListener('click', () => {
+    handlers.onAction();
+  });
+
+  const hint = root.querySelector<HTMLElement>('[data-hint]')!;
   const distance = root.querySelector<HTMLElement>('[data-dist]')!;
+  const action = root.querySelector<HTMLButtonElement>('[data-act]')!;
+
   return {
-    update(visible: boolean, meters: number) {
-      root.style.display = visible ? 'block' : 'none';
-      distance.textContent = `${meters.toFixed(1)} m`;
+    update(state: MoveUiState) {
+      root.style.display = state.visible ? 'block' : 'none';
+      hint.textContent = state.hint;
+      distance.textContent = `${state.distance.toFixed(1)} m`;
+      action.hidden = !state.action;
+      if (state.action) action.textContent = state.action;
     },
   };
 }

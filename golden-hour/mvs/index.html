@@ -84,14 +84,21 @@
       #door-ui .row button { width: auto; flex: 1; }
 
       #move {
-        left: 50%; bottom: 26px; transform: translateX(-50%); display: none;
+        left: 16px; bottom: 26px; display: none;
         padding: 12px 18px; text-align: center; z-index: 5;
       }
       #move .move-hint { color: var(--muted); font-size: 12px; letter-spacing: 0.03em; }
       #move .move-hint b { color: var(--accent); font-weight: 700; }
       #move [data-dist] { margin-left: 6px; color: var(--accent); font: 600 11px/1 var(--mono); }
-      #move .move-row { display: flex; gap: 10px; justify-content: center; margin-top: 9px; }
-      #move .move-row button { width: 88px; height: 42px; font-size: 16px; }
+      #move .move-pad {
+        display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(2, 40px);
+        gap: 6px; justify-content: center; margin-top: 9px;
+      }
+      #move .move-pad .up { grid-column: 2; grid-row: 1; }
+      #move .move-pad .left { grid-column: 1; grid-row: 2; }
+      #move .move-pad .right { grid-column: 3; grid-row: 2; }
+      #move .move-pad .down { grid-column: 2; grid-row: 2; }
+      #move .move-act { width: 100%; margin-top: 9px; }
 
       #actions { right: 16px; bottom: 16px; display: none; }
       #incidents { right: 16px; top: 112px; width: 280px; display: none; }
@@ -276,6 +283,8 @@
       body[data-hero="on"] #actions,
       body[data-hero="on"] #incidents { opacity: 0.18; }
       body[data-hero="on"] #radio { opacity: 0.92; }
+      #move { transition: opacity 0.3s ease; }
+      body[data-hero="on"] #move { opacity: 0; pointer-events: none; }
     </style>
   </head>
   <body data-run="title">

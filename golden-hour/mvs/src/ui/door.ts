@@ -37,7 +37,7 @@ export function createDoorUi(
   };
 
   const act = (name: string) => {
-    if (sim.phase !== 'execute' || sim.door.opened || !sim.crew.atDoor) return;
+    if (sim.phase !== 'execute' || sim.door.opened) return;
     if (name === 'check') checkDoor(sim);
     if (name === 'wait') waitDoor(sim);
     if (name === 'open') openDoor(sim);
@@ -77,14 +77,13 @@ export function createDoorUi(
   });
 
   return {
-    update(s: SimState, allow = true) {
+    update(s: SimState, allow = s.crew.atDoor) {
       if (s.phase === 'plan') {
         prevWaiting = false;
         lastWaitFailed = false;
       }
 
-      const atDoor =
-        allow && s.crew.atDoor && !s.door.opened && s.phase === 'execute';
+      const atDoor = allow && !s.door.opened && s.phase === 'execute';
       root.style.display = atDoor ? 'block' : 'none';
 
       const checkBtn = root.querySelector<HTMLButtonElement>('[data-act="check"]')!;

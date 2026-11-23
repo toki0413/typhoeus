@@ -6,8 +6,7 @@ export function beginRun(s: SimState): void {
   if (s.phase !== 'plan') return;
   s.phase = 'execute';
   s.crew.order = { kind: 'search', floor: 1 };
-  // Give the crew a beat to walk from the staging point to the stairwell.
-  s.crew.busyUntil = Math.max(s.crew.busyUntil, s.t + 1.4);
+  s.crew.manual = true;
   s.decisions.push({ at: s.t, kind: 'order', label: '下达搜索二层' });
 }
 
@@ -16,7 +15,7 @@ export function advance(s: SimState, dt: number): { enteredDebrief: boolean } {
 
   stepSim(s, dt);
 
-  if (s.ended || s.door.opened) {
+  if (s.ended || s.victim.extracted) {
     s.phase = 'debrief';
     return { enteredDebrief: true };
   }
