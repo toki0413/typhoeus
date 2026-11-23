@@ -6,10 +6,10 @@ export interface ScenarioEntry {
   href: string;
 }
 
-export const SCENARIOS: ScenarioEntry[] = [
-  { id: 'tutorial', label: '教学关', href: '/' },
-  { id: 'room', label: '单房间原型', href: '/room.html' },
-  { id: 'building', label: '建筑沙盒（实验）', href: '/building.html' },
+export const SCENARIO_ENTRIES: ScenarioEntry[] = [
+  { id: 'tutorial', label: '教学关', href: './' },
+  { id: 'room', label: '单房间原型', href: './room.html' },
+  { id: 'building', label: '建筑沙盒（实验）', href: './building.html' },
 ];
 
 /** 从 location.search 解析场景；未知或缺失时回退教学关。 */

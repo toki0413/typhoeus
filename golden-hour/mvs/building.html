@@ -184,6 +184,10 @@
       .scene-link a:hover {
         text-decoration: underline;
       }
+      .scene-link a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
       #outcome {
         position: fixed;
         inset: 0;
@@ -244,6 +248,7 @@
       <div class="row"><span>负重</span><b id="hud-load">--</b></div>
       <div class="row"><span>烟气</span><b id="hud-exposure">--</b></div>
       <div class="row"><span>居民</span><b id="hud-resident">--</b></div>
+      <div class="scene-link"><a href="./">教学关</a> · <a href="./room.html">单房间原型</a></div>
     </section>
 
     <section class="panel" id="routes-panel">
@@ -259,7 +264,6 @@
 
     <section class="panel" id="hint">
       <div><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> 选择路线 · <kbd>R</kbd> 重算 · <kbd>C</kbd> 背人/撤离</div>
-      <div class="scene-link"><a href="/">教学关</a> · <a href="/room.html">单房间原型</a></div>
     </section>
 
     <section id="outcome">

@@ -201,6 +201,10 @@
       .scene-link a:hover {
         text-decoration: underline;
       }
+      .scene-link a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
       #outcome {
         position: fixed;
         inset: 0;
@@ -285,6 +289,7 @@
         <div class="bar risk"><i id="bar-self"></i></div>
         <b id="val-self">--</b>
       </div>
+      <div class="scene-link"><a href="./">教学关</a> · <a href="./building.html">建筑沙盒</a></div>
     </section>
 
     <section class="panel" id="tools">
@@ -298,7 +303,6 @@
       <div><kbd>W A S D</kbd> 移动 · <kbd>Shift</kbd> 低姿 · <kbd>C</kbd> 背人/撤离</div>
       <div><kbd>E</kbd> 开门 · <kbd>R</kbd> 开窗 · <kbd>Q</kbd> 测温</div>
       <div><kbd>1</kbd> 水 · <kbd>2</kbd> 干粉 · <kbd>3</kbd> CO₂ · <kbd>4</kbd> 湿棉被 · <kbd>5</kbd> 断电 · <kbd>6</kbd> 关门</div>
-      <div class="scene-link"><a href="/">教学关</a> · <a href="/building.html">建筑沙盒</a></div>
     </section>
 
     <section class="panel" id="actions">
