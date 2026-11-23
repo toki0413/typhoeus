@@ -10,6 +10,8 @@ export interface ActorState {
   load: number;
   stamina: number;
   exposure: { smoke: number; heat: number };
+  /** 佩戴空呼与防护装具：显著降低烟热累积，但仍非无敌 */
+  masked: boolean;
   downed: boolean;
 }
 
@@ -21,6 +23,7 @@ export function createActor(x = -2.35, z = 0): ActorState {
     load: 0,
     stamina: 1,
     exposure: { smoke: 0, heat: 0 },
+    masked: false,
     downed: false,
   };
 }
@@ -30,6 +33,10 @@ const STANCE: Record<Stance, { smoke: number; heat: number; move: number; drain:
   low: { smoke: 0.22, heat: 0.22, move: 0.6, drain: 0.03 },
   crawl: { smoke: 0.12, heat: 0.1, move: 0.4, drain: 0.03 },
 };
+
+/** 空呼与防护装具的暴露折减；消防员能支撑多次往返，但烟热仍在累积。 */
+const MASK_SMOKE_FACTOR = 0.05;
+const MASK_HEAT_FACTOR = 0.08;
 
 export function stanceFactor(stance: Stance): number {
   return STANCE[stance].smoke;
@@ -57,8 +64,14 @@ export function stepActor(
 
   const profile = STANCE[actor.stance];
   const env = exposureAt(actor, room);
-  actor.exposure.smoke = clamp01(actor.exposure.smoke + env.smoke * profile.smoke * dt);
-  actor.exposure.heat = clamp01(actor.exposure.heat + env.heat * profile.heat * dt);
+  const smokeFactor = actor.masked ? MASK_SMOKE_FACTOR : 1;
+  const heatFactor = actor.masked ? MASK_HEAT_FACTOR : 1;
+  actor.exposure.smoke = clamp01(
+    actor.exposure.smoke + env.smoke * profile.smoke * smokeFactor * dt
+  );
+  actor.exposure.heat = clamp01(
+    actor.exposure.heat + env.heat * profile.heat * heatFactor * dt
+  );
 
   if (moving) {
     const drain = profile.drain * (1 + actor.load);

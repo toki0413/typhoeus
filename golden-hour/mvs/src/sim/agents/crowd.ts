@@ -130,7 +130,8 @@ export function rescueResident(
   residentId: string,
   actor: ActorState,
   room: RoomState,
-  verb: RescueVerb
+  verb: RescueVerb,
+  reach = RESCUE_REACH
 ): RescueResult {
   if (actor.downed) return { ok: false, reason: 'actor-downed', residentId };
 
@@ -140,7 +141,7 @@ export function rescueResident(
   if (resident.rescued) return { ok: false, reason: 'already-rescued', residentId };
   if (resident.dead) return { ok: false, reason: 'lost', residentId };
   if (!findResident(resident, actor)) return { ok: false, reason: 'not-found', residentId };
-  if (distanceTo(resident, actor) > RESCUE_REACH) {
+  if (distanceTo(resident, actor) > reach) {
     return { ok: false, reason: 'too-far', residentId };
   }
   // 失去意识（健康归零）的人无法牵着走，只能背

@@ -39,6 +39,8 @@ export const ENTRY_BUDGETS = {
   // Phase 1 共享 chunk：救援模块与 Vite 的 modulepreload 辅助。
   rescue: 30 * 1024,
   modulepreload: 8 * 1024,
+  // Phase 3 共享 chunk：居民/Director 共用的种子随机。
+  rng: 4 * 1024,
   'three.module': 170 * 1024,
 };
 

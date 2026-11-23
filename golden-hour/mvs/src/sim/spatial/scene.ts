@@ -3,7 +3,7 @@ import type { BuildingGraph } from './rooms';
 import { createBuilding } from './rooms';
 import { FIXED_DT, stepRoom } from './spread';
 import type { ActorState } from './actor';
-import type { OccupantState } from './rescue';
+import { createOccupant, type OccupantState } from './rescue';
 
 export interface ScenarioDefinition {
   id: string;
@@ -89,7 +89,7 @@ export function snapshotScenario(
   def: ScenarioDefinition,
   roomId: string,
   actor: ActorState,
-  occupant: OccupantState
+  occupant: OccupantState = createOccupant(0, 0, 'none')
 ): ScenarioSnapshot {
   const rooms: Record<string, RoomSnapshot> = {};
   const t = def.building.rooms[def.startRoom].room.t;

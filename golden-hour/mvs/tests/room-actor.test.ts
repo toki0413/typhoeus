@@ -26,6 +26,27 @@ describe('玩家状态', () => {
     expect(low.exposure.smoke).toBeLessThan(upright.exposure.smoke);
   });
 
+  it('佩戴空呼后烟热暴露累积更慢', () => {
+    const room = createRoom();
+    for (const c of room.cells) {
+      c.smoke = 0.8;
+      c.heat = 0.5;
+      c.steam = 0;
+    }
+    const bare = createActor(0, 0);
+    const masked = createActor(0, 0);
+    masked.masked = true;
+
+    for (let i = 0; i < 50; i++) {
+      stepActor(bare, room, 0.1, false);
+      stepActor(masked, room, 0.1, false);
+    }
+
+    expect(masked.exposure.smoke).toBeLessThan(bare.exposure.smoke);
+    expect(masked.exposure.heat).toBeLessThan(bare.exposure.heat);
+    expect(masked.downed).toBe(false);
+  });
+
   it('持续高热暴露会让玩家倒地', () => {
     const room = createRoom();
     for (const c of room.cells) {

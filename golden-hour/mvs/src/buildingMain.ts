@@ -1,12 +1,15 @@
 import { clamp01 } from './sim/spatial/fields';
 import { FIXED_DT } from './sim/spatial/spread';
 import { createActor, stepActor } from './sim/spatial/actor';
+import { createResident, type ResidentState } from './sim/agents/resident';
 import {
-  attachOccupant,
-  createOccupant,
-  stepOccupant,
-  syncCarriedOccupant,
-} from './sim/spatial/rescue';
+  createCrowd,
+  rescueResident,
+  stepCrowd,
+  type RescueReason,
+  type RescueVerb,
+} from './sim/agents/crowd';
+import { gridToWorld } from './sim/spatial/coords';
 import {
   createBuildingScenario,
   snapshotScenario,
@@ -15,12 +18,43 @@ import {
 import { findRoutes, type Route } from './sim/nav/graph';
 import { travelRoute } from './sim/nav/travel';
 import { createBuildingView } from './render/buildingView';
+import {
+  residentMarkers,
+  residentVisualState,
+  type ResidentVisualState,
+} from './render/residents';
 
 const canvas = document.getElementById('building-canvas') as HTMLCanvasElement;
 const view = createBuildingView(canvas);
 const def = createBuildingScenario();
 const actor = createActor();
-const occupant = createOccupant(0.3, 0.3);
+// 建筑入口按消防员佩戴空呼处理：烟热仍会累积，但足以支撑多次进出救援。
+actor.masked = true;
+
+/** 在 202 的指定格放置一名居民，并写入初始健康/恐慌。 */
+function residentAt(
+  id: string,
+  gx: number,
+  gy: number,
+  health: number,
+  panic: number
+): ResidentState {
+  const point = gridToWorld(gx, gy);
+  const resident = createResident(def.targetRoom, point.x, point.z, id);
+  resident.health = health;
+  resident.panic = panic;
+  return resident;
+}
+
+const crowd = createCrowd(
+  def.targetRoom,
+  [
+    residentAt('A', 2, 5, 1, 0),
+    residentAt('B', 2, 2, 0.45, 0.6),
+    residentAt('C', 4, 6, 0.22, 0.3),
+  ],
+  def.seed
+);
 
 let currentRoom = def.startRoom;
 let routes: Route[] = [];
@@ -33,14 +67,23 @@ const out = {
   room: document.getElementById('hud-room')!,
   target: document.getElementById('hud-target')!,
   stamina: document.getElementById('hud-stamina')!,
-  load: document.getElementById('hud-load')!,
   exposure: document.getElementById('hud-exposure')!,
   resident: document.getElementById('hud-resident')!,
   routes: document.getElementById('routes')!,
+  residents: document.getElementById('residents')!,
   log: document.getElementById('log')!,
   outcome: document.getElementById('outcome')!,
   outcomeTitle: document.getElementById('outcome-title')!,
   outcomeBody: document.getElementById('outcome-body')!,
+};
+
+const STATE_TEXT: Record<ResidentVisualState, string> = {
+  calm: '平静',
+  panic: '恐慌',
+  hidden: '躲藏',
+  unconscious: '昏迷',
+  dead: '已失去',
+  rescued: '已救出',
 };
 
 function addLog(text: string, kind: 'info' | 'ok' | 'danger' = 'info'): void {
@@ -55,23 +98,40 @@ function roomOf(id: string) {
 }
 
 function targetRoom(): string {
-  return occupant.carried || occupant.rescued ? def.startRoom : def.targetRoom;
+  return def.targetRoom;
+}
+
+function reasonText(reason: RescueReason): string {
+  switch (reason) {
+    case 'too-far':
+      return '离居民太远';
+    case 'not-found':
+      return '没找到';
+    case 'unconscious-needs-carry':
+      return '昏迷只能背';
+    case 'lost':
+      return '已经失去';
+    case 'actor-downed':
+      return '你已失去行动能力';
+    case 'already-rescued':
+      return '已救出';
+    case 'ok':
+      return '成功';
+  }
 }
 
 function recalcRoutes(): void {
-  const target = targetRoom();
   routes =
-    currentRoom === target
+    currentRoom === targetRoom()
       ? []
-      : findRoutes(def.building, currentRoom, target, actor, 3);
+      : findRoutes(def.building, currentRoom, targetRoom(), actor, 3);
   renderRoutes();
 }
 
 function renderRoutes(): void {
   if (currentRoom === targetRoom()) {
-    out.routes.innerHTML = `<p class="hint">${
-      occupant.carried ? '在入口，按 C 完成撤离。' : '已在 202，按 C 背起居民。'
-    }</p>`;
+    out.routes.innerHTML =
+      '<p class="hint">在 202：从居民列表选择牵出或背出。</p>';
     return;
   }
   if (!routes.length) {
@@ -89,6 +149,62 @@ function renderRoutes(): void {
     .join('');
 }
 
+/** 把 #residents 渲染成每个未获救居民一行，附牵/背按钮。 */
+function renderResidents(): void {
+  residentsSig = residentSignature();
+  if (ended) {
+    out.residents.innerHTML = '<p class="hint">本轮已结束。</p>';
+    return;
+  }
+  if (currentRoom !== def.targetRoom) {
+    out.residents.innerHTML = '<p class="hint">抵达 202 后可选择牵出或背出。</p>';
+    return;
+  }
+
+  const rows = crowd.residents
+    .filter((resident) => !resident.rescued)
+    .map((resident) => {
+      const state = residentVisualState(resident);
+      const isDead = state === 'dead';
+      const canLead = state !== 'unconscious' && !isDead;
+      return `<div class="resident-row">
+        <span class="resident-name">居民 ${resident.id}</span>
+        <span class="resident-meta">${Math.round(resident.health * 100)}% · ${
+          STATE_TEXT[state]
+        }</span>
+        <span class="resident-actions">
+          <button data-rescue="${resident.id}:lead"${
+            canLead ? '' : ' disabled'
+          }>牵</button>
+          <button data-rescue="${resident.id}:carry"${
+            isDead ? ' disabled' : ''
+          }>背</button>
+        </span>
+      </div>`;
+    })
+    .join('');
+
+  out.residents.innerHTML = rows || '<p class="hint">没有待救的居民。</p>';
+}
+
+let residentsSig = '';
+
+/** 居民面板的内容指纹；只有状态变化时才重建，避免每帧替换按钮。 */
+function residentSignature(): string {
+  const parts = crowd.residents.map(
+    (resident) =>
+      `${resident.id}:${resident.rescued ? 1 : 0}:${resident.dead ? 1 : 0}:${
+        resident.mood
+      }:${Math.round(resident.health * 20)}`
+  );
+  return `${currentRoom}|${ended ? 1 : 0}|${parts.join(',')}`;
+}
+
+function syncResidents(): void {
+  if (residentSignature() === residentsSig) return;
+  renderResidents();
+}
+
 function takeRoute(index: number): void {
   if (ended) return;
   const route = routes[index];
@@ -102,76 +218,92 @@ function takeRoute(index: number): void {
   }
 
   currentRoom = travel.roomId;
-  // 到达新房间时落在房间中心的入口锚点，避免站在燃烧格上。
-  actor.x = 0;
-  actor.z = 0;
+  // 到达 202 时落在门侧入口，避免玩家站在火源所在格上承受数倍暴露。
+  if (currentRoom === def.targetRoom) {
+    actor.x = -2.4;
+    actor.z = 0;
+  } else {
+    actor.x = 0;
+    actor.z = 0;
+  }
 
   const ticks = Math.max(1, Math.round(travel.time / FIXED_DT));
   for (let i = 0; i < ticks; i++) {
     stepScenario(def, FIXED_DT);
-    if (occupant.carried) syncCarriedOccupant(occupant, actor);
-    stepOccupant(
-      occupant,
-      roomOf(occupant.carried ? currentRoom : def.targetRoom),
-      FIXED_DT
-    );
+    // 玩家在路上时 202 的居民不会暂停恶化。
+    stepCrowd(crowd, roomOf(def.targetRoom), FIXED_DT);
   }
 
   addLog(`通过 ${route.steps.map((step) => step.kind).join(' → ')}，到达 ${currentRoom}`, 'ok');
   recalcRoutes();
+  syncResidents();
+  updateHud();
   checkOutcome();
 }
 
-function handleCarry(): void {
+/** 建筑入口按“同处一室即可施救”处理：室内逐米位移留到后续阶段。 */
+const ROOM_REACH = 6;
+
+function handleRescue(id: string, verb: RescueVerb): void {
   if (ended) return;
-
-  if (!occupant.carried) {
-    if (currentRoom !== def.targetRoom) {
-      addLog('先到 202 才能救人。');
-      return;
-    }
-    if (attachOccupant(actor, occupant)) {
-      addLog('背起居民，路线会变慢。', 'ok');
-      recalcRoutes();
-    } else {
-      addLog('离居民太远。');
-    }
+  if (currentRoom !== def.targetRoom) {
+    addLog('先到 202 才能救人。', 'danger');
     return;
   }
 
-  if (currentRoom !== def.startRoom) {
-    addLog('把居民背回入口才算撤离。');
-    return;
+  const t0 = crowd.t;
+  const result = rescueResident(
+    crowd,
+    id,
+    actor,
+    roomOf(def.targetRoom),
+    verb,
+    ROOM_REACH
+  );
+  const elapsed = crowd.t - t0;
+
+  // 救援消耗的模拟时间同样推进火场与玩家暴露，让取舍有真实代价。
+  const ticks = Math.max(0, Math.round(elapsed / FIXED_DT));
+  for (let i = 0; i < ticks; i++) {
+    stepScenario(def, FIXED_DT);
+    stepActor(actor, roomOf(currentRoom), FIXED_DT, true);
   }
 
-  occupant.rescued = true;
-  occupant.carried = false;
-  actor.load = Math.max(0, actor.load - occupant.carryLoad);
-  occupant.carryLoad = 0;
-  addLog('把居民带出火场。', 'ok');
+  if (result.ok) {
+    addLog(`${verb === 'carry' ? '已背出' : '已牵出'} 居民 ${id}`, 'ok');
+  } else {
+    addLog(`${reasonText(result.reason)}（居民 ${id}）`, 'danger');
+  }
+
+  syncResidents();
+  updateHud();
   checkOutcome();
 }
 
 function updateHud(): void {
   const exposure = clamp01(actor.exposure.smoke + actor.exposure.heat);
+  const remaining = crowd.residents.length - crowd.rescued - crowd.lost;
   out.room.textContent = currentRoom;
   out.target.textContent = targetRoom();
   out.stamina.textContent = `${Math.round(actor.stamina * 100)}%`;
-  out.load.textContent = `${Math.round(actor.load * 100)}%`;
   out.exposure.textContent = `${Math.round(exposure * 100)}%`;
-  out.resident.textContent = occupant.rescued
-    ? '已救出'
-    : `${Math.round(occupant.health * 100)}%`;
+  out.resident.textContent = `${crowd.rescued} 救出 · ${crowd.lost} 失去 · ${remaining} 待救`;
 }
 
 function checkOutcome(): void {
   if (ended) return;
-  if (actor.downed) {
-    end('你被烟和热压倒了', '路线不是免费的：烟层、体力、负重都会改变可选路径。');
+  const total = crowd.residents.length;
+  // 先结算“所有人都有了结果”，避免最后一救后被随后累积的暴露覆盖成绩。
+  if (crowd.rescued + crowd.lost >= total) {
+    const seconds = def.building.rooms[def.startRoom].room.t;
+    end(
+      `救出 ${crowd.rescued} / ${total}`,
+      `失去 ${crowd.lost} 人，用时 ${seconds.toFixed(1)} 秒。结果来自行动顺序与火场压力。`
+    );
     return;
   }
-  if (occupant.rescued) {
-    end('居民已救出', `用时 ${def.building.rooms[def.startRoom].room.t.toFixed(1)} 秒。`);
+  if (actor.downed) {
+    end('你被烟和热压倒了', '路线不是免费的：烟层、体力都会改变可选路径。');
   }
 }
 
@@ -180,6 +312,7 @@ function end(title: string, body: string): void {
   out.outcomeTitle.textContent = title;
   out.outcomeBody.textContent = body;
   out.outcome.classList.add('show');
+  renderResidents();
 }
 
 let last = performance.now();
@@ -192,31 +325,28 @@ function frame(now: number): void {
     acc += dt;
     while (acc >= FIXED_DT) {
       stepScenario(def, FIXED_DT);
-      if (occupant.carried) syncCarriedOccupant(occupant, actor);
-      stepOccupant(
-        occupant,
-        roomOf(occupant.carried ? currentRoom : def.targetRoom),
-        FIXED_DT
-      );
+      stepCrowd(crowd, roomOf(def.targetRoom), FIXED_DT);
       stepActor(actor, roomOf(currentRoom), FIXED_DT, false);
       acc -= FIXED_DT;
     }
     checkOutcome();
   }
 
-  const snap = snapshotScenario(def, currentRoom, actor, occupant);
+  const snap = snapshotScenario(def, currentRoom, actor);
   view.sync(
     def.building,
     snap,
     currentRoom,
     targetRoom(),
-    routes[0]?.steps.map((step) => step.id) ?? []
+    routes[0]?.steps.map((step) => step.id) ?? [],
+    residentMarkers(crowd.residents)
   );
   view.render();
 
   if (now - lastHud > 100) {
     lastHud = now;
     updateHud();
+    syncResidents();
   }
 
   requestAnimationFrame(frame);
@@ -228,7 +358,6 @@ window.addEventListener('keydown', (event) => {
   if (key === '1') takeRoute(0);
   if (key === '2') takeRoute(1);
   if (key === '3') takeRoute(2);
-  if (key === 'c') handleCarry();
   if (key === 'r') recalcRoutes();
 });
 
@@ -239,11 +368,20 @@ document.getElementById('routes')!.addEventListener('click', (event) => {
   if (Number.isInteger(index)) takeRoute(index);
 });
 
-document.getElementById('carry-btn')!.addEventListener('click', handleCarry);
+out.residents.addEventListener('click', (event) => {
+  const button = (event.target as HTMLElement).closest('button');
+  if (!button || (button as HTMLButtonElement).disabled) return;
+  const spec = button.dataset.rescue;
+  if (!spec) return;
+  const [id, verb] = spec.split(':');
+  if (id && (verb === 'lead' || verb === 'carry')) handleRescue(id, verb);
+});
+
 document.getElementById('reset-btn')!.addEventListener('click', () => window.location.reload());
 document.getElementById('outcome-reset')!.addEventListener('click', () => window.location.reload());
 
 addLog('到场：入口。目标 202，楼梯、消防梯、破拆三条路线。');
 recalcRoutes();
+syncResidents();
 updateHud();
 requestAnimationFrame(frame);

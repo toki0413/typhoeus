@@ -1,5 +1,6 @@
 import type { BuildingGraph } from '../sim/spatial/rooms';
 import type { ScenarioSnapshot } from '../sim/spatial/scene';
+import type { ResidentMarker, ResidentVisualState } from './residents';
 
 export interface BuildingView {
   sync(
@@ -7,7 +8,8 @@ export interface BuildingView {
     snapshot: ScenarioSnapshot,
     currentRoom: string,
     targetRoom: string,
-    routeLinks: string[]
+    routeLinks: string[],
+    markers?: ResidentMarker[]
   ): void;
   render(): void;
   resize(): void;
@@ -15,6 +17,21 @@ export interface BuildingView {
 }
 
 const BASE = [23, 28, 34] as const;
+
+/** 居民标记配色；hidden 由视图决定不画，这里给个占位色。 */
+const MARKER_COLORS: Record<ResidentVisualState, string> = {
+  calm: '#6fbf9a',
+  panic: '#e5b567',
+  hidden: '#6fbf9a',
+  unconscious: '#e06a4a',
+  dead: '#5a2a2a',
+  rescued: '#6fbf9a',
+};
+
+/** 居民局部坐标 x/z ∈ [-3,3] 归一化到 0..1。 */
+function markerOffset(value: number): number {
+  return Math.min(1, Math.max(0, (value + 3) / 6));
+}
 
 function roomColor(fire: number, smoke: number, heat: number): string {
   const f = Math.min(1, fire * 6);
@@ -48,7 +65,8 @@ export function createBuildingView(canvas: HTMLCanvasElement): BuildingView {
     snapshot: ScenarioSnapshot,
     currentRoom: string,
     targetRoom: string,
-    routeLinks: string[]
+    routeLinks: string[],
+    markers: ResidentMarker[] = []
   ): void {
     if (!ctx) return;
     const w = canvas.width;
@@ -118,14 +136,17 @@ export function createBuildingView(canvas: HTMLCanvasElement): BuildingView {
       ctx.stroke();
     }
 
-    if (!snapshot.occupant.rescued) {
-      const target = centers[targetRoom];
-      if (target) {
-        ctx.beginPath();
-        ctx.fillStyle = '#c39a7f';
-        ctx.arc(target.x + 14, target.y + 10, 5 * dpr, 0, Math.PI * 2);
-        ctx.fill();
-      }
+    // 居民标记：按房间矩形归一化局部坐标；hidden 不在剖视图上暴露。
+    for (const marker of markers) {
+      if (marker.state === 'hidden') continue;
+      const rect = rects.find((item) => item.id === marker.roomId);
+      if (!rect) continue;
+      const px = rect.x + markerOffset(marker.x) * rect.w;
+      const py = rect.y + markerOffset(marker.z) * rect.h;
+      ctx.beginPath();
+      ctx.fillStyle = MARKER_COLORS[marker.state];
+      ctx.arc(px, py, 4 * dpr, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
