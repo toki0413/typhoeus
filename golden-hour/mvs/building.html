@@ -173,6 +173,17 @@
         color: var(--ink);
         background: rgba(255, 255, 255, 0.05);
       }
+      .scene-link {
+        margin-top: 6px;
+        font-size: 12px;
+      }
+      .scene-link a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .scene-link a:hover {
+        text-decoration: underline;
+      }
       #outcome {
         position: fixed;
         inset: 0;
@@ -248,6 +259,7 @@
 
     <section class="panel" id="hint">
       <div><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> 选择路线 · <kbd>R</kbd> 重算 · <kbd>C</kbd> 背人/撤离</div>
+      <div class="scene-link"><a href="/">教学关</a> · <a href="/room.html">单房间原型</a></div>
     </section>
 
     <section id="outcome">
